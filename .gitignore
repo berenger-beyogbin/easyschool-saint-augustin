@@ -1,0 +1,75 @@
+# ===========================================================
+# EASY SCHOOL 2.0 — .gitignore
+# NE JAMAIS VERSIONNER CE QUI EST LISTÉ ICI
+# ===========================================================
+
+# === SECRETS — NE JAMAIS COMMITTER ===
+.env
+.env.local
+.env.production
+.env.staging
+*.env
+
+# === PYTHON ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# === ENVIRONNEMENTS VIRTUELS ===
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# === BUILD / DIST ===
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# === LOGS ===
+*.log
+logs/
+
+# === BASES DE DONNÉES LOCALES ===
+*.sqlite
+*.sqlite3
+*.db
+
+# === TESTS ===
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# === MYPY / PYTYPE ===
+.mypy_cache/
+.pytype/
+*.pyi
+
+# === ÉDITEURS ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === PYINSTALLER ===
+*.spec
+
+# === ASSETS GÉNÉRÉS ===
+assets/photos_eleves/
+assets/logos/
+!assets/logos/.gitkeep
+!assets/photos_eleves/.gitkeep
