@@ -50,7 +50,7 @@ class PrestationService:
     def update_prestataire(id_prestataire: int, data: Dict[str, Any]) -> tuple[bool, str]:
         session = get_session()
         try:
-            p = session.query(Prestataire).get(id_prestataire)
+            p = session.get(Prestataire, id_prestataire)
             if not p:
                 return False, "Prestataire introuvable."
             nom = data.get("Nom", p.Nom).strip()
@@ -93,7 +93,7 @@ class PrestationService:
     def get_prestation_by_id(id_prestation: int) -> Optional[PrestationAnnexe]:
         session = get_session()
         try:
-            return session.query(PrestationAnnexe).get(id_prestation)
+            return session.get(PrestationAnnexe, id_prestation)
         except Exception:
             return None
         finally:
@@ -134,7 +134,7 @@ class PrestationService:
     def update_prestation(id_prestation: int, data: Dict[str, Any]) -> tuple[bool, str]:
         session = get_session()
         try:
-            p = session.query(PrestationAnnexe).get(id_prestation)
+            p = session.get(PrestationAnnexe, id_prestation)
             if not p:
                 return False, "Prestation introuvable."
 
@@ -171,7 +171,7 @@ class PrestationService:
     def toggle_active(id_prestation: int) -> tuple[bool, str]:
         session = get_session()
         try:
-            p = session.query(PrestationAnnexe).get(id_prestation)
+            p = session.get(PrestationAnnexe, id_prestation)
             if not p:
                 return False, "Prestation introuvable."
             p.IsActive = not p.IsActive

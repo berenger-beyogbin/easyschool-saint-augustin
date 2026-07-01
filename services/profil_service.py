@@ -95,7 +95,7 @@ class ProfilService:
     def get_by_id(id_profil: int) -> Profil | None:
         session = get_session()
         try:
-            return session.query(Profil).get(id_profil)
+            return session.get(Profil, id_profil)
         finally:
             session.close()
 
@@ -139,7 +139,7 @@ class ProfilService:
     def update(id_profil: int, data: dict) -> tuple[bool, str]:
         session = get_session()
         try:
-            profil = session.query(Profil).get(id_profil)
+            profil = session.get(Profil, id_profil)
             if not profil:
                 return False, "Profil introuvable."
             code = data.get("Code", "").strip().upper()
@@ -170,7 +170,7 @@ class ProfilService:
         from models.utilisateur import Utilisateur
         session = get_session()
         try:
-            profil = session.query(Profil).get(id_profil)
+            profil = session.get(Profil, id_profil)
             if not profil:
                 return False, "Profil introuvable."
             if session.query(Utilisateur).filter_by(IDProfil=id_profil).first():

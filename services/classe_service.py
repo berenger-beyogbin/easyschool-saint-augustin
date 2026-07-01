@@ -98,7 +98,7 @@ class ClasseService:
         """Supprime une classe d'eleves."""
         session = get_session()
         try:
-            classe = session.query(TClasse).get(id_classe)
+            classe = session.get(TClasse, id_classe)
             if classe:
                 session.delete(classe)
                 session.commit()

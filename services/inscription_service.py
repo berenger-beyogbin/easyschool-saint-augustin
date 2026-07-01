@@ -54,7 +54,7 @@ class InscriptionService:
         """
         session = get_session()
         try:
-            classe = session.query(TClasse).get(id_classe)
+            classe = session.get(TClasse, id_classe)
             if not classe:
                 return False, "La classe spécifiée n'existe pas."
                 
@@ -84,7 +84,7 @@ class InscriptionService:
         session = get_session()
         try:
             # 1. Vérifier si l'année est clôturée
-            annee = session.query(TAnneeScolaire).get(id_annee)
+            annee = session.get(TAnneeScolaire, id_annee)
             if not annee or annee.Cloturer:
                 return False, "L'année active est clôturée. Impossible d'y inscrire des élèves."
 
@@ -112,7 +112,7 @@ class InscriptionService:
                 return False, "Cet élève possède déjà une inscription pour cette année scolaire."
 
             # 3. Vérifier la capacité de la classe
-            classe = session.query(TClasse).get(id_classe)
+            classe = session.get(TClasse, id_classe)
             if not classe:
                 return False, "La classe sélectionnée est inconnue."
                 
@@ -143,7 +143,7 @@ class InscriptionService:
             )
             
             # Si l'élève n'était pas associé à cette famille, on met à jour sa fiche
-            eleve = session.query(Eleve).get(id_eleve)
+            eleve = session.get(Eleve, id_eleve)
             if eleve and eleve.IDFamille != id_famille:
                 eleve.IDFamille = id_famille
 
@@ -199,11 +199,11 @@ class InscriptionService:
 
         session = get_session()
         try:
-            annee = session.query(TAnneeScolaire).get(id_annee)
+            annee = session.get(TAnneeScolaire, id_annee)
             if not annee or annee.Cloturer:
                 return False, "L'année active est clôturée. Impossible de modifier l'inscription."
 
-            inscription = session.query(TInscription).get(id_inscription)
+            inscription = session.get(TInscription, id_inscription)
             if not inscription:
                 return False, "L'inscription à modifier est introuvable."
 
@@ -216,7 +216,7 @@ class InscriptionService:
 
             # Vérifier la capacité uniquement si la classe change
             if id_classe != inscription.IDClasse:
-                classe = session.query(TClasse).get(id_classe)
+                classe = session.get(TClasse, id_classe)
                 if not classe:
                     return False, "La classe sélectionnée est inconnue."
                 effectif = session.query(TInscription).filter_by(

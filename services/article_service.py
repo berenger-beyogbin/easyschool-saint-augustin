@@ -48,7 +48,7 @@ class ArticleService:
         """Recupere un article par son ID."""
         session = get_session()
         try:
-            return session.query(Article).get(id_art)
+            return session.get(Article, id_art)
         except Exception as e:
             print(f"Erreur get_article_by_id : {e}")
             return None
@@ -164,7 +164,7 @@ class ArticleService:
         lib_clean = libelle.strip()
         session = get_session()
         try:
-            art = session.query(Article).get(id_art)
+            art = session.get(Article, id_art)
             if not art:
                 return False, "Article inexistant."
 
@@ -200,7 +200,7 @@ class ArticleService:
         """Supprime un article s'il n'a pas de mouvements ni de stock courant positif."""
         session = get_session()
         try:
-            art = session.query(Article).get(id_art)
+            art = session.get(Article, id_art)
             if not art:
                 return False, "Article inexistant."
 

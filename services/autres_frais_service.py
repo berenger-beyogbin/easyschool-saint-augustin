@@ -20,7 +20,7 @@ class AutresFraisService:
         """Recupere un type d'autre frais par son ID."""
         session = get_session()
         try:
-            return session.query(AutresFrais).get(id_frais)
+            return session.get(AutresFrais, id_frais)
         except Exception as e:
             print(f"Erreur get_autres_frais_by_id : {e}")
             return None
@@ -64,7 +64,7 @@ class AutresFraisService:
 
         session = get_session()
         try:
-            frais = session.query(AutresFrais).get(id_frais)
+            frais = session.get(AutresFrais, id_frais)
             if not frais:
                 return False, "Type de frais inexistant."
 
@@ -90,7 +90,7 @@ class AutresFraisService:
         """Supprime un type d'autre frais s'il n'est pas utilise."""
         session = get_session()
         try:
-            frais = session.query(AutresFrais).get(id_frais)
+            frais = session.get(AutresFrais, id_frais)
             if not frais:
                 return False, "Type de frais inexistant."
 

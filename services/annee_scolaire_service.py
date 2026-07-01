@@ -51,7 +51,7 @@ class AnneeScolaireService:
         from app.session import AppSession
         session = get_session()
         try:
-            annee = session.query(TAnneeScolaire).get(id_annee)
+            annee = session.get(TAnneeScolaire, id_annee)
             if annee:
                 annee.Cloturer = True
                 session.commit()

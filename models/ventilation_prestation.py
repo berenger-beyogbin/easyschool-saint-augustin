@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, Numeric, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
-from datetime import datetime
+from utils.datetime_utils import utcnow
 
 
 class VentilationPrestation(Base):
@@ -28,9 +28,9 @@ class VentilationPrestation(Base):
     MontantTheorique = Column(Numeric(12, 2), nullable=False, default=0.0)
     TauxPaiement = Column(Numeric(6, 4), nullable=False, default=0.0)
     ModeCalcul = Column(String(20), nullable=False, default="CASCADE")
-    CalculeAt = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    CreatedAt = Column(DateTime, default=datetime.utcnow)
-    UpdatedAt = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    CalculeAt = Column(DateTime, default=utcnow, onupdate=utcnow)
+    CreatedAt = Column(DateTime, default=utcnow)
+    UpdatedAt = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     eleve = relationship("Eleve")
     prestation = relationship("PrestationAnnexe", back_populates="ventilations")

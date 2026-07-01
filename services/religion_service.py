@@ -46,7 +46,7 @@ class ReligionService:
         """Supprime une religion."""
         session = get_session()
         try:
-            rel = session.query(TReligion).get(id_rel)
+            rel = session.get(TReligion, id_rel)
             if rel:
                 session.delete(rel)
                 session.commit()

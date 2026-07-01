@@ -46,7 +46,7 @@ class NationaliteService:
         """Supprime une nationalite."""
         session = get_session()
         try:
-            nat = session.query(TNationalite).get(id_nat)
+            nat = session.get(TNationalite, id_nat)
             if nat:
                 session.delete(nat)
                 session.commit()

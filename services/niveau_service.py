@@ -93,7 +93,7 @@ class NiveauService:
         from models.classe import TClasse
         session = get_session()
         try:
-            niveau = session.query(TNiveau).get(id_niveau)
+            niveau = session.get(TNiveau, id_niveau)
             if niveau:
                 # Verifier s'il y a des classes rattachees au niveau
                 has_classes = session.query(TClasse).filter_by(IDT_Niveau=id_niveau).first() is not None

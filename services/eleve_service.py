@@ -68,7 +68,7 @@ class EleveService:
         """Associe un élève existant à une famille."""
         session = get_session()
         try:
-            eleve = session.query(Eleve).get(id_eleve)
+            eleve = session.get(Eleve, id_eleve)
             if not eleve:
                 return False, "Élève introuvable."
             eleve.IDFamille = id_famille
@@ -242,7 +242,7 @@ class EleveService:
         """Modifie un élève existant."""
         session = get_session()
         try:
-            eleve = session.query(Eleve).get(id_eleve)
+            eleve = session.get(Eleve, id_eleve)
             if not eleve:
                 return False, "L'élève à modifier n'existe pas."
 
@@ -316,7 +316,7 @@ class EleveService:
         """Supprime un élève uniquement s'il n'a ni inscription ni versement associé."""
         session = get_session()
         try:
-            eleve = session.query(Eleve).get(id_eleve)
+            eleve = session.get(Eleve, id_eleve)
             if not eleve:
                 return False, "L'élève à supprimer n'existe pas."
 

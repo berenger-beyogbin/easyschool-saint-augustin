@@ -103,7 +103,7 @@ class AppSession:
             return False
         session = get_session()
         try:
-            annee = session.query(TAnneeScolaire).get(cls._active_annee_id)
+            annee = session.get(TAnneeScolaire, cls._active_annee_id)
             if annee and not annee.Cloturer:
                 return True
             return False

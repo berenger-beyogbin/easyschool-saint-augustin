@@ -198,8 +198,6 @@ class StatistiquesService:
                     "Matricule": ins.eleve.Matricule,
                     "Nom": f"{ins.eleve.Nom} {ins.eleve.Prenoms}",
                     "LibClasse": ins.classe.LibClasse,
-                    "SoldeAnt": 0.0,
-                    "Impaye": 0.0,
                     "MontantDu": scol_due,
                     "MontantVerse": scol_vers,
                     "Reduction": scol_reduc,

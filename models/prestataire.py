@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from app.database import Base
-from datetime import datetime
+from utils.datetime_utils import utcnow
 
 
 class Prestataire(Base):
@@ -14,8 +14,8 @@ class Prestataire(Base):
     Telephone = Column(String(50), nullable=True)
     Email = Column(String(150), nullable=True)
     IsActive = Column(Boolean, default=True, nullable=False)
-    CreatedAt = Column(DateTime, default=datetime.utcnow)
-    UpdatedAt = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    CreatedAt = Column(DateTime, default=utcnow)
+    UpdatedAt = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     prestations = relationship("PrestationAnnexe", back_populates="prestataire")
 

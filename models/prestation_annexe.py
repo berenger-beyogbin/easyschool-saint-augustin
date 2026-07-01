@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
-from datetime import datetime
+from utils.datetime_utils import utcnow
 
 
 class PrestationAnnexe(Base):
@@ -18,8 +18,8 @@ class PrestationAnnexe(Base):
     MontantAnnuel = Column(Numeric(12, 2), nullable=False, default=0.0)
     IDPrestataire = Column(Integer, ForeignKey("Prestataire.IDPrestataire", ondelete="SET NULL"), nullable=True)
     IsActive = Column(Boolean, default=True, nullable=False)
-    CreatedAt = Column(DateTime, default=datetime.utcnow)
-    UpdatedAt = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    CreatedAt = Column(DateTime, default=utcnow)
+    UpdatedAt = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     prestataire = relationship("Prestataire", back_populates="prestations")
     ventilations = relationship("VentilationPrestation", back_populates="prestation", cascade="all, delete-orphan")

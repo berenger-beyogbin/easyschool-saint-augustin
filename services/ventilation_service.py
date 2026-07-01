@@ -18,13 +18,13 @@ paiement global de la scolarité (scol_payé / scol_due) reste calculé et renvo
 """
 
 from typing import List, Dict, Any, Optional
-from datetime import datetime
 from sqlalchemy import and_
 
 from app.database import get_session
 from models.ventilation_prestation import VentilationPrestation
 from models.prestation_annexe import PrestationAnnexe
 from models.inscription import TInscription
+from utils.datetime_utils import utcnow
 from models.eleve import Eleve
 from models.classe import TClasse
 
@@ -95,7 +95,7 @@ class VentilationService:
             #    chaque prestation est couverte intégralement avant de passer à la
             #    suivante, dans l'ordre de création des prestations.
             results = []
-            now = datetime.utcnow()
+            now = utcnow()
             montant_restant = max(scol_paye, 0.0)
             for p in prestations:
                 montant_theorique = float(p.MontantAnnuel)

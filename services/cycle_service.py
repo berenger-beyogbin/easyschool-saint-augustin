@@ -63,7 +63,7 @@ class CycleService:
         from models.classe import TClasse
         session = get_session()
         try:
-            cycle = session.query(TCycle).get(id_cycle)
+            cycle = session.get(TCycle, id_cycle)
             if cycle:
                 # Verifier d'abord s'il y a des niveaux rattaches
                 has_niveaux = session.query(TNiveau).filter_by(IDT_Cycle=id_cycle).first() is not None

@@ -264,7 +264,7 @@ class ScolariteStatPrinter:
 
         # Formater les données
         formatted = []
-        sum_du = sum_ant = sum_vers = sum_reduc = sum_reste = 0.0
+        sum_du = sum_vers = sum_reduc = sum_reste = 0.0
         for idx, item in enumerate(rows):
             etat_raw = item.get("Etat", "Impayé")
             if etat_raw == "Payé":
@@ -272,14 +272,11 @@ class ScolariteStatPrinter:
             else:
                 etat_lbl = "Non soldé"
 
-            ant   = item.get("SoldeAnt", 0.0)
-            imp   = item.get("Impaye", 0.0)
             du    = item.get("MontantDu", 0.0)
             vers  = item.get("MontantVerse", 0.0)
             reduc = item.get("Reduction", 0.0)
             reste = item.get("Reste", 0.0)
 
-            sum_ant   += ant
             sum_du    += du
             sum_vers  += vers
             sum_reduc += reduc
@@ -301,7 +298,6 @@ class ScolariteStatPrinter:
             })
 
         totaux = {
-            "sum_ant":   sum_ant,
             "sum_du":    sum_du,
             "sum_vers":  sum_vers,
             "sum_reduc": sum_reduc,

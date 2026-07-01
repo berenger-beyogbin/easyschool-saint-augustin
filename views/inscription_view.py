@@ -562,7 +562,7 @@ class InscriptionView(QWidget):
 
         session = get_session()
         try:
-            classe_obj = session.query(TClasse).get(id_classe)
+            classe_obj = session.get(TClasse, id_classe)
             if not classe_obj:
                 self.lbl_effectif.setText("Effectif actuel : — / —")
                 self._set_effectif_style("default")

@@ -252,7 +252,7 @@ class VersementService:
         session = get_session()
         try:
             # Verifier si l'annee est cloturee
-            annee = session.query(TAnneeScolaire).get(id_annee)
+            annee = session.get(TAnneeScolaire, id_annee)
             if not annee:
                 return False, "Annee scolaire introuvable.", None
             if annee.Cloturer:
@@ -310,12 +310,12 @@ class VersementService:
         """Supprime un versement existent."""
         session = get_session()
         try:
-            v = session.query(VersementScol).get(id_versement)
+            v = session.get(VersementScol, id_versement)
             if not v:
                 return False, "Versement introuvable."
             
             # Verifier si l'annee est cloturee
-            annee = session.query(TAnneeScolaire).get(v.IDTAnneeScolaire)
+            annee = session.get(TAnneeScolaire, v.IDTAnneeScolaire)
             if annee and annee.Cloturer:
                 return False, "Impossible de supprimer un versement appartenant a une annee cloturee."
 

@@ -95,7 +95,7 @@ class MontantAutresFraisService:
         """Supprime ou retire un montant d'autre frais."""
         session = get_session()
         try:
-            m = session.query(MontantAutresFrais).get(id_montant)
+            m = session.get(MontantAutresFrais, id_montant)
             if not m:
                 return False, "Tarif introuvable."
             session.delete(m)

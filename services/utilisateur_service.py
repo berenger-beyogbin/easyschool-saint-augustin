@@ -169,7 +169,7 @@ class UtilisateurService:
     def update(id_user: int, data: dict) -> tuple[bool, str]:
         session = get_session()
         try:
-            user = session.query(Utilisateur).get(id_user)
+            user = session.get(Utilisateur, id_user)
             if not user:
                 return False, "Utilisateur introuvable."
 
@@ -211,7 +211,7 @@ class UtilisateurService:
     def toggle_active(id_user: int) -> tuple[bool, str]:
         session = get_session()
         try:
-            user = session.query(Utilisateur).get(id_user)
+            user = session.get(Utilisateur, id_user)
             if not user:
                 return False, "Utilisateur introuvable."
             user.IsActive = not user.IsActive
@@ -228,7 +228,7 @@ class UtilisateurService:
     def set_printer_preference(id_user: int, printer_name: str | None) -> tuple[bool, str]:
         session = get_session()
         try:
-            user = session.query(Utilisateur).get(id_user)
+            user = session.get(Utilisateur, id_user)
             if not user:
                 return False, "Utilisateur introuvable."
             user.ImprimanteDefaut = printer_name or None
@@ -245,7 +245,7 @@ class UtilisateurService:
         from app.session import AppSession
         session = get_session()
         try:
-            user = session.query(Utilisateur).get(id_user)
+            user = session.get(Utilisateur, id_user)
             if not user:
                 return False, "Utilisateur introuvable."
             if user.IDUtilisateur == AppSession.get_current_user_id():

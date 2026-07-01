@@ -22,7 +22,7 @@ class FamilleService:
         """Trouve une famille par sa clé primaire."""
         session = get_session()
         try:
-            return session.query(TFamille).get(id_famille)
+            return session.get(TFamille, id_famille)
         finally:
             session.close()
 
@@ -110,7 +110,7 @@ class FamilleService:
         """Modifie une famille existante."""
         session = get_session()
         try:
-            famille = session.query(TFamille).get(id_famille)
+            famille = session.get(TFamille, id_famille)
             if not famille:
                 return False, "La famille à modifier n'existe pas."
 
@@ -174,7 +174,7 @@ class FamilleService:
         """Supprime une famille si elle n'est liée à aucun élève."""
         session = get_session()
         try:
-            famille = session.query(TFamille).get(id_famille)
+            famille = session.get(TFamille, id_famille)
             if not famille:
                 return False, "La famille à supprimer n'existe pas."
 
