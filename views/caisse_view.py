@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QFrame,
-    QDateEdit, QAbstractItemView
+    QDateEdit, QAbstractItemView, QComboBox
 )
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
@@ -10,9 +10,28 @@ from app.session import AppSession
 from utils.receipt_printer import ReceiptPrinter
 from app.styles import (
     COLORS, INPUT_STYLE, DATE_STYLE, BUTTON_SUCCESS,
-    BUTTON_SECONDARY, TABLE_STYLE, apply_card_shadow
+    BUTTON_SECONDARY, TABLE_STYLE, COMBO_STYLE, apply_card_shadow
 )
 from views.ui_components import FinancialSection, FinancialRow, make_separator
+
+
+# ─── Valeurs UI temporaires du reçu (non persistées en base) ─────────────────
+# Ces informations ne sont pas encore des colonnes de VersementScol : elles ne
+# sont transmises qu'au reçu imprimé, le temps d'une phase ulterieure dédiée.
+MODES_PAIEMENT = ["Espèce", "Mobile Money", "Chèque", "Virement"]
+TITULAIRES_PAIEMENT = ["Non précisé", "Père", "Mère", "Tuteur", "Autre"]
+
+
+def _compute_motif(m_scol: float, m_trans: float, m_cant: float) -> str:
+    """Déduit un motif de paiement simple à partir des montants versés."""
+    parts = []
+    if m_scol > 0:
+        parts.append("Scolarité")
+    if m_trans > 0:
+        parts.append("Transport")
+    if m_cant > 0:
+        parts.append("Cantine")
+    return " + ".join(parts) if parts else "Scolarité"
 
 
 # ─── Helpers montants ────────────────────────────────────────────────────────
@@ -310,6 +329,20 @@ class CaisseView(QWidget):
         self.txt_vers_cant.setFixedHeight(38)
         self.txt_vers_cant.textChanged.connect(self._update_valider_button)
         form_row.addLayout(_make_field_group("Cantine (F CFA)", self.txt_vers_cant))
+
+        self.combo_mode_paiement = QComboBox()
+        self.combo_mode_paiement.addItems(MODES_PAIEMENT)
+        self.combo_mode_paiement.setStyleSheet(COMBO_STYLE)
+        self.combo_mode_paiement.setFixedWidth(140)
+        self.combo_mode_paiement.setFixedHeight(38)
+        form_row.addLayout(_make_field_group("Mode de paiement", self.combo_mode_paiement))
+
+        self.combo_titulaire = QComboBox()
+        self.combo_titulaire.addItems(TITULAIRES_PAIEMENT)
+        self.combo_titulaire.setStyleSheet(COMBO_STYLE)
+        self.combo_titulaire.setFixedWidth(130)
+        self.combo_titulaire.setFixedHeight(38)
+        form_row.addLayout(_make_field_group("Titulaire", self.combo_titulaire))
 
         # Toggle Réduction
         reduc_vbox = QVBoxLayout()
@@ -715,6 +748,11 @@ class CaisseView(QWidget):
                 "nom":           nom_eleve,
                 "classe":        cls_eleve,
                 "numero":        str(new_id) if new_id else "—",
+                # Enrichissement CJGA — valeurs UI temporaires (non persistées en base)
+                "motif":         _compute_motif(m_scol, m_trans, m_cant),
+                "mode_paiement": self.combo_mode_paiement.currentText(),
+                "titulaire":     self.combo_titulaire.currentText(),
+                "total_recu":    m_scol + m_trans + m_cant,
                 # SCOLARITE
                 "scol_active": fin_before["options"]["scolarite"],
                 "scol_due":    fin_before["scol_reste"],   # solde dû AVANT ce paiement
@@ -733,6 +771,7 @@ class CaisseView(QWidget):
             }
 
             self.toggle_reduction.setChecked(False)
+            self.combo_titulaire.setCurrentIndex(0)
             self.txt_date.setDate(QDate.currentDate())
             self.refresh_eleve_profile()
 

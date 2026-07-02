@@ -21,6 +21,70 @@ def _fmt(v) -> str:
         return "0 F"
 
 
+# ── Montant en lettres (français, entiers uniquement) ─────────────────────────
+_UNITES = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf",
+           "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize",
+           "dix-sept", "dix-huit", "dix-neuf"]
+_DIZAINES = ["", "", "vingt", "trente", "quarante", "cinquante", "soixante",
+             "soixante-dix", "quatre-vingt", "quatre-vingt-dix"]
+
+
+def _deux_chiffres_en_lettres(n: int) -> str:
+    if n < 20:
+        return _UNITES[n]
+    dix, unite = divmod(n, 10)
+    if dix in (7, 9):
+        base, reste = _DIZAINES[dix - 1], 10 + unite
+        if unite == 1 and dix == 7:
+            return f"{base} et {_UNITES[reste]}"
+        return f"{base}-{_UNITES[reste]}"
+    if unite == 0:
+        return f"{_DIZAINES[dix]}s" if dix == 8 else _DIZAINES[dix]
+    if unite == 1 and dix != 8:
+        return f"{_DIZAINES[dix]} et un"
+    return f"{_DIZAINES[dix]}-{_UNITES[unite]}"
+
+
+def _trois_chiffres_en_lettres(n: int) -> str:
+    centaine, reste = divmod(n, 100)
+    parts = []
+    if centaine > 0:
+        parts.append("cent" if centaine == 1 else f"{_UNITES[centaine]} cent" + ("s" if reste == 0 else ""))
+    if reste > 0:
+        parts.append(_deux_chiffres_en_lettres(reste))
+    return " ".join(parts) if parts else "zéro"
+
+
+def _montant_en_lettres(v) -> str:
+    """Convertit un montant FCFA entier en toutes lettres (français)."""
+    try:
+        n = int(float(v))
+    except Exception:
+        return ""
+    if n == 0:
+        return "Zéro franc CFA"
+
+    reste = abs(n)
+    milliards, reste = divmod(reste, 1_000_000_000)
+    millions, reste = divmod(reste, 1_000_000)
+    milliers, unites = divmod(reste, 1000)
+
+    parts = []
+    if milliards > 0:
+        parts.append(f"{_trois_chiffres_en_lettres(milliards)} milliard" + ("s" if milliards > 1 else ""))
+    if millions > 0:
+        parts.append(f"{_trois_chiffres_en_lettres(millions)} million" + ("s" if millions > 1 else ""))
+    if milliers > 0:
+        parts.append("mille" if milliers == 1 else f"{_trois_chiffres_en_lettres(milliers)} mille")
+    if unites > 0 or not parts:
+        parts.append(_trois_chiffres_en_lettres(unites))
+
+    texte = " ".join(parts)
+    texte = f"moins {texte}" if n < 0 else texte
+    unite_franc = "franc" if abs(n) == 1 else "francs"
+    return f"{texte[0].upper()}{texte[1:]} {unite_franc} CFA"
+
+
 def _font(size_pt: float, bold: bool = False) -> QFont:
     f = QFont("Arial", size_pt)
     f.setBold(bold)
@@ -191,14 +255,26 @@ class ReceiptPrinter:
             base_size=8, bold=True, min_size=5.5,
         )
 
-        # Ligne fine sous l'en-tête
+        # Ligne fine sous l'en-tête, avec le libellé du document au centre
         y_sep1 = Y + mm(26)
+        label_recu = "REÇU DE PAIEMENT"
+        painter.setFont(_font(9, bold=True))
+        label_w = painter.fontMetrics().horizontalAdvance(label_recu) + mm(4)
+        mid_x = X + CW / 2
+
         painter.setPen(QPen(C_BLACK, mm(0.22)))
-        painter.drawLine(int(X + mm(1.5)), int(y_sep1), int(X + CW - mm(1.5)), int(y_sep1))
+        painter.drawLine(int(X + mm(1.5)), int(y_sep1), int(mid_x - label_w / 2), int(y_sep1))
+        painter.drawLine(int(mid_x + label_w / 2), int(y_sep1), int(X + CW - mm(1.5)), int(y_sep1))
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(mid_x - label_w / 2, y_sep1 - mm(3), label_w, mm(6)),
+            Qt.AlignmentFlag.AlignCenter,
+            label_recu,
+        )
 
         # ── INFOS ÉLÈVE ───────────────────────────────────────────────────────
         y_info = y_sep1 + mm(2)
-        row_h = mm(6)
+        row_h = mm(5)
         painter.setFont(_font(9, bold=True))
         painter.setPen(QPen(C_BLACK))
 
@@ -221,6 +297,20 @@ class ReceiptPrinter:
         painter.drawText(QRectF(X + CW * 0.47, y_info, CW * 0.5, row_h),
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                          f"Numéro :  {data.get('numero', '')}")
+
+        # Motif / Mode de paiement / Titulaire — enrichissement CJGA
+        # (valeurs UI temporaires, non persistées en base à ce stade)
+        y_info += row_h
+        painter.setFont(_font(8, bold=True))
+        painter.drawText(QRectF(X + mm(3), y_info, CW * 0.36, row_h),
+                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         f"Motif :  {data.get('motif', 'Scolarité')}")
+        painter.drawText(QRectF(X + CW * 0.37, y_info, CW * 0.34, row_h),
+                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         f"Mode :  {data.get('mode_paiement', 'Espèce')}")
+        painter.drawText(QRectF(X + CW * 0.70, y_info, CW * 0.30, row_h),
+                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         f"Titulaire :  {data.get('titulaire', 'Non précisé')}")
 
         # Séparateur pointillé
         y_dot_h = y_info + row_h + mm(1.5)
@@ -264,7 +354,7 @@ class ReceiptPrinter:
             painter.drawLine(int(sep_x), int(y_dot_h), int(sep_x), int(y_footer_top))
 
         # ── Titres des rubriques ──────────────────────────────────────────────
-        TITLE_H = mm(13)
+        TITLE_H = mm(11)
         sections_meta = [
             ("SCOLARITE", x_scol,  "scol_active"),
             ("TRANSPORT", x_trans, "trans_active"),
@@ -367,17 +457,34 @@ class ReceiptPrinter:
         nb_h = mm(13)
         nb_y = y_footer_top + mm(2)
 
-        nb_text = (
-            "NB : Tout paiement effectué ne sera pas remboursé, si les paiements ne sont pas "
-            "effectués selon l'échéance fixée, l'enfant peut être retourné à la maison.   "
-            "Si l'enfant cesse de prendre le car ou arrête de manger à la cantine, merci "
-            "de mentionner par écrit à la comptabilité."
-        )
-
-        painter.setFont(_font(6))
+        # Montant total reçu + montant en lettres — enrichissement CJGA
+        total_recu = data.get("total_recu")
+        if total_recu is None:
+            total_recu = (
+                float(data.get("scol_recu", 0) or 0) +
+                float(data.get("trans_recu", 0) or 0) +
+                float(data.get("cant_recu", 0) or 0)
+            )
+        total_h = mm(4)
+        total_line = f"Montant total reçu :  {_fmt(total_recu)}  —  {_montant_en_lettres(total_recu)}"
+        painter.setFont(_font(8, bold=True))
         painter.setPen(QPen(C_BLACK))
         painter.drawText(
-            QRectF(X + mm(2), nb_y, CW - mm(4), nb_h),
+            QRectF(X + mm(2), nb_y, CW - mm(4), total_h),
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
+            total_line,
+        )
+
+        nb_text = (
+            "NB : Tout paiement effectué n'est pas remboursable. Le non-respect de l'échéance "
+            "peut entraîner le renvoi de l'enfant. Prévenir la comptabilité par écrit en cas "
+            "d'arrêt du transport ou de la cantine."
+        )
+
+        painter.setFont(_font(5.5))
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(X + mm(2), nb_y + total_h, CW - mm(4), nb_h - total_h),
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
             nb_text,
         )
