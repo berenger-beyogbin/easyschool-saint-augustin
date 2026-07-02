@@ -643,8 +643,6 @@ QPushButton {{
     font-size: 13px;
     border-radius: 6px;
     border: 1px solid {COLORS['border']};
-    min-height: 26px;
-    max-height: 30px;
 }}
 QPushButton:hover {{
     background-color: #CBD5E1;
@@ -661,8 +659,6 @@ QPushButton {{
     font-size: 13px;
     border-radius: 6px;
     border: none;
-    min-height: 26px;
-    max-height: 30px;
 }}
 QPushButton:hover {{ background-color: {COLORS['primary_dark']}; }}
 QPushButton:disabled {{ background-color: #E5E7EB; color: #9CA3AF; }}
@@ -677,8 +673,6 @@ QPushButton {{
     font-size: 13px;
     border-radius: 6px;
     border: none;
-    min-height: 26px;
-    max-height: 30px;
 }}
 QPushButton:hover {{ background-color: #B91C1C; }}
 QPushButton:disabled {{ background-color: #E5E7EB; color: #9CA3AF; }}
@@ -693,8 +687,6 @@ QPushButton {{
     font-size: 13px;
     border-radius: 6px;
     border: none;
-    min-height: 26px;
-    max-height: 30px;
 }}
 QPushButton:hover {{ background-color: #EA580C; }}
 QPushButton:disabled {{ background-color: #E5E7EB; color: #9CA3AF; }}
@@ -728,13 +720,16 @@ QMessageBox QPushButton {{
     max-height: 34px;
     font-size: 15px;
     font-weight: 600;
+    outline: none;
 }}
 QMessageBox QPushButton:hover {{
     background-color: {COLORS['border']};
     border-color: {COLORS['muted']};
+    color: {COLORS['text']};
 }}
 QMessageBox QPushButton:pressed {{
     background-color: #D1D5DB;
+    color: {COLORS['text']};
 }}
 QMessageBox QPushButton:default {{
     background-color: {COLORS['primary']};
@@ -744,6 +739,18 @@ QMessageBox QPushButton:default {{
 QMessageBox QPushButton:default:hover {{
     background-color: {COLORS['primary_dark']};
     border-color: {COLORS['primary_dark']};
+    color: #FFFFFF;
+}}
+QMessageBox QPushButton:default:pressed {{
+    background-color: #1E3A8A;
+    border-color: #1E3A8A;
+    color: #FFFFFF;
+}}
+QMessageBox QPushButton:focus {{
+    color: {COLORS['text']};
+}}
+QMessageBox QPushButton:default:focus {{
+    color: #FFFFFF;
 }}
 QMessageBox QFrame {{
     background-color: transparent;
@@ -999,6 +1006,7 @@ def apply_modal_style(dialog):
             min-height: 30px;
             font-size: 14px;
             font-weight: 600;
+            outline: none;
         }}
         QPushButton:hover {{
             background-color: {COLORS['border']};
@@ -1006,6 +1014,7 @@ def apply_modal_style(dialog):
         }}
         QPushButton:pressed {{
             background-color: #D1D5DB;
+            color: {COLORS['text']};
         }}
         QPushButton:default {{
             background-color: {COLORS['primary']};
@@ -1014,8 +1023,66 @@ def apply_modal_style(dialog):
         }}
         QPushButton:default:hover {{
             background-color: {COLORS['primary_dark']};
+            color: #FFFFFF;
+        }}
+        QPushButton:default:pressed {{
+            background-color: #1E3A8A;
+            color: #FFFFFF;
         }}
     """)
+
+
+def install_messagebox_autostyle():
+    """Force TOUTE QMessageBox (y compris via QMessageBox.warning/information/
+    critical/question) à recevoir explicitement MESSAGEBOX_STYLE sur l'instance.
+
+    Nécessaire car le style applicatif global (QApplication.setStyleSheet) est
+    "masqué" pour une QMessageBox dès que son widget parent a lui-même un
+    setStyleSheet local (cas de quasi toutes les vues de l'app) : Qt fait alors
+    remonter la cascade jusqu'à l'ancêtre le plus proche possédant un style,
+    sans redescendre vers le style de l'application pour les propriétés
+    manquantes — le bouton par défaut retombe sur le rendu Fusion natif
+    (texte "BrightText" blanc sur fond quasi blanc = illisible).
+    À appeler une seule fois, tôt dans main().
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    _ICONS = {
+        "warning": QMessageBox.Icon.Warning,
+        "information": QMessageBox.Icon.Information,
+        "critical": QMessageBox.Icon.Critical,
+        "question": QMessageBox.Icon.Question,
+    }
+
+    def _make(kind):
+        icon = _ICONS[kind]
+
+        def _fn(parent, title, text,
+                buttons=QMessageBox.StandardButton.NoButton,
+                defaultButton=QMessageBox.StandardButton.NoButton):
+            box = QMessageBox(parent)
+            box.setIcon(icon)
+            box.setWindowTitle(title)
+            box.setText(text)
+            if buttons != QMessageBox.StandardButton.NoButton:
+                box.setStandardButtons(buttons)
+            elif kind == "question":
+                box.setStandardButtons(
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+            else:
+                box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            if defaultButton != QMessageBox.StandardButton.NoButton:
+                box.setDefaultButton(defaultButton)
+            box.setStyleSheet(MESSAGEBOX_STYLE)
+            return box.exec()
+
+        return _fn
+
+    QMessageBox.warning = staticmethod(_make("warning"))
+    QMessageBox.information = staticmethod(_make("information"))
+    QMessageBox.critical = staticmethod(_make("critical"))
+    QMessageBox.question = staticmethod(_make("question"))
 
 
 def apply_card_shadow(widget):
@@ -1109,7 +1176,7 @@ def configure_table_action_button(button, variant: str = "danger") -> None:
         "neutral": BUTTON_TABLE_ACTION,
     }
     button.setStyleSheet(styles.get(variant, BUTTON_TABLE_ACTION_DANGER))
-    button.setFixedHeight(30)
+    button.setFixedHeight(32)
     button.setMinimumWidth(95)
     button.setMaximumWidth(130)
     button.setCursor(Qt.CursorShape.PointingHandCursor)

@@ -1,0 +1,4 @@
+# Dependances pour construire la version installable (PyInstaller).
+# Installer avec :
+#   pip install -r requirements.txt -r requirements-build.txt
+pyinstaller>=6.11.0
