@@ -1,5 +1,5 @@
 from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
-from PySide6.QtGui import QPainter, QFont, QFontMetrics, QPen, QColor, QPageSize, QPageLayout
+from PySide6.QtGui import QPainter, QFont, QPen, QColor, QPageSize, QPageLayout
 from PySide6.QtCore import Qt, QRectF
 
 # ── En-tête école : fallback neutre si aucun établissement n'est trouvé ───────
@@ -37,14 +37,15 @@ def _draw_centered_fit_text(painter: QPainter, rect: QRectF, text: str,
 
     size = base_size
     font = _font(size, bold)
-    fm = QFontMetrics(font)
+    painter.setFont(font)
+    fm = painter.fontMetrics()
     while fm.horizontalAdvance(text) > rect.width() and size > min_size:
         size -= 0.5
         font = _font(size, bold)
-        fm = QFontMetrics(font)
+        painter.setFont(font)
+        fm = painter.fontMetrics()
 
     if fm.horizontalAdvance(text) <= rect.width():
-        painter.setFont(font)
         painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, text)
         return
 
@@ -59,7 +60,6 @@ def _draw_centered_fit_text(painter: QPainter, rect: QRectF, text: str,
         if best_w is None or w < best_w:
             best_w, line1, line2 = w, candidate1, candidate2
 
-    painter.setFont(font)
     half_h = rect.height() / 2
     painter.drawText(QRectF(rect.x(), rect.y(), rect.width(), half_h),
                       Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, line1)
