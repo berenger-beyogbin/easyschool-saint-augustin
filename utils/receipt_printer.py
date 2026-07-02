@@ -2,6 +2,8 @@ from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from PySide6.QtGui import QPainter, QFont, QPen, QColor, QPageSize, QPageLayout
 from PySide6.QtCore import Qt, QRectF
 
+from app.config import Config
+
 # ── En-tête école : fallback neutre si aucun établissement n'est trouvé ───────
 _HDR_NOM_FALLBACK = "ÉTABLISSEMENT SCOLAIRE"
 
@@ -319,21 +321,22 @@ class ReceiptPrinter:
         painter.setPen(pen_dot)
         painter.drawLine(int(X), int(y_dot_h), int(X + CW), int(y_dot_h))
 
-        # ── CORPS : GRILLE LIBELLÉS + 3 COLONNES DE VALEURS ──────────────────
+        # ── CORPS : GRILLE LIBELLÉS + COLONNES DES RUBRIQUES ACTIVES ─────────
         #
-        #  | LIBELLÉS (30%) | SCOLARITE (23%) | TRANSPORT (23%) | CANTINE (24%) |
-        #  |─────────────────────────────────────────────────────────────────────|
-        #  | Montant dû :   |   120 000 F     |   110 000 F     |  100 000 F    |
-        #  | Montant reçu : |    20 000 F     |    30 000 F     |       0 F     |
-        #  | Reste à verser:|   100 000 F     |    80 000 F     |  100 000 F    |
+        # Seules les rubriques actives sont dessinées (Scolarité toujours
+        # affichée ; Transport/Cantine uniquement si actives pour cet élève).
+        # Une rubrique désactivée n'a pas de colonne du tout (pas de "—" grisé).
+        sections_def = [
+            ("SCOLARITE", "scol_active",  "scol_due",  "scol_recu",  "scol_reste",  True),
+            ("TRANSPORT", "trans_active", "trans_due", "trans_recu", "trans_reste", False),
+            ("CANTINE",   "cant_active",  "cant_due",  "cant_recu",  "cant_reste",  False),
+        ]
+        sections = [s for s in sections_def if s[5] or data.get(s[1], False)]
 
-        lbl_w = CW * 0.28           # colonne libellés
-        val_w = (CW - lbl_w) / 3   # largeur de chaque colonne rubrique (égales)
-
-        x_lbl   = X
-        x_scol  = X + lbl_w
-        x_trans = x_scol + val_w
-        x_cant  = x_trans + val_w
+        lbl_w = CW * 0.28                       # colonne libellés
+        val_w = (CW - lbl_w) / len(sections)    # largeur de chaque colonne rubrique active
+        x_lbl = X
+        x_cols = [x_lbl + lbl_w + i * val_w for i in range(len(sections))]
 
         y_body_top   = y_dot_h
         y_footer_top = Y + CH - mm(37)
@@ -344,10 +347,10 @@ class ReceiptPrinter:
 
         # Séparateur vertical gauche (libellés / valeurs) — trait continu fin
         painter.setPen(QPen(C_BORDER, mm(0.25)))
-        painter.drawLine(int(x_scol), int(y_dot_h), int(x_scol), int(y_footer_top))
+        painter.drawLine(int(x_cols[0]), int(y_dot_h), int(x_cols[0]), int(y_footer_top))
 
         # Séparateurs verticaux entre colonnes de valeurs — pointillés
-        for sep_x in [x_trans, x_cant]:
+        for sep_x in x_cols[1:]:
             pen_v = QPen(C_BORDER, mm(0.25))
             pen_v.setStyle(Qt.PenStyle.DotLine)
             painter.setPen(pen_v)
@@ -355,12 +358,8 @@ class ReceiptPrinter:
 
         # ── Titres des rubriques ──────────────────────────────────────────────
         TITLE_H = mm(11)
-        sections_meta = [
-            ("SCOLARITE", x_scol,  "scol_active"),
-            ("TRANSPORT", x_trans, "trans_active"),
-            ("CANTINE",   x_cant,  "cant_active"),
-        ]
-        for title, tx, act_key in sections_meta:
+        for section, tx in zip(sections, x_cols):
+            title, act_key = section[0], section[1]
             active = data.get(act_key, False)
             painter.setFont(_font(11, bold=True))
             painter.setPen(QPen(C_BLACK if active else C_MUTED))
@@ -377,21 +376,16 @@ class ReceiptPrinter:
                 )
 
         # ── Lignes de données ─────────────────────────────────────────────────
-        data_rows = [
-            ("Montant dû :",      "scol_due",   "trans_due",   "cant_due",   False),
-            ("Montant reçu :",    "scol_recu",  "trans_recu",  "cant_recu",  False),
-            ("Reste à verser :",  "scol_reste", "trans_reste", "cant_reste", True),
-        ]
-        val_cols = [
-            (x_scol,  "scol_active"),
-            (x_trans, "trans_active"),
-            (x_cant,  "cant_active"),
+        # (label, index du champ dans section_def : 2=due, 3=recu, 4=reste)
+        row_defs = [
+            ("Montant dû :",      2, False),
+            ("Montant reçu :",    3, False),
+            ("Reste à verser :",  4, True),
         ]
         d_row_h = mm(11)
         y_row = y_body_top + TITLE_H + mm(1)
 
-        for label, sk, tk, ck, is_reste in data_rows:
-            row_vkeys = (sk, tk, ck)
+        for label, field_idx, is_reste in row_defs:
             # Libellé — une seule fois à gauche
             painter.setFont(_font(9, bold=is_reste))
             painter.setPen(QPen(C_BLACK))
@@ -401,10 +395,10 @@ class ReceiptPrinter:
                 label,
             )
 
-            # Valeurs pour chaque rubrique
-            for col_idx, (tx, act_key) in enumerate(val_cols):
+            # Valeurs pour chaque rubrique active
+            for section, tx in zip(sections, x_cols):
+                act_key, vkey = section[1], section[field_idx]
                 active = data.get(act_key, False)
-                vkey = row_vkeys[col_idx]
                 val = data.get(vkey, 0)
 
                 if not active:
@@ -436,11 +430,8 @@ class ReceiptPrinter:
             y_row += d_row_h
 
         # ── Filigranes SOLDE (par colonne de valeur) ──────────────────────────
-        for (tx, act_key, reste_key) in [
-            (x_scol,  "scol_active",  "scol_reste"),
-            (x_trans, "trans_active", "trans_reste"),
-            (x_cant,  "cant_active",  "cant_reste"),
-        ]:
+        for section, tx in zip(sections, x_cols):
+            act_key, reste_key = section[1], section[4]
             if data.get(act_key, False) and float(data.get(reste_key, 1)) <= 0.0:
                 painter.save()
                 painter.translate(tx + val_w / 2, (y_body_top + TITLE_H + y_footer_top) / 2)
@@ -475,11 +466,13 @@ class ReceiptPrinter:
             total_line,
         )
 
-        nb_text = (
-            "NB : Tout paiement effectué n'est pas remboursable. Le non-respect de l'échéance "
-            "peut entraîner le renvoi de l'enfant. Prévenir la comptabilité par écrit en cas "
-            "d'arrêt du transport ou de la cantine."
+        clause_services = " ou ".join(
+            s for s, actif in (("du transport", Config.ENABLE_TRANSPORT),
+                                ("de la cantine", Config.ENABLE_CANTINE)) if actif
         )
+        nb_text = "NB : Tout paiement effectué n'est pas remboursable. Le non-respect de l'échéance peut entraîner le renvoi de l'enfant."
+        if clause_services:
+            nb_text += f" Prévenir la comptabilité par écrit en cas d'arrêt {clause_services}."
 
         painter.setFont(_font(5.5))
         painter.setPen(QPen(C_BLACK))

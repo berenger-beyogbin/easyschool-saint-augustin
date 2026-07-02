@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from app.config import Config
 from app.session import AppSession
 from app.styles import (
     COLORS, BUTTON_PRIMARY, BUTTON_SECONDARY, apply_table_style, apply_card_shadow
@@ -167,6 +168,10 @@ class DashboardView(QWidget):
         self.kpi_cards["total_depenses"].setVisible(show_comptabilite)
         self.kpi_cards["total_recettes"].setVisible(show_comptabilite)
 
+        # Cantine / Transport désactivés pour la version collège CJGA
+        self.kpi_cards["total_versements_cantine"].setVisible(show_versements and Config.ENABLE_CANTINE)
+        self.kpi_cards["total_versements_transport"].setVisible(show_versements and Config.ENABLE_TRANSPORT)
+
     def _build_alertes(self):
         self.alertes_frame = QFrame()
         self.alertes_frame.setStyleSheet(f"""
@@ -273,6 +278,12 @@ class DashboardView(QWidget):
 
         self.tbl_versements.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.tbl_ventes.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+
+        # Cantine / Transport désactivés pour la version collège CJGA
+        if not Config.ENABLE_CANTINE:
+            self.tbl_versements.setColumnHidden(4, True)
+        if not Config.ENABLE_TRANSPORT:
+            self.tbl_versements.setColumnHidden(5, True)
         tables_widget.setVisible(show_versements or show_ventes)
         self.main_layout.addWidget(tables_widget)
 

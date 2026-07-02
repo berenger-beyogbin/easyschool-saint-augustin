@@ -419,6 +419,10 @@ class CaisseView(QWidget):
         self.table_history.setHorizontalHeaderLabels([
             "Date", "Scolarité", "Transport", "Cantine", "Réduc.", "ID"
         ])
+        if not Config.ENABLE_TRANSPORT:
+            self.table_history.setColumnHidden(2, True)
+        if not Config.ENABLE_CANTINE:
+            self.table_history.setColumnHidden(3, True)
         self.table_history.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_history.setSelectionMode(QTableWidget.SingleSelection)
         self.table_history.setEditTriggers(QAbstractItemView.NoEditTriggers)
