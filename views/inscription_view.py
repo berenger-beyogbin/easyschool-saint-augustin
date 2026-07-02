@@ -10,13 +10,14 @@ from services.famille_service import FamilleService
 from services.eleve_service import EleveService
 from services.niveau_service import NiveauService
 from services.inscription_service import InscriptionService
+from services.inscription_autres_frais_service import InscriptionAutresFraisService
 from app.session import AppSession
 from app.database import get_session
 from app.config import Config
 from models.classe import TClasse
 from app.styles import (
     COLORS, INPUT_STYLE, COMBO_STYLE, TABLE_STYLE,
-    apply_card_shadow
+    apply_card_shadow, format_fcfa
 )
 
 _CARD_STYLE = """
@@ -136,6 +137,8 @@ class InscriptionView(QWidget):
         self._mode_modification = False
         self._id_inscription_courante = None
         self._inscriptions_map = {}  # {id_eleve: TInscription}
+        self._frais_checkboxes = []  # [(QCheckBox, frais_dict)] — liste dynamique selon le niveau
+        self._form_enabled = False
         self.setStyleSheet(f"background-color: {COLORS['bg']};")
         self.init_ui()
         self.load_responsables()
@@ -360,9 +363,6 @@ class InscriptionView(QWidget):
         self.chk_cantine = QCheckBox("Option Cantine midi")
         self.chk_cantine.setStyleSheet(_CHK_STYLE)
 
-        self.chk_autres = QCheckBox("Autres Frais / Activités")
-        self.chk_autres.setStyleSheet(_CHK_STYLE)
-
         for chk in [self.chk_scolarite, self.chk_nouveau]:
             c3.addWidget(self._make_option_row(chk))
 
@@ -376,7 +376,31 @@ class InscriptionView(QWidget):
         self.row_cantine.setVisible(Config.ENABLE_CANTINE)
         c3.addWidget(self.row_cantine)
 
-        c3.addWidget(self._make_option_row(self.chk_autres))
+        # Séparateur avant la section frais annexes
+        sep_frais = QFrame()
+        sep_frais.setFrameShape(QFrame.HLine)
+        sep_frais.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
+        sep_frais.setFixedHeight(1)
+        c3.addWidget(sep_frais)
+
+        # Frais annexes à l'inscription : liste cochable, dépend du niveau choisi
+        lbl_frais_annexes = QLabel("FRAIS ANNEXES À L'INSCRIPTION")
+        lbl_frais_annexes.setStyleSheet(_FIELD_LABEL_STYLE)
+        c3.addWidget(lbl_frais_annexes)
+
+        self.frais_annexes_container = QFrame()
+        self.frais_annexes_container.setStyleSheet("QFrame { background-color: transparent; border: none; }")
+        self.frais_annexes_layout = QVBoxLayout(self.frais_annexes_container)
+        self.frais_annexes_layout.setContentsMargins(0, 0, 0, 0)
+        self.frais_annexes_layout.setSpacing(6)
+        c3.addWidget(self.frais_annexes_container)
+
+        self.lbl_total_frais_annexes = QLabel("Total frais annexes sélectionnés : 0 FCFA")
+        self.lbl_total_frais_annexes.setStyleSheet(
+            f"font-size: 12px; font-weight: 700; color: {COLORS['primary_dark']};"
+            "background-color: transparent; border: none;"
+        )
+        c3.addWidget(self.lbl_total_frais_annexes)
 
         # Bouton CTA
         self.btn_inscrire = QPushButton("Inscrire l'Élève")
@@ -393,27 +417,33 @@ class InscriptionView(QWidget):
 
     def _set_form_enabled(self, enabled: bool):
         """Active ou désactive les champs du panneau d'affectation."""
+        self._form_enabled = enabled
         for w in [self.cmb_niveau, self.cmb_classe, self.cmb_statut_affectation,
                   self.chk_scolarite, self.chk_nouveau,
                   self.chk_transport, self.chk_cantine,
-                  self.chk_autres, self.btn_inscrire]:
+                  self.btn_inscrire]:
             w.setEnabled(enabled)
+        for chk, _frais in self._frais_checkboxes:
+            chk.setEnabled(enabled)
 
     def _prefill_inscription(self, inscription):
         """Pré-remplit le formulaire à partir d'une inscription existante."""
         idx = self.cmb_niveau.findData(inscription.IDNiveau)
         if idx >= 0:
-            self.cmb_niveau.setCurrentIndex(idx)  # déclenche load_classes_par_niveau
+            self.cmb_niveau.setCurrentIndex(idx)  # déclenche load_classes_par_niveau puis on_classe_changed
         idx = self.cmb_classe.findData(inscription.IDClasse)
         if idx >= 0:
-            self.cmb_classe.setCurrentIndex(idx)
+            self.cmb_classe.setCurrentIndex(idx)  # déclenche on_classe_changed (recharge les frais annexes)
         self.chk_scolarite.setChecked(bool(inscription.Scolarite))
         self.chk_nouveau.setChecked(bool(inscription.Nouveau))
         self.chk_transport.setChecked(bool(inscription.Transport))
         self.chk_cantine.setChecked(bool(inscription.Cantine))
-        self.chk_autres.setChecked(bool(inscription.AutresFrais))
         idx = self.cmb_statut_affectation.findData(inscription.StatutAffectation or "AFFECTE_ETAT")
         self.cmb_statut_affectation.setCurrentIndex(idx if idx >= 0 else 0)
+
+        # Précoche les frais annexes déjà enregistrés pour cette inscription.
+        # La liste des frais proposés a déjà été rechargée ci-dessus (changement niveau/classe).
+        self._precocher_frais_annexes(inscription.IDTInscription)
 
     def _reset_form(self):
         """Réinitialise le formulaire aux valeurs par défaut pour une nouvelle inscription."""
@@ -424,7 +454,80 @@ class InscriptionView(QWidget):
         self.chk_nouveau.setChecked(True)
         self.chk_transport.setChecked(False)
         self.chk_cantine.setChecked(False)
-        self.chk_autres.setChecked(False)
+        # La remise à zéro de cmb_niveau ci-dessus déclenche on_classe_changed,
+        # qui recharge (et donc vide) la sélection des frais annexes.
+
+    # ── Frais annexes cochables ───────────────────────────────────────────────
+
+    def _clear_frais_annexes_layout(self):
+        """Retire tous les widgets actuellement affichés dans la section frais annexes."""
+        while self.frais_annexes_layout.count():
+            item = self.frais_annexes_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        self._frais_checkboxes = []
+
+    def _load_frais_annexes(self, id_niveau):
+        """
+        Recharge la liste des frais annexes cochables pour le niveau sélectionné.
+        Vide systématiquement l'ancienne sélection avant de reconstruire la liste.
+
+        NOTE : pas de filtrage par sexe pour l'instant — le catalogue MontantAutresFrais
+        ne porte pas cette dimension aujourd'hui. Un filtrage par sexe pourra être
+        ajouté ici plus tard si le modèle évolue pour le supporter.
+        """
+        self._clear_frais_annexes_layout()
+
+        id_annee = AppSession.get_active_annee_id()
+        if not id_niveau or not id_annee:
+            self._update_total_frais_annexes()
+            return
+
+        frais_list = InscriptionAutresFraisService.get_frais_proposes(id_niveau, id_annee)
+
+        if not frais_list:
+            lbl_vide = QLabel("Aucun frais annexe paramétré pour ce niveau.")
+            lbl_vide.setStyleSheet(
+                f"font-size: 11px; font-style: italic; color: {COLORS['muted']};"
+                "background-color: transparent; border: none;"
+            )
+            lbl_vide.setWordWrap(True)
+            self.frais_annexes_layout.addWidget(lbl_vide)
+            self._update_total_frais_annexes()
+            return
+
+        for frais in frais_list:
+            libelle = frais.get("LibelleFrais") or frais.get("CodeFrais") or "Frais"
+            montant = frais.get("MontantFrais") or 0
+            chk = QCheckBox(f"{libelle} — {format_fcfa(montant)}")
+            chk.setStyleSheet(_CHK_STYLE)
+            chk.setEnabled(self._form_enabled)
+            chk.toggled.connect(self._update_total_frais_annexes)
+            self.frais_annexes_layout.addWidget(self._make_option_row(chk))
+            self._frais_checkboxes.append((chk, frais))
+
+        self._update_total_frais_annexes()
+
+    def _update_total_frais_annexes(self):
+        """Recalcule et affiche le total des frais annexes actuellement cochés."""
+        total = sum(
+            (frais.get("MontantFrais") or 0)
+            for chk, frais in self._frais_checkboxes
+            if chk.isChecked()
+        )
+        self.lbl_total_frais_annexes.setText(f"Total frais annexes sélectionnés : {format_fcfa(total)}")
+
+    def _precocher_frais_annexes(self, id_inscription):
+        """Précoche les frais annexes déjà enregistrés pour une inscription existante."""
+        if not id_inscription:
+            return
+        coches = InscriptionAutresFraisService.get_frais_coches(id_inscription)
+        ids_montant_coches = {c["IDMontantAutres"] for c in coches if c.get("IDMontantAutres")}
+        for chk, frais in self._frais_checkboxes:
+            if frais.get("IDMontantAutres") in ids_montant_coches:
+                chk.setChecked(True)
+        self._update_total_frais_annexes()
 
     # ── Helpers effectif ──────────────────────────────────────────────────────
 
@@ -579,6 +682,11 @@ class InscriptionView(QWidget):
         self._set_form_enabled(True)
 
     def on_classe_changed(self):
+        # Le niveau pilote les frais annexes proposés (indépendant de la classe) :
+        # on recharge ici pour couvrir à la fois un changement de niveau (qui repeuple
+        # cmb_classe et déclenche ce slot) et un changement de classe direct.
+        self._load_frais_annexes(self.cmb_niveau.currentData())
+
         id_classe = self.cmb_classe.currentData()
         id_annee = AppSession.get_active_annee_id()
         if not id_classe or not id_annee:
@@ -698,6 +806,11 @@ class InscriptionView(QWidget):
             self.cmb_classe.setFocus()
             return
 
+        # Frais annexes actuellement cochés (IDMontantAutres du catalogue paramétré)
+        ids_montant_frais = [
+            frais["IDMontantAutres"] for chk, frais in self._frais_checkboxes if chk.isChecked()
+        ]
+
         payload = {
             "IDEleve":     self.selected_eleve_id,
             "IDFamille":   self.selected_famille_id,
@@ -707,20 +820,39 @@ class InscriptionView(QWidget):
             "Scolarite":   self.chk_scolarite.isChecked(),
             "Transport":   self.chk_transport.isChecked(),
             "Cantine":     self.chk_cantine.isChecked(),
-            "AutresFrais": self.chk_autres.isChecked(),
+            # Indicateur global : au moins un frais annexe coché.
+            "AutresFrais": bool(ids_montant_frais),
             "StatutAffectation": self.cmb_statut_affectation.currentData(),
         }
 
+        id_inscription = None
         if self._mode_modification:
             success, message = InscriptionService.update_inscription(
                 self._id_inscription_courante, payload
             )
             title_ok = "Modification Réussie"
             title_err = "Erreur de Modification"
+            id_inscription = self._id_inscription_courante
         else:
             success, message = InscriptionService.create_inscription(payload)
             title_ok = "Inscription Réussie"
             title_err = "Régulation d'Inscription"
+            if success:
+                inscription_creee = InscriptionService.get_inscription_by_eleve_annee(
+                    self.selected_eleve_id, id_annee
+                )
+                id_inscription = inscription_creee.IDTInscription if inscription_creee else None
+
+        if success and id_inscription:
+            ok_frais, msg_frais = InscriptionAutresFraisService.set_frais_coches(
+                id_inscription, ids_montant_frais, login=None
+            )
+            if not ok_frais:
+                QMessageBox.warning(
+                    self, "Frais annexes",
+                    f"L'inscription a été enregistrée mais les frais annexes n'ont pas pu être "
+                    f"sauvegardés : {msg_frais}"
+                )
 
         if success:
             QMessageBox.information(self, title_ok, message)
