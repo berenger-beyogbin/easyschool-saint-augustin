@@ -9,7 +9,9 @@ class Config:
     DB_PORT = os.getenv("DB_PORT", "5432")
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
-    DB_NAME = os.getenv("DB_NAME", "easy_school_db")
+    # Base dediee a l'adaptation CJGA (College Catholique Joseph Garnier Attingue),
+    # separee de la base historique du primaire pour eviter tout melange de donnees.
+    DB_NAME = os.getenv("DB_NAME", "easy_school_csja_db")
 
     @classmethod
     def get_db_url(cls):
