@@ -2,10 +2,8 @@ from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from PySide6.QtGui import QPainter, QFont, QPen, QColor, QPageSize, QPageLayout
 from PySide6.QtCore import Qt, QRectF
 
-# ── En-tête école : codé en dur ───────────────────────────────────────────────
-_HDR_TYPE = "ECOLE PRIMAIRE CATHOLIQUE"
-_HDR_NOM  = "SAINT AUGUSTIN"
-_HDR_ADDR = "Route d'Alépé carrefour Monastère. CEL : 07 08 56 42 02 / 05 04 08 13 55"
+# ── En-tête école : fallback neutre si aucun établissement n'est trouvé ───────
+_HDR_NOM_FALLBACK = "ÉTABLISSEMENT SCOLAIRE"
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 C_BLACK  = QColor(0,   0,   0)
@@ -45,16 +43,45 @@ class ReceiptPrinter:
         printer.setPageOrientation(QPageLayout.Orientation.Landscape)
         printer.setFullPage(True)
 
+        hdr = ReceiptPrinter._get_etablissement_header()
+
         preview = QPrintPreviewDialog(printer, parent)
         preview.setWindowTitle("Aperçu — Reçu de paiement")
         preview.resize(980, 700)
-        preview.paintRequested.connect(lambda p: ReceiptPrinter._render(p, data))
+        preview.paintRequested.connect(lambda p: ReceiptPrinter._render(p, data, hdr))
         preview.exec()
 
     # ─────────────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _render(printer: QPrinter, data: dict):
+    def _get_etablissement_header() -> dict:
+        """Recupere les infos d'en-tete de l'etablissement pour le recu.
+        Ne doit jamais lever d'exception : un recu doit toujours pouvoir s'imprimer."""
+        hdr = {
+            "type": "", "nom": _HDR_NOM_FALLBACK, "sigle": "",
+            "adresse": "", "telephone": "", "email": "", "slogan": "",
+            "dren": "", "iep": "",
+        }
+        try:
+            from services.etablissement_service import EtablissementService
+            ecole = EtablissementService.get_etablissement()
+            hdr["type"]      = ecole.TypeEtab or ""
+            hdr["nom"]       = ecole.RaisonSociale or _HDR_NOM_FALLBACK
+            hdr["sigle"]     = ecole.Sigle or ""
+            hdr["adresse"]   = ecole.Adresse or ""
+            hdr["telephone"] = ecole.Telephone or ""
+            hdr["email"]     = ecole.Email or ""
+            hdr["slogan"]    = ecole.Slogan or ""
+            hdr["dren"]      = ecole.Dren or ""
+            hdr["iep"]       = ecole.IEP or ""
+        except Exception:
+            pass
+        return hdr
+
+    @staticmethod
+    def _render(printer: QPrinter, data: dict, hdr: dict = None):
+        if hdr is None:
+            hdr = ReceiptPrinter._get_etablissement_header()
         painter = QPainter(printer)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -87,28 +114,41 @@ class ReceiptPrinter:
             painter.drawLine(int(cx + dx * gp), int(cy), int(cx + dx * (gp + mk)), int(cy))
             painter.drawLine(int(cx), int(cy + dy * gp), int(cx), int(cy + dy * (gp + mk)))
 
-        # ── EN-TÊTE ───────────────────────────────────────────────────────────
+        # ── EN-TÊTE (dynamique, selon l'établissement enregistré) ─────────────
         painter.setPen(QPen(C_BLACK))
+
+        hdr_line1 = "  —  ".join(s for s in [hdr.get("type", ""), hdr.get("dren", ""), hdr.get("iep", "")] if s)
+        hdr_line2 = hdr.get("nom") or _HDR_NOM_FALLBACK
+        if hdr.get("sigle"):
+            hdr_line2 = f"{hdr_line2} ({hdr['sigle']})"
+        hdr_line3_parts = [hdr.get("adresse", "")]
+        if hdr.get("telephone"):
+            hdr_line3_parts.append(f"CEL : {hdr['telephone']}")
+        if hdr.get("email"):
+            hdr_line3_parts.append(hdr["email"])
+        if hdr.get("slogan"):
+            hdr_line3_parts.append(f"« {hdr['slogan']} »")
+        hdr_line3 = "  —  ".join(s for s in hdr_line3_parts if s)
 
         painter.setFont(_font(9, bold=True))
         painter.drawText(
             QRectF(X, Y + mm(2.5), CW, mm(7)),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            _HDR_TYPE,
+            hdr_line1,
         )
 
         painter.setFont(_font(20, bold=True))
         painter.drawText(
             QRectF(X, Y + mm(8), CW, mm(12)),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            _HDR_NOM,
+            hdr_line2,
         )
 
         painter.setFont(_font(8, bold=True))
         painter.drawText(
             QRectF(X, Y + mm(19), CW, mm(6)),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            _HDR_ADDR,
+            hdr_line3,
         )
 
         # Ligne fine sous l'en-tête

@@ -13,19 +13,19 @@ class EtablissementService:
             if not ecole:
                 # S'il n'existe aucun etablissement, on en cree un par defaut pour eviter une erreur
                 ecole = EtablissementEcole(
-                    RaisonSociale="EPC SAINT AUGUSTIN",
-                    Sigle="EPC",
-                    Telephone="01 01 01 01 01 / 01 01 01 01 01",
-                    Adresse="ABOBOTE",
-                    Localite="ABOBOTE",
-                    ChefEtab="DONGO KOUAME",
-                    CodeEtab="0037",
-                    TypeEtab="Enseignement Primaire",
-                    Ministere="MENAET",
-                    Dren="ABIDJAN 4",
-                    IEP="PLATEAU DOKUI",
-                    Slogan="Discipline - Success",
-                    Email="contact@epcsaintaugustin.ci"
+                    RaisonSociale="ÉTABLISSEMENT SCOLAIRE",
+                    Sigle="",
+                    Telephone="",
+                    Adresse="",
+                    Localite="",
+                    ChefEtab="",
+                    CodeEtab="",
+                    TypeEtab="",
+                    Ministere="",
+                    Dren="",
+                    IEP="",
+                    Slogan="",
+                    Email=""
                 )
                 session.add(ecole)
                 session.commit()
