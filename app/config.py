@@ -13,6 +13,13 @@ class Config:
     # separee de la base historique du primaire pour eviter tout melange de donnees.
     DB_NAME = os.getenv("DB_NAME", "easy_school_cjga_db")
 
+    # Flags de désactivation fonctionnelle pour la version college CJGA.
+    # Masquage UI uniquement : aucune table/colonne n'est supprimee, les
+    # anciennes structures (VersementScol.MontantCantine, etc.) restent intactes.
+    ENABLE_TRANSPORT = False
+    ENABLE_CANTINE = False
+    ENABLE_BIBLIOTHEQUE = False
+
     @classmethod
     def get_db_url(cls):
         # Genere l'URL de connexion SQLAlchemy pour PostgreSQL

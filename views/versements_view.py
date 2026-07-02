@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from app.styles import COLORS, TAB_STYLE_NESTED
+from app.config import Config
 from views.caisse_view import CaisseView
 from views.montant_scolarite_view import MontantScolariteView
 from views.montant_transport_view import MontantTransportView
@@ -32,24 +33,23 @@ class VersementsView(QWidget):
 
         self.tabs.addTab(self.view_caisse,       "Caisse")
         self.tabs.addTab(self.view_scolarite,    "Scolarité")
-        self.tabs.addTab(self.view_transport,    "Transport")
-        self.tabs.addTab(self.view_cantine,      "Cantine")
+        if Config.ENABLE_TRANSPORT:
+            self.tabs.addTab(self.view_transport, "Transport")
+        if Config.ENABLE_CANTINE:
+            self.tabs.addTab(self.view_cantine,   "Cantine")
         self.tabs.addTab(self.view_autres_frais, "Autres Frais")
 
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
 
     def on_tab_changed(self, index):
-        if index == 0:
-            self.view_caisse.load_eleves()
-        elif index == 1:
-            self.view_scolarite.load_montants()
-        elif index == 2:
-            self.view_transport.load_montants()
-        elif index == 3:
-            self.view_cantine.load_montants()
-        elif index == 4:
-            self.view_autres_frais.load_data()
+        widget = self.tabs.widget(index)
+        if widget is self.view_caisse:
+            widget.load_eleves()
+        elif widget in (self.view_scolarite, self.view_transport, self.view_cantine):
+            widget.load_montants()
+        elif widget is self.view_autres_frais:
+            widget.load_data()
 
     def refresh_data(self):
         self.on_tab_changed(self.tabs.currentIndex())

@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from app.styles import COLORS, TAB_STYLE
+from app.config import Config
 from views.ui_components import make_module_header
 
 from views.stat_inscrits_view import StatInscritsView
@@ -43,8 +44,10 @@ class StatistiquesView(QWidget):
         self.tabs.addTab(self.view_inscrits,     "Inscrits")
         self.tabs.addTab(self.view_nouveaux,     "Nouveaux")
         self.tabs.addTab(self.view_scolarite,    "Scolarité")
-        self.tabs.addTab(self.view_cantine,      "Cantine")
-        self.tabs.addTab(self.view_transport,    "Transport")
+        if Config.ENABLE_CANTINE:
+            self.tabs.addTab(self.view_cantine,   "Cantine")
+        if Config.ENABLE_TRANSPORT:
+            self.tabs.addTab(self.view_transport, "Transport")
         self.tabs.addTab(self.view_vente,        "Vente")
         self.tabs.addTab(self.view_stock,        "Stock")
         self.tabs.addTab(self.view_prestataires, "Prestataires")

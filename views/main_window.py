@@ -27,6 +27,7 @@ from .prestation_config_view import PrestationConfigView
 from app.styles import (
     COLORS, SIDEBAR_MENU_STYLE, TAB_STYLE, COMBO_STYLE, BUTTON_SECONDARY
 )
+from app.config import Config
 
 
 class AvatarLabel(QLabel):
@@ -647,7 +648,7 @@ class MainWindow(QMainWindow):
         titles = {
             0: "TABLEAU DE BORD",
             1: "SCOLARITÉ / INSCRIPTIONS",
-            2: "KIOSQUE & BIBLIOTHÈQUE",
+            2: "KIOSQUE & BIBLIOTHÈQUE" if Config.ENABLE_BIBLIOTHEQUE else "KIOSQUE",
             3: "COMPTABILITÉ FINANCIÈRE",
             4: "STATISTIQUES ET RAPPORTS",
             5: "SMS  ·  BIENTÔT",

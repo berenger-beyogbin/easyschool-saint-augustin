@@ -12,6 +12,7 @@ from services.niveau_service import NiveauService
 from services.inscription_service import InscriptionService
 from app.session import AppSession
 from app.database import get_session
+from app.config import Config
 from models.classe import TClasse
 from app.styles import (
     COLORS, INPUT_STYLE, COMBO_STYLE, TABLE_STYLE,
@@ -351,9 +352,20 @@ class InscriptionView(QWidget):
         self.chk_autres = QCheckBox("Autres Frais / Activités")
         self.chk_autres.setStyleSheet(_CHK_STYLE)
 
-        for chk in [self.chk_scolarite, self.chk_nouveau,
-                    self.chk_transport, self.chk_cantine, self.chk_autres]:
+        for chk in [self.chk_scolarite, self.chk_nouveau]:
             c3.addWidget(self._make_option_row(chk))
+
+        # Transport / Cantine désactivés pour la version collège CJGA
+        # (voir app.config.Config) — masqués, non proposés en saisie.
+        self.row_transport = self._make_option_row(self.chk_transport)
+        self.row_transport.setVisible(Config.ENABLE_TRANSPORT)
+        c3.addWidget(self.row_transport)
+
+        self.row_cantine = self._make_option_row(self.chk_cantine)
+        self.row_cantine.setVisible(Config.ENABLE_CANTINE)
+        c3.addWidget(self.row_cantine)
+
+        c3.addWidget(self._make_option_row(self.chk_autres))
 
         # Bouton CTA
         self.btn_inscrire = QPushButton("Inscrire l'Élève")

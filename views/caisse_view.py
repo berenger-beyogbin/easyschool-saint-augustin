@@ -7,6 +7,7 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
 from services.versement_service import VersementService
 from app.session import AppSession
+from app.config import Config
 from utils.receipt_printer import ReceiptPrinter
 from app.styles import (
     COLORS, INPUT_STYLE, DATE_STYLE, BUTTON_SUCCESS,
@@ -251,6 +252,10 @@ class CaisseView(QWidget):
         self.table_eleves.setHorizontalHeaderLabels([
             "Matricule", "Nom & Prénoms", "Classe", "Cantine", "Transport", "Nouveau"
         ])
+        if not Config.ENABLE_CANTINE:
+            self.table_eleves.setColumnHidden(3, True)
+        if not Config.ENABLE_TRANSPORT:
+            self.table_eleves.setColumnHidden(4, True)
         self.table_eleves.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_eleves.setSelectionMode(QTableWidget.SingleSelection)
         self.table_eleves.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -321,14 +326,24 @@ class CaisseView(QWidget):
         self.txt_vers_trans.setFixedWidth(125)
         self.txt_vers_trans.setFixedHeight(38)
         self.txt_vers_trans.textChanged.connect(self._update_valider_button)
-        form_row.addLayout(_make_field_group("Transport (F CFA)", self.txt_vers_trans))
+        # Transport désactivé pour la version collège CJGA — champ masqué,
+        # la valeur interne reste "0" (aucune saisie possible).
+        self.grp_vers_trans = QWidget()
+        self.grp_vers_trans.setLayout(_make_field_group("Transport (F CFA)", self.txt_vers_trans))
+        self.grp_vers_trans.setVisible(Config.ENABLE_TRANSPORT)
+        form_row.addWidget(self.grp_vers_trans)
 
         self.txt_vers_cant = QLineEdit("0")
         self.txt_vers_cant.setStyleSheet(INPUT_STYLE)
         self.txt_vers_cant.setFixedWidth(125)
         self.txt_vers_cant.setFixedHeight(38)
         self.txt_vers_cant.textChanged.connect(self._update_valider_button)
-        form_row.addLayout(_make_field_group("Cantine (F CFA)", self.txt_vers_cant))
+        # Cantine désactivée pour la version collège CJGA — champ masqué,
+        # la valeur interne reste "0" (aucune saisie possible).
+        self.grp_vers_cant = QWidget()
+        self.grp_vers_cant.setLayout(_make_field_group("Cantine (F CFA)", self.txt_vers_cant))
+        self.grp_vers_cant.setVisible(Config.ENABLE_CANTINE)
+        form_row.addWidget(self.grp_vers_cant)
 
         self.combo_mode_paiement = QComboBox()
         self.combo_mode_paiement.addItems(MODES_PAIEMENT)
@@ -635,12 +650,12 @@ class CaisseView(QWidget):
         self.row_sc_reduc.set_value(fmt(fin["scol_reduc"]))
         self.row_sc_rem.set_value(fmt(fin["scol_reste"]))
 
-        self.fs_trans.setVisible(fin["trans_due"] > 0)
+        self.fs_trans.setVisible(Config.ENABLE_TRANSPORT and fin["trans_due"] > 0)
         self.row_tr_due.set_value(fmt(fin["trans_due"]))
         self.row_tr_paid.set_value(fmt(fin["trans_paye"]))
         self.row_tr_rem.set_value(fmt(fin["trans_reste"]))
 
-        self.fs_cant.setVisible(fin["cant_due"] > 0)
+        self.fs_cant.setVisible(Config.ENABLE_CANTINE and fin["cant_due"] > 0)
         self.row_ca_due.set_value(fmt(fin["cant_due"]))
         self.row_ca_paid.set_value(fmt(fin["cant_paye"]))
         self.row_ca_rem.set_value(fmt(fin["cant_reste"]))
@@ -759,12 +774,12 @@ class CaisseView(QWidget):
                 "scol_recu":   m_scol,
                 "scol_reste":  fin_after["scol_reste"],
                 # TRANSPORT
-                "trans_active": fin_before["options"]["transport"],
+                "trans_active": Config.ENABLE_TRANSPORT and fin_before["options"]["transport"],
                 "trans_due":    fin_before["trans_reste"],  # solde dû AVANT ce paiement
                 "trans_recu":   m_trans,
                 "trans_reste":  fin_after["trans_reste"],
                 # CANTINE
-                "cant_active": fin_before["options"]["cantine"],
+                "cant_active": Config.ENABLE_CANTINE and fin_before["options"]["cantine"],
                 "cant_due":    fin_before["cant_reste"],    # solde dû AVANT ce paiement
                 "cant_recu":   m_cant,
                 "cant_reste":  fin_after["cant_reste"],
