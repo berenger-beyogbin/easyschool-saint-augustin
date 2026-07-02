@@ -752,6 +752,19 @@ class CaisseView(QWidget):
             login=AppSession.get_logged_in_username()
         )
         if success:
+            self.toggle_reduction.setChecked(False)
+            self.combo_titulaire.setCurrentIndex(0)
+            self.txt_date.setDate(QDate.currentDate())
+            self.refresh_eleve_profile()
+
+            if reduction_active:
+                # Une réduction n'est jamais un paiement réel : aucun reçu.
+                QMessageBox.information(
+                    self, "Réduction enregistrée",
+                    "Réduction enregistrée avec succès. Aucun reçu n'a été généré."
+                )
+                return
+
             # Situation financière APRÈS le paiement (pour « Reste à verser »)
             fin_after = VersementService.get_infos_financieres_eleve(active_annee_id, self.selected_eleve_id)
 
@@ -788,11 +801,6 @@ class CaisseView(QWidget):
                 "cant_recu":   m_cant,
                 "cant_reste":  fin_after["cant_reste"],
             }
-
-            self.toggle_reduction.setChecked(False)
-            self.combo_titulaire.setCurrentIndex(0)
-            self.txt_date.setDate(QDate.currentDate())
-            self.refresh_eleve_profile()
 
             # Ouverture de l'aperçu du reçu
             ReceiptPrinter.print_receipt(self, receipt_data)
