@@ -68,6 +68,7 @@ def create_tables():
     import models.inscription
     import models.autres_frais
     import models.montant_autres_frais
+    import models.inscription_autres_frais
     import models.montant_scol
     import models.montant_cantine
     import models.montant_transport
