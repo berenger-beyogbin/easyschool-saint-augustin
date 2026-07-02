@@ -30,6 +30,9 @@ class TInscription(Base):
     Login = Column(String(50), nullable=True)
     DateInscription = Column(Date, nullable=False)
 
+    # Statut d'affectation de l'État (AFFECTE_ETAT / NON_AFFECTE_ETAT)
+    StatutAffectation = Column(String(20), nullable=False, default="AFFECTE_ETAT")
+
     # Relations
     annee_scolaire = relationship("TAnneeScolaire")
     famille = relationship("TFamille", back_populates="inscriptions")

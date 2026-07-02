@@ -108,6 +108,17 @@ def create_tables():
     except Exception as e:
         print(f"Avertissement migration 'Utilisateur': {e}")
 
+    # Idempotent upgrade : statut d'affectation de l'État sur les inscriptions
+    try:
+        with _engine.begin() as conn:
+            conn.execute(text(
+                'ALTER TABLE IF EXISTS "TInscription" '
+                'ADD COLUMN IF NOT EXISTS "StatutAffectation" VARCHAR(20) NOT NULL DEFAULT \'AFFECTE_ETAT\';'
+            ))
+            print("Mise a jour de table 'TInscription' (ajout colonne StatutAffectation) terminee avec succes.")
+    except Exception as e:
+        print(f"Avertissement migration 'TInscription': {e}")
+
     # Ventilation analytique : index de performance sur (IDEleve, IDAnneeScolaire)
     try:
         with _engine.begin() as conn:

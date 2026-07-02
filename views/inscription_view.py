@@ -313,10 +313,21 @@ class InscriptionView(QWidget):
         self.cmb_classe.setFixedHeight(36)
         self.cmb_classe.currentIndexChanged.connect(self.on_classe_changed)
 
+        # Statut d'affectation de l'État
+        lbl_statut_affectation = QLabel("STATUT AFFECTATION *")
+        lbl_statut_affectation.setStyleSheet(_FIELD_LABEL_STYLE)
+        self.cmb_statut_affectation = QComboBox()
+        self.cmb_statut_affectation.setStyleSheet(COMBO_STYLE)
+        self.cmb_statut_affectation.setFixedHeight(36)
+        self.cmb_statut_affectation.addItem("Affecté de l'État", "AFFECTE_ETAT")
+        self.cmb_statut_affectation.addItem("Non affecté de l'État", "NON_AFFECTE_ETAT")
+
         c3.addWidget(lbl_niveau)
         c3.addWidget(self.cmb_niveau)
         c3.addWidget(lbl_classe)
         c3.addWidget(self.cmb_classe)
+        c3.addWidget(lbl_statut_affectation)
+        c3.addWidget(self.cmb_statut_affectation)
 
         # Effectif badge
         self.lbl_effectif = QLabel("Effectif actuel : — / —")
@@ -382,7 +393,7 @@ class InscriptionView(QWidget):
 
     def _set_form_enabled(self, enabled: bool):
         """Active ou désactive les champs du panneau d'affectation."""
-        for w in [self.cmb_niveau, self.cmb_classe,
+        for w in [self.cmb_niveau, self.cmb_classe, self.cmb_statut_affectation,
                   self.chk_scolarite, self.chk_nouveau,
                   self.chk_transport, self.chk_cantine,
                   self.chk_autres, self.btn_inscrire]:
@@ -401,11 +412,14 @@ class InscriptionView(QWidget):
         self.chk_transport.setChecked(bool(inscription.Transport))
         self.chk_cantine.setChecked(bool(inscription.Cantine))
         self.chk_autres.setChecked(bool(inscription.AutresFrais))
+        idx = self.cmb_statut_affectation.findData(inscription.StatutAffectation or "AFFECTE_ETAT")
+        self.cmb_statut_affectation.setCurrentIndex(idx if idx >= 0 else 0)
 
     def _reset_form(self):
         """Réinitialise le formulaire aux valeurs par défaut pour une nouvelle inscription."""
         self.cmb_niveau.setCurrentIndex(0)
         self.cmb_classe.setCurrentIndex(0)
+        self.cmb_statut_affectation.setCurrentIndex(0)
         self.chk_scolarite.setChecked(True)
         self.chk_nouveau.setChecked(True)
         self.chk_transport.setChecked(False)
@@ -694,6 +708,7 @@ class InscriptionView(QWidget):
             "Transport":   self.chk_transport.isChecked(),
             "Cantine":     self.chk_cantine.isChecked(),
             "AutresFrais": self.chk_autres.isChecked(),
+            "StatutAffectation": self.cmb_statut_affectation.currentData(),
         }
 
         if self._mode_modification:
