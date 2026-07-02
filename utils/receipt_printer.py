@@ -1,5 +1,5 @@
 from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
-from PySide6.QtGui import QPainter, QFont, QPen, QColor, QPageSize, QPageLayout
+from PySide6.QtGui import QPainter, QFont, QFontMetrics, QPen, QColor, QPageSize, QPageLayout
 from PySide6.QtCore import Qt, QRectF
 
 # ── En-tête école : fallback neutre si aucun établissement n'est trouvé ───────
@@ -25,6 +25,46 @@ def _font(size_pt: float, bold: bool = False) -> QFont:
     f = QFont("Arial", size_pt)
     f.setBold(bold)
     return f
+
+
+def _draw_centered_fit_text(painter: QPainter, rect: QRectF, text: str,
+                             base_size: float, bold: bool = True, min_size: float = 6.0) -> None:
+    """Dessine `text` centré dans `rect` sans jamais dépasser sa largeur.
+    Réduit progressivement la taille de police jusqu'à `min_size` ; si le texte
+    est encore trop large, il est réparti sur deux lignes centrées."""
+    if not text:
+        return
+
+    size = base_size
+    font = _font(size, bold)
+    fm = QFontMetrics(font)
+    while fm.horizontalAdvance(text) > rect.width() and size > min_size:
+        size -= 0.5
+        font = _font(size, bold)
+        fm = QFontMetrics(font)
+
+    if fm.horizontalAdvance(text) <= rect.width():
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, text)
+        return
+
+    # Toujours trop large à la taille minimale : répartir sur deux lignes
+    words = text.split(" ")
+    line1, line2 = text, ""
+    best_w = None
+    for i in range(1, len(words)):
+        candidate1 = " ".join(words[:i])
+        candidate2 = " ".join(words[i:])
+        w = max(fm.horizontalAdvance(candidate1), fm.horizontalAdvance(candidate2))
+        if best_w is None or w < best_w:
+            best_w, line1, line2 = w, candidate1, candidate2
+
+    painter.setFont(font)
+    half_h = rect.height() / 2
+    painter.drawText(QRectF(rect.x(), rect.y(), rect.width(), half_h),
+                      Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, line1)
+    painter.drawText(QRectF(rect.x(), rect.y() + half_h, rect.width(), half_h),
+                      Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, line2)
 
 
 class ReceiptPrinter:
@@ -137,18 +177,18 @@ class ReceiptPrinter:
             hdr_line1,
         )
 
-        painter.setFont(_font(20, bold=True))
-        painter.drawText(
-            QRectF(X, Y + mm(8), CW, mm(12)),
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+        _draw_centered_fit_text(
+            painter,
+            QRectF(X + mm(2), Y + mm(8), CW - mm(4), mm(12)),
             hdr_line2,
+            base_size=20, bold=True, min_size=11,
         )
 
-        painter.setFont(_font(8, bold=True))
-        painter.drawText(
-            QRectF(X, Y + mm(19), CW, mm(6)),
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+        _draw_centered_fit_text(
+            painter,
+            QRectF(X + mm(2), Y + mm(19), CW - mm(4), mm(6)),
             hdr_line3,
+            base_size=8, bold=True, min_size=5.5,
         )
 
         # Ligne fine sous l'en-tête
@@ -180,7 +220,7 @@ class ReceiptPrinter:
                          f"Classe :  {data.get('classe', '')}")
         painter.drawText(QRectF(X + CW * 0.47, y_info, CW * 0.5, row_h),
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                         f"Numero :  {data.get('numero', '')}")
+                         f"Numéro :  {data.get('numero', '')}")
 
         # Séparateur pointillé
         y_dot_h = y_info + row_h + mm(1.5)
