@@ -526,9 +526,10 @@ class CaisseView(QWidget):
         body_layout.addWidget(total_frame)
 
         # Sections par rubrique
-        self.fs_scol  = FinancialSection("Scolarité",  COLORS["primary"])
-        self.fs_trans = FinancialSection("Transport",   "#0369A1")
-        self.fs_cant  = FinancialSection("Cantine",     COLORS["warning"])
+        self.fs_scol   = FinancialSection("Scolarité",    COLORS["primary"])
+        self.fs_trans  = FinancialSection("Transport",     "#0369A1")
+        self.fs_cant   = FinancialSection("Cantine",       COLORS["warning"])
+        self.fs_autres = FinancialSection("Autres frais",  COLORS["purple"])
 
         self.row_sc_due   = self.fs_scol.add_row("Dû",        "0 F")
         self.row_sc_paid  = self.fs_scol.add_row("Versé",     "0 F", COLORS["success"])
@@ -544,12 +545,18 @@ class CaisseView(QWidget):
         self.row_ca_paid = self.fs_cant.add_row("Versé", "0 F", COLORS["success"])
         self.row_ca_rem  = self.fs_cant.add_row("Reste", "0 F", COLORS["danger"], bold=True)
 
+        self.row_au_due  = self.fs_autres.add_row("Dû",    "0 F")
+        self.row_au_paid = self.fs_autres.add_row("Versé", "0 F", COLORS["success"])
+        self.row_au_rem  = self.fs_autres.add_row("Reste", "0 F", COLORS["danger"], bold=True)
+
         self.fs_trans.setVisible(False)
         self.fs_cant.setVisible(False)
+        self.fs_autres.setVisible(False)
 
         body_layout.addWidget(self.fs_scol)
         body_layout.addWidget(self.fs_trans)
         body_layout.addWidget(self.fs_cant)
+        body_layout.addWidget(self.fs_autres)
 
         body_layout.addStretch()
 
@@ -664,18 +671,19 @@ class CaisseView(QWidget):
         self.row_ca_paid.set_value(fmt(fin["cant_paye"]))
         self.row_ca_rem.set_value(fmt(fin["cant_reste"]))
 
-        total_due  = fin["scol_due"]  + fin["trans_due"]  + fin["cant_due"]
-        total_paye = fin["scol_paye"] + fin["trans_paye"] + fin["cant_paye"]
-        total_rem  = fin["scol_reste"] + fin["trans_reste"] + fin["cant_reste"]
+        self.fs_autres.setVisible(fin["autres_due"] > 0)
+        self.row_au_due.set_value(fmt(fin["autres_due"]))
+        self.row_au_paid.set_value(fmt(fin["autres_paye"]))
+        self.row_au_rem.set_value(fmt(fin["autres_reste"]))
 
-        self.row_tot_due.set_value(fmt(total_due))
-        self.row_tot_paid.set_value(fmt(total_paye))
+        self.row_tot_due.set_value(fmt(fin["total_due"]))
+        self.row_tot_paid.set_value(fmt(fin["total_paye"]))
         self.row_tot_reduc.setVisible(fin["total_reduc"] > 0)
         self.row_tot_reduc.set_value(fmt(fin["total_reduc"]))
-        self.row_tot_rem.set_value(fmt(total_rem))
+        self.row_tot_rem.set_value(fmt(fin["total_reste"]))
 
         try:
-            color = COLORS["danger"] if total_rem > 0 else COLORS["success"]
+            color = COLORS["danger"] if fin["total_reste"] > 0 else COLORS["success"]
             self.row_tot_rem.set_color(color)
         except Exception:
             pass
@@ -832,6 +840,7 @@ class CaisseView(QWidget):
             self.row_sc_due,  self.row_sc_paid,  self.row_sc_rem,
             self.row_tr_due,  self.row_tr_paid,  self.row_tr_rem,
             self.row_ca_due,  self.row_ca_paid,  self.row_ca_rem,
+            self.row_au_due,  self.row_au_paid,  self.row_au_rem,
             self.row_tot_due, self.row_tot_paid, self.row_tot_rem,
         ]:
             row.set_value("0 F")
@@ -839,3 +848,4 @@ class CaisseView(QWidget):
         self.row_tot_reduc.setVisible(False)
         self.fs_trans.setVisible(False)
         self.fs_cant.setVisible(False)
+        self.fs_autres.setVisible(False)

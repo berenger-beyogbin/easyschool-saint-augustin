@@ -11,6 +11,7 @@ from models.montant_scol import MontantScol
 from models.montant_transport import MontantTransport
 from models.montant_cantine import MontantCantine
 from models.montant_autres_frais import MontantAutresFrais
+from models.inscription_autres_frais import InscriptionAutresFrais
 from models.versement_scol import VersementScol
 from app.database import get_session
 
@@ -162,8 +163,15 @@ class VersementService:
                     res["cant_due"] = float(m_cant.Montant)
 
             # 5. Calculer le montant du des Autres Frais Annexes
-            if ins.AutresFrais:
-                # Somme de tous les autres frais configures pour ce niveau
+            lignes_autres = session.query(InscriptionAutresFrais).filter(
+                InscriptionAutresFrais.IDTInscription == ins.IDTInscription
+            ).all()
+            if lignes_autres:
+                # Frais annexes coches individuellement a l'inscription : montants figes
+                res["autres_due"] = sum(float(l.MontantApplique) for l in lignes_autres)
+            elif ins.AutresFrais:
+                # Fallback legacy (anciennes inscriptions sans lignes InscriptionAutresFrais) :
+                # somme de tous les autres frais configures pour ce niveau
                 frais_items = session.query(MontantAutresFrais).filter(
                     (MontantAutresFrais.IDAnneeScolaire == id_annee) & (MontantAutresFrais.IDT_Niveau == ins.IDNiveau)
                 ).all()
