@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QHeaderView, QComboBox, QCheckBox, QFrame,
-    QDialog, QDialogButtonBox
+    QDialog, QDialogButtonBox, QScrollArea
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -147,8 +147,14 @@ class InscriptionView(QWidget):
 
     # ── Helpers UI ────────────────────────────────────────────────────────────
 
-    def _make_step_card(self, step_num: str, title: str):
-        """Crée une carte premium avec badge numéroté et header dégradé."""
+    def _make_step_card(self, step_num: str, title: str, scrollable: bool = False):
+        """Crée une carte premium avec badge numéroté et header dégradé.
+
+        Si scrollable=True, le corps de la carte est placé dans une QScrollArea :
+        utile pour les cartes à contenu de longueur variable (ex. liste de frais
+        annexes dépendant du niveau), qui ne doivent jamais être écrasées par la
+        hauteur imposée par les cartes voisines dans la grille.
+        """
         card = QFrame()
         card.setObjectName("stepCard")
         card.setStyleSheet(_CARD_STYLE)
@@ -184,7 +190,17 @@ class InscriptionView(QWidget):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(14, 12, 14, 14)
         content_layout.setSpacing(10)
-        card_vbox.addWidget(content)
+
+        if scrollable:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.setWidget(content)
+            card_vbox.addWidget(scroll)
+        else:
+            card_vbox.addWidget(content)
 
         return card, content_layout
 
@@ -298,7 +314,7 @@ class InscriptionView(QWidget):
         main_layout.addWidget(card2, 1, 0)
 
         # ── Carte 3 : Affectation (rowspan=2 → aligne haut sur card1, bas sur card2)
-        card3, c3 = self._make_step_card("3", "Choix de l'affectation de classe")
+        card3, c3 = self._make_step_card("3", "Choix de l'affectation de classe", scrollable=True)
 
         # Niveau scolaire
         lbl_niveau = QLabel("NIVEAU SCOLAIRE *")
@@ -388,6 +404,11 @@ class InscriptionView(QWidget):
         lbl_frais_annexes.setStyleSheet(_FIELD_LABEL_STYLE)
         c3.addWidget(lbl_frais_annexes)
 
+        # Liste de frais annexes, de longueur variable selon le niveau choisi.
+        # La carte 3 entière est désormais scrollable (voir _make_step_card),
+        # donc cette zone n'a plus besoin de sa propre QScrollArea imbriquée :
+        # ça évitait un double défilement et un écrasement de la dernière ligne
+        # sous le libellé du total (superposition visuelle).
         self.frais_annexes_container = QFrame()
         self.frais_annexes_container.setStyleSheet("QFrame { background-color: transparent; border: none; }")
         self.frais_annexes_layout = QVBoxLayout(self.frais_annexes_container)
