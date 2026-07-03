@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QFrame,
     QDateEdit, QAbstractItemView, QComboBox
 )
@@ -302,10 +302,20 @@ class CaisseView(QWidget):
 
         layout.addWidget(make_separator())
 
-        # Ligne de champs
-        form_row = QHBoxLayout()
-        form_row.setSpacing(14)
-        form_row.setAlignment(Qt.AlignBottom)
+        # Grille de saisie (2 lignes) :
+        #   Ligne 1 : Date | Montants (Scolarité + Autres frais...) | Réduction
+        #   Ligne 2 : Mode de paiement | Titulaire | Bouton Valider
+        # Les colonnes 0 et 2 restent fixes, la colonne 1 (montants/titulaire)
+        # absorbe l'espace disponible pour garder les lignes alignées.
+        form_grid = QGridLayout()
+        form_grid.setHorizontalSpacing(24)
+        form_grid.setVerticalSpacing(16)
+        form_grid.setColumnStretch(0, 0)
+        form_grid.setColumnStretch(1, 1)
+        form_grid.setColumnStretch(2, 0)
+
+        FIELD_H = 38
+        AMOUNT_W = 125
 
         self.txt_date = QDateEdit()
         self.txt_date.setCalendarPopup(True)
@@ -313,64 +323,58 @@ class CaisseView(QWidget):
         self.txt_date.setDate(QDate.currentDate())
         self.txt_date.setStyleSheet(DATE_STYLE)
         self.txt_date.setFixedWidth(140)
-        self.txt_date.setFixedHeight(38)
-        form_row.addLayout(_make_field_group("Date", self.txt_date))
+        self.txt_date.setFixedHeight(FIELD_H)
+        form_grid.addLayout(_make_field_group("Date", self.txt_date), 0, 0, 1, 1, Qt.AlignLeft)
+
+        # Sous-zone montants : regroupe visuellement Scolarité + Autres frais
+        # (+ Transport/Cantine si activés) dans une même ligne cohérente.
+        montants_row = QHBoxLayout()
+        montants_row.setSpacing(14)
 
         self.txt_vers_scol = QLineEdit("0")
         self.txt_vers_scol.setStyleSheet(INPUT_STYLE)
-        self.txt_vers_scol.setFixedWidth(125)
-        self.txt_vers_scol.setFixedHeight(38)
+        self.txt_vers_scol.setFixedWidth(AMOUNT_W)
+        self.txt_vers_scol.setFixedHeight(FIELD_H)
         self.txt_vers_scol.textChanged.connect(self._update_valider_button)
-        form_row.addLayout(_make_field_group("Scolarité (F CFA)", self.txt_vers_scol))
+        montants_row.addLayout(_make_field_group("Scolarité (F CFA)", self.txt_vers_scol))
 
         self.txt_vers_autres = QLineEdit("0")
         self.txt_vers_autres.setStyleSheet(INPUT_STYLE)
-        self.txt_vers_autres.setFixedWidth(125)
-        self.txt_vers_autres.setFixedHeight(38)
+        self.txt_vers_autres.setFixedWidth(AMOUNT_W)
+        self.txt_vers_autres.setFixedHeight(FIELD_H)
         self.txt_vers_autres.textChanged.connect(self._update_valider_button)
         # Visible seulement si l'élève a des autres frais dus (voir refresh_eleve_profile).
         self.grp_vers_autres = QWidget()
         self.grp_vers_autres.setLayout(_make_field_group("Autres frais (F CFA)", self.txt_vers_autres))
         self.grp_vers_autres.setVisible(False)
-        form_row.addWidget(self.grp_vers_autres)
+        montants_row.addWidget(self.grp_vers_autres)
 
         self.txt_vers_trans = QLineEdit("0")
         self.txt_vers_trans.setStyleSheet(INPUT_STYLE)
-        self.txt_vers_trans.setFixedWidth(125)
-        self.txt_vers_trans.setFixedHeight(38)
+        self.txt_vers_trans.setFixedWidth(AMOUNT_W)
+        self.txt_vers_trans.setFixedHeight(FIELD_H)
         self.txt_vers_trans.textChanged.connect(self._update_valider_button)
         # Transport désactivé pour la version collège CJGA — champ masqué,
         # la valeur interne reste "0" (aucune saisie possible).
         self.grp_vers_trans = QWidget()
         self.grp_vers_trans.setLayout(_make_field_group("Transport (F CFA)", self.txt_vers_trans))
         self.grp_vers_trans.setVisible(Config.ENABLE_TRANSPORT)
-        form_row.addWidget(self.grp_vers_trans)
+        montants_row.addWidget(self.grp_vers_trans)
 
         self.txt_vers_cant = QLineEdit("0")
         self.txt_vers_cant.setStyleSheet(INPUT_STYLE)
-        self.txt_vers_cant.setFixedWidth(125)
-        self.txt_vers_cant.setFixedHeight(38)
+        self.txt_vers_cant.setFixedWidth(AMOUNT_W)
+        self.txt_vers_cant.setFixedHeight(FIELD_H)
         self.txt_vers_cant.textChanged.connect(self._update_valider_button)
         # Cantine désactivée pour la version collège CJGA — champ masqué,
         # la valeur interne reste "0" (aucune saisie possible).
         self.grp_vers_cant = QWidget()
         self.grp_vers_cant.setLayout(_make_field_group("Cantine (F CFA)", self.txt_vers_cant))
         self.grp_vers_cant.setVisible(Config.ENABLE_CANTINE)
-        form_row.addWidget(self.grp_vers_cant)
+        montants_row.addWidget(self.grp_vers_cant)
 
-        self.combo_mode_paiement = QComboBox()
-        self.combo_mode_paiement.addItems(MODES_PAIEMENT)
-        self.combo_mode_paiement.setStyleSheet(COMBO_STYLE)
-        self.combo_mode_paiement.setFixedWidth(140)
-        self.combo_mode_paiement.setFixedHeight(38)
-        form_row.addLayout(_make_field_group("Mode de paiement", self.combo_mode_paiement))
-
-        self.combo_titulaire = QComboBox()
-        self.combo_titulaire.addItems(TITULAIRES_PAIEMENT)
-        self.combo_titulaire.setStyleSheet(COMBO_STYLE)
-        self.combo_titulaire.setFixedWidth(130)
-        self.combo_titulaire.setFixedHeight(38)
-        form_row.addLayout(_make_field_group("Titulaire", self.combo_titulaire))
+        montants_row.addStretch()
+        form_grid.addLayout(montants_row, 0, 1)
 
         # Toggle Réduction
         reduc_vbox = QVBoxLayout()
@@ -383,9 +387,25 @@ class CaisseView(QWidget):
         self.toggle_reduction = ToggleSwitch()
         reduc_vbox.addWidget(lbl_reduc)
         reduc_vbox.addWidget(self.toggle_reduction)
-        form_row.addLayout(reduc_vbox)
+        form_grid.addLayout(reduc_vbox, 0, 2, 1, 1, Qt.AlignLeft)
 
-        form_row.addStretch()
+        # --- Ligne 2 : Mode de paiement | Titulaire | Bouton Valider ---
+        self.combo_mode_paiement = QComboBox()
+        self.combo_mode_paiement.addItems(MODES_PAIEMENT)
+        self.combo_mode_paiement.setStyleSheet(COMBO_STYLE)
+        self.combo_mode_paiement.setFixedWidth(140)
+        self.combo_mode_paiement.setFixedHeight(FIELD_H)
+        form_grid.addLayout(_make_field_group("Mode de paiement", self.combo_mode_paiement), 1, 0, 1, 1, Qt.AlignLeft)
+
+        self.combo_titulaire = QComboBox()
+        self.combo_titulaire.addItems(TITULAIRES_PAIEMENT)
+        self.combo_titulaire.setStyleSheet(COMBO_STYLE)
+        self.combo_titulaire.setFixedWidth(130)
+        self.combo_titulaire.setFixedHeight(FIELD_H)
+        titulaire_row = QHBoxLayout()
+        titulaire_row.addLayout(_make_field_group("Titulaire", self.combo_titulaire))
+        titulaire_row.addStretch()
+        form_grid.addLayout(titulaire_row, 1, 1)
 
         # Bouton Valider
         btn_vbox = QVBoxLayout()
@@ -413,9 +433,9 @@ class CaisseView(QWidget):
         self.btn_valider_versement.setEnabled(False)
         self.btn_valider_versement.clicked.connect(self.on_validate_and_save)
         btn_vbox.addWidget(self.btn_valider_versement)
-        form_row.addLayout(btn_vbox)
+        form_grid.addLayout(btn_vbox, 1, 2, 1, 1, Qt.AlignLeft | Qt.AlignBottom)
 
-        layout.addLayout(form_row)
+        layout.addLayout(form_grid)
         parent_layout.addWidget(self.panel_versement)
 
     # -------------------------------------------------------------------------
