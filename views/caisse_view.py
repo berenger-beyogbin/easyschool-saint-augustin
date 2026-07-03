@@ -23,7 +23,7 @@ MODES_PAIEMENT = ["Espèce", "Mobile Money", "Chèque", "Virement"]
 TITULAIRES_PAIEMENT = ["Non précisé", "Père", "Mère", "Tuteur", "Autre"]
 
 
-def _compute_motif(m_scol: float, m_trans: float, m_cant: float) -> str:
+def _compute_motif(m_scol: float, m_trans: float, m_cant: float, m_autres: float = 0) -> str:
     """Déduit un motif de paiement simple à partir des montants versés."""
     parts = []
     if m_scol > 0:
@@ -32,6 +32,8 @@ def _compute_motif(m_scol: float, m_trans: float, m_cant: float) -> str:
         parts.append("Transport")
     if m_cant > 0:
         parts.append("Cantine")
+    if m_autres > 0:
+        parts.append("Autres frais")
     return " + ".join(parts) if parts else "Scolarité"
 
 
@@ -321,6 +323,17 @@ class CaisseView(QWidget):
         self.txt_vers_scol.textChanged.connect(self._update_valider_button)
         form_row.addLayout(_make_field_group("Scolarité (F CFA)", self.txt_vers_scol))
 
+        self.txt_vers_autres = QLineEdit("0")
+        self.txt_vers_autres.setStyleSheet(INPUT_STYLE)
+        self.txt_vers_autres.setFixedWidth(125)
+        self.txt_vers_autres.setFixedHeight(38)
+        self.txt_vers_autres.textChanged.connect(self._update_valider_button)
+        # Visible seulement si l'élève a des autres frais dus (voir refresh_eleve_profile).
+        self.grp_vers_autres = QWidget()
+        self.grp_vers_autres.setLayout(_make_field_group("Autres frais (F CFA)", self.txt_vers_autres))
+        self.grp_vers_autres.setVisible(False)
+        form_row.addWidget(self.grp_vers_autres)
+
         self.txt_vers_trans = QLineEdit("0")
         self.txt_vers_trans.setStyleSheet(INPUT_STYLE)
         self.txt_vers_trans.setFixedWidth(125)
@@ -415,14 +428,14 @@ class CaisseView(QWidget):
         layout.setSpacing(0)
 
         self.table_history = QTableWidget()
-        self.table_history.setColumnCount(6)
+        self.table_history.setColumnCount(7)
         self.table_history.setHorizontalHeaderLabels([
-            "Date", "Scolarité", "Transport", "Cantine", "Réduc.", "ID"
+            "Date", "Scolarité", "Autres frais", "Transport", "Cantine", "Réduc.", "ID"
         ])
         if not Config.ENABLE_TRANSPORT:
-            self.table_history.setColumnHidden(2, True)
-        if not Config.ENABLE_CANTINE:
             self.table_history.setColumnHidden(3, True)
+        if not Config.ENABLE_CANTINE:
+            self.table_history.setColumnHidden(4, True)
         self.table_history.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_history.setSelectionMode(QTableWidget.SingleSelection)
         self.table_history.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -431,7 +444,7 @@ class CaisseView(QWidget):
         self.table_history.verticalHeader().setVisible(False)
         self.table_history.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table_history.horizontalHeader().setHighlightSections(False)
-        self.table_history.setColumnHidden(5, True)
+        self.table_history.setColumnHidden(6, True)
         self.table_history.setFrameShape(QFrame.NoFrame)
         self.table_history.setShowGrid(False)
         layout.addWidget(self.table_history)
@@ -642,9 +655,14 @@ class CaisseView(QWidget):
         self.txt_vers_trans.setEnabled(opts["transport"] and fin["trans_reste"] > 0)
         self.txt_vers_cant.setEnabled(opts["cantine"]   and fin["cant_reste"]  > 0)
 
+        # Autres frais : champ visible seulement si l'élève a un montant dû ou un reste à payer.
+        self.grp_vers_autres.setVisible(fin["autres_due"] > 0 or fin["autres_reste"] > 0)
+        self.txt_vers_autres.setEnabled(opts["autres"] and fin["autres_reste"] > 0)
+
         self.txt_vers_scol.setText("0" if self.txt_vers_scol.isEnabled() else "")
         self.txt_vers_trans.setText("0" if self.txt_vers_trans.isEnabled() else "")
         self.txt_vers_cant.setText("0" if self.txt_vers_cant.isEnabled() else "")
+        self.txt_vers_autres.setText("0" if self.txt_vers_autres.isEnabled() else "")
 
         self.load_history()
 
@@ -698,11 +716,13 @@ class CaisseView(QWidget):
         for i, v in enumerate(vlist):
             dt_str = v.DateVers.strftime("%d/%m/%Y") if v.DateVers else "N/A"
             scol   = int(v.MontantVersSco)
+            autres = int(v.MontantVersAutres)
             trans  = int(v.MontantVersTrans)
             cant   = int(v.MontantCantine)
             vals = [
                 dt_str,
                 f"{scol:,} F".replace(",", " "),
+                f"{autres:,} F".replace(",", " "),
                 f"{trans:,} F".replace(",", " "),
                 f"{cant:,} F".replace(",", " "),
                 "Oui" if v.Reduction else "Non",
@@ -717,9 +737,13 @@ class CaisseView(QWidget):
                         item.setForeground(QColor(COLORS['primary']))
                 elif col == 2:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    if autres > 0:
+                        item.setForeground(QColor(COLORS['purple']))
+                elif col == 3:
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     if trans > 0:
                         item.setForeground(QColor("#0369A1"))
-                elif col == 3:
+                elif col == 4:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     if cant > 0:
                         item.setForeground(QColor(COLORS['warning']))
@@ -733,9 +757,10 @@ class CaisseView(QWidget):
             return
         q_date = self.txt_date.date().toPython()
         try:
-            m_scol  = _parse_input(self.txt_vers_scol.text())
-            m_trans = _parse_input(self.txt_vers_trans.text())
-            m_cant  = _parse_input(self.txt_vers_cant.text())
+            m_scol   = _parse_input(self.txt_vers_scol.text())
+            m_trans  = _parse_input(self.txt_vers_trans.text())
+            m_cant   = _parse_input(self.txt_vers_cant.text())
+            m_autres = _parse_input(self.txt_vers_autres.text())
         except ValueError:
             QMessageBox.critical(self, "Erreur", "Un des montants saisis est incorrect.")
             return
@@ -753,7 +778,7 @@ class CaisseView(QWidget):
             m_scol=m_scol,
             m_trans=m_trans,
             m_cant=m_cant,
-            m_autres=0,
+            m_autres=m_autres,
             reduction=reduction_active,
             impaye=False,
             restitution=False,
@@ -789,15 +814,20 @@ class CaisseView(QWidget):
                 "classe":        cls_eleve,
                 "numero":        str(new_id) if new_id else "—",
                 # Enrichissement CJGA — valeurs UI temporaires (non persistées en base)
-                "motif":         _compute_motif(m_scol, m_trans, m_cant),
+                "motif":         _compute_motif(m_scol, m_trans, m_cant, m_autres),
                 "mode_paiement": self.combo_mode_paiement.currentText(),
                 "titulaire":     self.combo_titulaire.currentText(),
-                "total_recu":    m_scol + m_trans + m_cant,
+                "total_recu":    m_scol + m_trans + m_cant + m_autres,
                 # SCOLARITE
                 "scol_active": fin_before["options"]["scolarite"],
                 "scol_due":    fin_before["scol_reste"],   # solde dû AVANT ce paiement
                 "scol_recu":   m_scol,
                 "scol_reste":  fin_after["scol_reste"],
+                # AUTRES FRAIS
+                "autres_active": fin_before["autres_due"] > 0 or m_autres > 0,
+                "autres_due":    fin_before["autres_reste"],  # solde dû AVANT ce paiement
+                "autres_recu":   m_autres,
+                "autres_reste":  fin_after["autres_reste"],
                 # TRANSPORT
                 "trans_active": Config.ENABLE_TRANSPORT and fin_before["options"]["transport"],
                 "trans_due":    fin_before["trans_reste"],  # solde dû AVANT ce paiement
@@ -824,6 +854,8 @@ class CaisseView(QWidget):
                 total += _parse_input(self.txt_vers_trans.text())
             if self.txt_vers_cant.isEnabled():
                 total += _parse_input(self.txt_vers_cant.text())
+            if self.txt_vers_autres.isEnabled():
+                total += _parse_input(self.txt_vers_autres.text())
         except Exception:
             total = 0
         self.btn_valider_versement.setEnabled(total > 0)
@@ -832,6 +864,8 @@ class CaisseView(QWidget):
         self.txt_vers_scol.setText("")
         self.txt_vers_trans.setText("")
         self.txt_vers_cant.setText("")
+        self.txt_vers_autres.setText("")
+        self.grp_vers_autres.setVisible(False)
         self.table_history.setRowCount(0)
 
     def clear_financial_panel(self):

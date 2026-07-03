@@ -327,9 +327,10 @@ class ReceiptPrinter:
         # affichée ; Transport/Cantine uniquement si actives pour cet élève).
         # Une rubrique désactivée n'a pas de colonne du tout (pas de "—" grisé).
         sections_def = [
-            ("SCOLARITE", "scol_active",  "scol_due",  "scol_recu",  "scol_reste",  True),
-            ("TRANSPORT", "trans_active", "trans_due", "trans_recu", "trans_reste", False),
-            ("CANTINE",   "cant_active",  "cant_due",  "cant_recu",  "cant_reste",  False),
+            ("SCOLARITE",    "scol_active",   "scol_due",   "scol_recu",   "scol_reste",   True),
+            ("AUTRES FRAIS", "autres_active", "autres_due", "autres_recu", "autres_reste", False),
+            ("TRANSPORT",    "trans_active",  "trans_due",  "trans_recu",  "trans_reste",  False),
+            ("CANTINE",      "cant_active",   "cant_due",   "cant_recu",   "cant_reste",   False),
         ]
         sections = [s for s in sections_def if s[5] or data.get(s[1], False)]
 
@@ -453,6 +454,7 @@ class ReceiptPrinter:
         if total_recu is None:
             total_recu = (
                 float(data.get("scol_recu", 0) or 0) +
+                float(data.get("autres_recu", 0) or 0) +
                 float(data.get("trans_recu", 0) or 0) +
                 float(data.get("cant_recu", 0) or 0)
             )
