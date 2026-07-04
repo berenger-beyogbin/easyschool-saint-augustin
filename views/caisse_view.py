@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QFrame,
     QDateEdit, QAbstractItemView, QComboBox
 )
@@ -126,6 +126,25 @@ def _make_field_group(label_text: str, widget) -> QVBoxLayout:
     vbox.addWidget(lbl)
     vbox.addWidget(widget)
     return vbox
+
+
+def _make_subtitle(text: str) -> QLabel:
+    """Petit sous-titre de zone (ex. « Montants à encaisser »)."""
+    lbl = QLabel(text.upper())
+    lbl.setStyleSheet(
+        f"font-size: 10px; font-weight: 800; color: {COLORS['primary']};"
+        "background-color: transparent; border: none; letter-spacing: 0.8px;"
+    )
+    return lbl
+
+
+def _make_vseparator() -> QFrame:
+    """Filet vertical discret séparant deux zones d'un formulaire."""
+    sep = QFrame()
+    sep.setFrameShape(QFrame.VLine)
+    sep.setStyleSheet(f"color: {COLORS['border']}; background-color: {COLORS['border']}; border: none;")
+    sep.setFixedWidth(1)
+    return sep
 
 
 def _make_panel(accent_color: str) -> tuple:
@@ -302,34 +321,32 @@ class CaisseView(QWidget):
 
         layout.addWidget(make_separator())
 
-        # Grille de saisie (2 lignes) :
-        #   Ligne 1 : Date | Montants (Scolarité + Autres frais...) | Réduction
-        #   Ligne 2 : Mode de paiement | Titulaire | Bouton Valider
-        # Les colonnes 0 et 2 restent fixes, la colonne 1 (montants/titulaire)
-        # absorbe l'espace disponible pour garder les lignes alignées.
-        form_grid = QGridLayout()
-        form_grid.setHorizontalSpacing(24)
-        form_grid.setVerticalSpacing(16)
-        form_grid.setColumnStretch(0, 0)
-        form_grid.setColumnStretch(1, 1)
-        form_grid.setColumnStretch(2, 0)
-
+        # Corps du formulaire : 2 zones horizontales côte à côte, séparées par
+        # un filet vertical, pour regrouper visuellement les champs par usage.
+        #   Zone gauche « Montants »  : Date, Scolarité, Autres frais (+ Transport/Cantine si activés)
+        #   Zone droite « Paiement »  : Mode de paiement, Titulaire, Réduction, Bouton Valider
         FIELD_H = 38
-        AMOUNT_W = 125
+        AMOUNT_W = 130
+
+        form_row = QHBoxLayout()
+        form_row.setSpacing(20)
+
+        # ── Zone gauche : Montants ────────────────────────────────────────
+        zone_montants = QVBoxLayout()
+        zone_montants.setSpacing(8)
+        zone_montants.addWidget(_make_subtitle("Montants à encaisser"))
+
+        montants_row = QHBoxLayout()
+        montants_row.setSpacing(14)
 
         self.txt_date = QDateEdit()
         self.txt_date.setCalendarPopup(True)
         self.txt_date.setDisplayFormat("dd/MM/yyyy")
         self.txt_date.setDate(QDate.currentDate())
         self.txt_date.setStyleSheet(DATE_STYLE)
-        self.txt_date.setFixedWidth(140)
+        self.txt_date.setFixedWidth(AMOUNT_W + 20)
         self.txt_date.setFixedHeight(FIELD_H)
-        form_grid.addLayout(_make_field_group("Date", self.txt_date), 0, 0, 1, 1, Qt.AlignLeft)
-
-        # Sous-zone montants : regroupe visuellement Scolarité + Autres frais
-        # (+ Transport/Cantine si activés) dans une même ligne cohérente.
-        montants_row = QHBoxLayout()
-        montants_row.setSpacing(14)
+        montants_row.addLayout(_make_field_group("Date", self.txt_date))
 
         self.txt_vers_scol = QLineEdit("0")
         self.txt_vers_scol.setStyleSheet(INPUT_STYLE)
@@ -374,9 +391,42 @@ class CaisseView(QWidget):
         montants_row.addWidget(self.grp_vers_cant)
 
         montants_row.addStretch()
-        form_grid.addLayout(montants_row, 0, 1)
+        zone_montants.addLayout(montants_row)
+        zone_montants.addStretch()
 
-        # Toggle Réduction
+        form_row.addLayout(zone_montants, 3)
+        form_row.addWidget(_make_vseparator())
+
+        # ── Zone droite : Paiement ────────────────────────────────────────
+        zone_paiement = QVBoxLayout()
+        zone_paiement.setSpacing(8)
+        zone_paiement.addWidget(_make_subtitle("Informations de paiement"))
+
+        infos_row = QHBoxLayout()
+        infos_row.setSpacing(14)
+
+        self.combo_mode_paiement = QComboBox()
+        self.combo_mode_paiement.addItems(MODES_PAIEMENT)
+        self.combo_mode_paiement.setStyleSheet(COMBO_STYLE)
+        self.combo_mode_paiement.setFixedWidth(140)
+        self.combo_mode_paiement.setFixedHeight(FIELD_H)
+        infos_row.addLayout(_make_field_group("Mode de paiement", self.combo_mode_paiement))
+
+        self.combo_titulaire = QComboBox()
+        self.combo_titulaire.addItems(TITULAIRES_PAIEMENT)
+        self.combo_titulaire.setStyleSheet(COMBO_STYLE)
+        self.combo_titulaire.setFixedWidth(130)
+        self.combo_titulaire.setFixedHeight(FIELD_H)
+        infos_row.addLayout(_make_field_group("Titulaire", self.combo_titulaire))
+        infos_row.addStretch()
+        zone_paiement.addLayout(infos_row)
+
+        # Réduction + Valider regroupés sur une même ligne, alignés à droite
+        # pour que le bouton reste ancré près du reste du bloc (pas de vide).
+        action_row = QHBoxLayout()
+        action_row.setSpacing(14)
+        action_row.addStretch()
+
         reduc_vbox = QVBoxLayout()
         reduc_vbox.setSpacing(4)
         lbl_reduc = QLabel("RÉDUCTION")
@@ -387,27 +437,8 @@ class CaisseView(QWidget):
         self.toggle_reduction = ToggleSwitch()
         reduc_vbox.addWidget(lbl_reduc)
         reduc_vbox.addWidget(self.toggle_reduction)
-        form_grid.addLayout(reduc_vbox, 0, 2, 1, 1, Qt.AlignLeft)
+        action_row.addLayout(reduc_vbox)
 
-        # --- Ligne 2 : Mode de paiement | Titulaire | Bouton Valider ---
-        self.combo_mode_paiement = QComboBox()
-        self.combo_mode_paiement.addItems(MODES_PAIEMENT)
-        self.combo_mode_paiement.setStyleSheet(COMBO_STYLE)
-        self.combo_mode_paiement.setFixedWidth(140)
-        self.combo_mode_paiement.setFixedHeight(FIELD_H)
-        form_grid.addLayout(_make_field_group("Mode de paiement", self.combo_mode_paiement), 1, 0, 1, 1, Qt.AlignLeft)
-
-        self.combo_titulaire = QComboBox()
-        self.combo_titulaire.addItems(TITULAIRES_PAIEMENT)
-        self.combo_titulaire.setStyleSheet(COMBO_STYLE)
-        self.combo_titulaire.setFixedWidth(130)
-        self.combo_titulaire.setFixedHeight(FIELD_H)
-        titulaire_row = QHBoxLayout()
-        titulaire_row.addLayout(_make_field_group("Titulaire", self.combo_titulaire))
-        titulaire_row.addStretch()
-        form_grid.addLayout(titulaire_row, 1, 1)
-
-        # Bouton Valider
         btn_vbox = QVBoxLayout()
         btn_vbox.setSpacing(4)
         btn_vbox.setAlignment(Qt.AlignBottom)
@@ -428,14 +459,19 @@ class CaisseView(QWidget):
             QPushButton:pressed {{ background-color: #166534; }}
             QPushButton:disabled {{ background-color: #E5E7EB; color: #9CA3AF; }}
         """)
-        self.btn_valider_versement.setMinimumWidth(170)
+        self.btn_valider_versement.setMinimumWidth(150)
         self.btn_valider_versement.setCursor(Qt.PointingHandCursor)
         self.btn_valider_versement.setEnabled(False)
         self.btn_valider_versement.clicked.connect(self.on_validate_and_save)
         btn_vbox.addWidget(self.btn_valider_versement)
-        form_grid.addLayout(btn_vbox, 1, 2, 1, 1, Qt.AlignLeft | Qt.AlignBottom)
+        action_row.addLayout(btn_vbox)
 
-        layout.addLayout(form_grid)
+        zone_paiement.addLayout(action_row)
+        zone_paiement.addStretch()
+
+        form_row.addLayout(zone_paiement, 2)
+
+        layout.addLayout(form_row)
         parent_layout.addWidget(self.panel_versement)
 
     # -------------------------------------------------------------------------
