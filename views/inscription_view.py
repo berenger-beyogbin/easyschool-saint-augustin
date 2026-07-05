@@ -380,31 +380,26 @@ class InscriptionView(QWidget):
         row_affectation.setSpacing(10)
         row_affectation.addLayout(col_niveau, 1)
         row_affectation.addLayout(col_classe, 1)
-        c3.addLayout(row_affectation)
 
         # Ligne 2 : Effectif actuel
         self.lbl_effectif = QLabel("Effectif actuel : — / —")
         self._set_effectif_style("default")
-        c3.addWidget(self.lbl_effectif)
 
         # Ligne 3 : Statut affectation (pleine largeur, pour ne tronquer aucune valeur)
         col_statut = QVBoxLayout()
         col_statut.setSpacing(4)
         col_statut.addWidget(lbl_statut_affectation)
         col_statut.addWidget(self.cmb_statut_affectation)
-        c3.addLayout(col_statut)
 
         # Séparateur
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
         sep.setFixedHeight(1)
-        c3.addWidget(sep)
 
         # Options de services
         lbl_services = QLabel("OPTIONS DE SERVICES SCOLARITÉ")
         lbl_services.setStyleSheet(_FIELD_LABEL_STYLE)
-        c3.addWidget(lbl_services)
 
         self.chk_scolarite = QCheckBox("Scolarité de base")
         self.chk_scolarite.setChecked(True)
@@ -424,17 +419,32 @@ class InscriptionView(QWidget):
         row_base.setSpacing(10)
         row_base.addWidget(self._make_option_row(self.chk_scolarite))
         row_base.addWidget(self._make_option_row(self.chk_nouveau))
-        c3.addLayout(row_base)
 
         # Transport / Cantine désactivés pour la version collège CJGA
         # (voir app.config.Config) — masqués, non proposés en saisie.
         self.row_transport = self._make_option_row(self.chk_transport)
         self.row_transport.setVisible(Config.ENABLE_TRANSPORT)
-        c3.addWidget(self.row_transport)
 
         self.row_cantine = self._make_option_row(self.chk_cantine)
         self.row_cantine.setVisible(Config.ENABLE_CANTINE)
-        c3.addWidget(self.row_cantine)
+
+        # ── Zone fixe haute : niveau, classe, effectif, statut, options ────
+        # Regroupée dans son propre QFrame pour bien la séparer visuellement
+        # de la liste des frais annexes (scrollable) et du bloc total/bouton.
+        top_frame = QFrame()
+        top_frame.setStyleSheet("QFrame { background-color: transparent; border: none; }")
+        top_layout = QVBoxLayout(top_frame)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(10)
+        top_layout.addLayout(row_affectation)
+        top_layout.addWidget(self.lbl_effectif)
+        top_layout.addLayout(col_statut)
+        top_layout.addWidget(sep)
+        top_layout.addWidget(lbl_services)
+        top_layout.addLayout(row_base)
+        top_layout.addWidget(self.row_transport)
+        top_layout.addWidget(self.row_cantine)
+        c3.addWidget(top_frame)
 
         # Séparateur avant la section frais annexes
         sep_frais = QFrame()
@@ -475,7 +485,6 @@ class InscriptionView(QWidget):
             f"font-size: 12px; font-weight: 700; color: {COLORS['primary_dark']};"
             "background-color: transparent; border: none;"
         )
-        c3.addWidget(self.lbl_total_frais_annexes)
 
         # Bouton CTA
         self.btn_inscrire = QPushButton("Inscrire l'Élève")
@@ -483,8 +492,17 @@ class InscriptionView(QWidget):
         self.btn_inscrire.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_inscrire.clicked.connect(self.on_inscrire)
 
-        c3.addStretch()
-        c3.addWidget(self.btn_inscrire)
+        # ── Zone fixe basse : total + bouton ───────────────────────────────
+        # Toujours hors du QScrollArea des frais, avec une marge nette au-dessus
+        # du total (séparation avec la liste) et entre le total et le bouton.
+        bottom_frame = QFrame()
+        bottom_frame.setStyleSheet("QFrame { background-color: transparent; border: none; }")
+        bottom_layout = QVBoxLayout(bottom_frame)
+        bottom_layout.setContentsMargins(0, 12, 0, 0)
+        bottom_layout.setSpacing(12)
+        bottom_layout.addWidget(self.lbl_total_frais_annexes)
+        bottom_layout.addWidget(self.btn_inscrire)
+        c3.addWidget(bottom_frame)
 
         main_layout.addWidget(card3, 0, 1, 2, 1)  # rowspan=2 : de card1 à card2
 
