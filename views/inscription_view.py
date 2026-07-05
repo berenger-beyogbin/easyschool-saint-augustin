@@ -236,8 +236,8 @@ class InscriptionView(QWidget):
         main_layout.setContentsMargins(18, 18, 18, 18)
         main_layout.setHorizontalSpacing(16)
         main_layout.setVerticalSpacing(14)
-        main_layout.setColumnStretch(0, 4)
-        main_layout.setColumnStretch(1, 3)
+        main_layout.setColumnStretch(0, 1)
+        main_layout.setColumnStretch(1, 1)
         main_layout.setRowStretch(2, 1)
 
         # ── Carte 1 : Responsable ──────────────────────────────────────────────
@@ -253,8 +253,8 @@ class InscriptionView(QWidget):
         self.txt_search_resp.textChanged.connect(self.load_responsables)
 
         self.table_resp = QTableWidget()
-        self.table_resp.setColumnCount(4)
-        self.table_resp.setHorizontalHeaderLabels(["Responsable", "Téléphone", "Prim.", "Sec."])
+        self.table_resp.setColumnCount(2)
+        self.table_resp.setHorizontalHeaderLabels(["Responsable", "Téléphone"])
         self.table_resp.setStyleSheet(TABLE_STYLE)
         self.table_resp.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.table_resp.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -341,17 +341,34 @@ class InscriptionView(QWidget):
         self.cmb_statut_affectation.addItem("Affecté de l'État", "AFFECTE_ETAT")
         self.cmb_statut_affectation.addItem("Non affecté de l'État", "NON_AFFECTE_ETAT")
 
-        c3.addWidget(lbl_niveau)
-        c3.addWidget(self.cmb_niveau)
-        c3.addWidget(lbl_classe)
-        c3.addWidget(self.cmb_classe)
-        c3.addWidget(lbl_statut_affectation)
-        c3.addWidget(self.cmb_statut_affectation)
+        col_niveau = QVBoxLayout()
+        col_niveau.setSpacing(4)
+        col_niveau.addWidget(lbl_niveau)
+        col_niveau.addWidget(self.cmb_niveau)
 
-        # Effectif badge
+        col_classe = QVBoxLayout()
+        col_classe.setSpacing(4)
+        col_classe.addWidget(lbl_classe)
+        col_classe.addWidget(self.cmb_classe)
+
+        # Ligne 1 : Niveau scolaire (50%) + Classe de destination (50%)
+        row_affectation = QHBoxLayout()
+        row_affectation.setSpacing(10)
+        row_affectation.addLayout(col_niveau, 1)
+        row_affectation.addLayout(col_classe, 1)
+        c3.addLayout(row_affectation)
+
+        # Ligne 2 : Effectif actuel
         self.lbl_effectif = QLabel("Effectif actuel : — / —")
         self._set_effectif_style("default")
         c3.addWidget(self.lbl_effectif)
+
+        # Ligne 3 : Statut affectation (pleine largeur, pour ne tronquer aucune valeur)
+        col_statut = QVBoxLayout()
+        col_statut.setSpacing(4)
+        col_statut.addWidget(lbl_statut_affectation)
+        col_statut.addWidget(self.cmb_statut_affectation)
+        c3.addLayout(col_statut)
 
         # Séparateur
         sep = QFrame()
@@ -379,8 +396,11 @@ class InscriptionView(QWidget):
         self.chk_cantine = QCheckBox("Option Cantine midi")
         self.chk_cantine.setStyleSheet(_CHK_STYLE)
 
-        for chk in [self.chk_scolarite, self.chk_nouveau]:
-            c3.addWidget(self._make_option_row(chk))
+        row_base = QHBoxLayout()
+        row_base.setSpacing(10)
+        row_base.addWidget(self._make_option_row(self.chk_scolarite))
+        row_base.addWidget(self._make_option_row(self.chk_nouveau))
+        c3.addLayout(row_base)
 
         # Transport / Cantine désactivés pour la version collège CJGA
         # (voir app.config.Config) — masqués, non proposés en saisie.
@@ -411,9 +431,12 @@ class InscriptionView(QWidget):
         # sous le libellé du total (superposition visuelle).
         self.frais_annexes_container = QFrame()
         self.frais_annexes_container.setStyleSheet("QFrame { background-color: transparent; border: none; }")
-        self.frais_annexes_layout = QVBoxLayout(self.frais_annexes_container)
+        self.frais_annexes_layout = QGridLayout(self.frais_annexes_container)
         self.frais_annexes_layout.setContentsMargins(0, 0, 0, 0)
-        self.frais_annexes_layout.setSpacing(6)
+        self.frais_annexes_layout.setHorizontalSpacing(8)
+        self.frais_annexes_layout.setVerticalSpacing(6)
+        self.frais_annexes_layout.setColumnStretch(0, 1)
+        self.frais_annexes_layout.setColumnStretch(1, 1)
         c3.addWidget(self.frais_annexes_container)
 
         self.lbl_total_frais_annexes = QLabel("Total frais annexes sélectionnés : 0 FCFA")
@@ -514,18 +537,19 @@ class InscriptionView(QWidget):
                 "background-color: transparent; border: none;"
             )
             lbl_vide.setWordWrap(True)
-            self.frais_annexes_layout.addWidget(lbl_vide)
+            self.frais_annexes_layout.addWidget(lbl_vide, 0, 0, 1, 2)
             self._update_total_frais_annexes()
             return
 
-        for frais in frais_list:
+        for index, frais in enumerate(frais_list):
             libelle = frais.get("LibelleFrais") or frais.get("CodeFrais") or "Frais"
             montant = frais.get("MontantFrais") or 0
             chk = QCheckBox(f"{libelle} — {format_fcfa(montant)}")
             chk.setStyleSheet(_CHK_STYLE)
             chk.setEnabled(self._form_enabled)
             chk.toggled.connect(self._update_total_frais_annexes)
-            self.frais_annexes_layout.addWidget(self._make_option_row(chk))
+            row, col = divmod(index, 2)
+            self.frais_annexes_layout.addWidget(self._make_option_row(chk), row, col)
             self._frais_checkboxes.append((chk, frais))
 
         self._update_total_frais_annexes()
@@ -584,8 +608,6 @@ class InscriptionView(QWidget):
             item_nom.setData(Qt.UserRole, fam.IdTFamille)
             self.table_resp.setItem(i, 0, item_nom)
             self.table_resp.setItem(i, 1, QTableWidgetItem(fam.CellulaireResponsable or ""))
-            self.table_resp.setItem(i, 2, QTableWidgetItem("OUI" if fam.EnsCatPrimaire else "NON"))
-            self.table_resp.setItem(i, 3, QTableWidgetItem("OUI" if fam.EnsCatSecondaire else "NON"))
             self.table_resp.setRowHeight(i, 32)
 
     def load_niveaux(self):
