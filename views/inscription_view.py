@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QHeaderView, QComboBox, QCheckBox, QFrame,
-    QDialog, QDialogButtonBox, QScrollArea
+    QDialog, QDialogButtonBox, QScrollArea, QSizePolicy
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -204,8 +204,14 @@ class InscriptionView(QWidget):
 
         return card, content_layout
 
-    def _make_option_row(self, checkbox: QCheckBox) -> QFrame:
-        """Enveloppe un checkbox dans une ligne stylisée avec hover."""
+    def _make_option_row(self, checkbox: QCheckBox, wrap_text: str = None) -> QFrame:
+        """Enveloppe un checkbox dans une ligne stylisée avec hover.
+
+        Si wrap_text est fourni, le libellé est affiché via un QLabel à part
+        (avec retour à la ligne automatique) plutôt que sur le texte natif du
+        checkbox — un QCheckBox ne wrap jamais son texte, ce qui provoquait un
+        débordement horizontal de la carte pour les libellés de frais longs.
+        """
         frame = QFrame()
         frame.setObjectName("optionRow")
         frame.setStyleSheet("""
@@ -221,8 +227,19 @@ class InscriptionView(QWidget):
         """)
         row = QHBoxLayout(frame)
         row.setContentsMargins(12, 7, 12, 7)
+        row.setSpacing(10)
         row.addWidget(checkbox)
-        row.addStretch()
+        if wrap_text is not None:
+            checkbox.setText("")
+            lbl = QLabel(wrap_text)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(
+                f"font-size: 12px; font-weight: 500; color: {COLORS['text_soft']};"
+                "background-color: transparent; border: none;"
+            )
+            row.addWidget(lbl, 1)
+        else:
+            row.addStretch()
         return frame
 
     # ── Construction UI ───────────────────────────────────────────────────────
@@ -322,6 +339,7 @@ class InscriptionView(QWidget):
         self.cmb_niveau = QComboBox()
         self.cmb_niveau.setStyleSheet(COMBO_STYLE)
         self.cmb_niveau.setFixedHeight(36)
+        self.cmb_niveau.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_niveau.currentIndexChanged.connect(self.load_classes_par_niveau)
 
         # Classe
@@ -330,6 +348,7 @@ class InscriptionView(QWidget):
         self.cmb_classe = QComboBox()
         self.cmb_classe.setStyleSheet(COMBO_STYLE)
         self.cmb_classe.setFixedHeight(36)
+        self.cmb_classe.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_classe.currentIndexChanged.connect(self.on_classe_changed)
 
         # Statut d'affectation de l'État
@@ -338,6 +357,7 @@ class InscriptionView(QWidget):
         self.cmb_statut_affectation = QComboBox()
         self.cmb_statut_affectation.setStyleSheet(COMBO_STYLE)
         self.cmb_statut_affectation.setFixedHeight(36)
+        self.cmb_statut_affectation.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_statut_affectation.addItem("Affecté de l'État", "AFFECTE_ETAT")
         self.cmb_statut_affectation.addItem("Non affecté de l'État", "NON_AFFECTE_ETAT")
 
@@ -429,14 +449,14 @@ class InscriptionView(QWidget):
         # donc cette zone n'a plus besoin de sa propre QScrollArea imbriquée :
         # ça évitait un double défilement et un écrasement de la dernière ligne
         # sous le libellé du total (superposition visuelle).
+        # Une seule colonne (plutôt qu'une grille 2 colonnes) : les libellés de
+        # frais peuvent être longs et doivent pouvoir passer à la ligne sans
+        # jamais forcer la carte à s'élargir au-delà de la largeur disponible.
         self.frais_annexes_container = QFrame()
         self.frais_annexes_container.setStyleSheet("QFrame { background-color: transparent; border: none; }")
-        self.frais_annexes_layout = QGridLayout(self.frais_annexes_container)
+        self.frais_annexes_layout = QVBoxLayout(self.frais_annexes_container)
         self.frais_annexes_layout.setContentsMargins(0, 0, 0, 0)
-        self.frais_annexes_layout.setHorizontalSpacing(8)
-        self.frais_annexes_layout.setVerticalSpacing(6)
-        self.frais_annexes_layout.setColumnStretch(0, 1)
-        self.frais_annexes_layout.setColumnStretch(1, 1)
+        self.frais_annexes_layout.setSpacing(6)
         c3.addWidget(self.frais_annexes_container)
 
         self.lbl_total_frais_annexes = QLabel("Total frais annexes sélectionnés : 0 FCFA")
@@ -537,19 +557,19 @@ class InscriptionView(QWidget):
                 "background-color: transparent; border: none;"
             )
             lbl_vide.setWordWrap(True)
-            self.frais_annexes_layout.addWidget(lbl_vide, 0, 0, 1, 2)
+            self.frais_annexes_layout.addWidget(lbl_vide)
             self._update_total_frais_annexes()
             return
 
-        for index, frais in enumerate(frais_list):
+        for frais in frais_list:
             libelle = frais.get("LibelleFrais") or frais.get("CodeFrais") or "Frais"
             montant = frais.get("MontantFrais") or 0
-            chk = QCheckBox(f"{libelle} — {format_fcfa(montant)}")
+            chk = QCheckBox()
             chk.setStyleSheet(_CHK_STYLE)
             chk.setEnabled(self._form_enabled)
             chk.toggled.connect(self._update_total_frais_annexes)
-            row, col = divmod(index, 2)
-            self.frais_annexes_layout.addWidget(self._make_option_row(chk), row, col)
+            libelle_complet = f"{libelle} — {format_fcfa(montant)}"
+            self.frais_annexes_layout.addWidget(self._make_option_row(chk, wrap_text=libelle_complet))
             self._frais_checkboxes.append((chk, frais))
 
         self._update_total_frais_annexes()
