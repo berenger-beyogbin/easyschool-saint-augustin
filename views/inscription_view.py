@@ -331,13 +331,16 @@ class InscriptionView(QWidget):
         main_layout.addWidget(card2, 1, 0)
 
         # ── Carte 3 : Affectation (rowspan=2 → aligne haut sur card1, bas sur card2)
-        # La carte elle-même n'est plus scrollable : seule la liste des frais
-        # annexes (longueur variable selon le niveau) a son propre QScrollArea
-        # borné en hauteur, plus bas, pour que le reste de la carte (niveau,
-        # classe, effectif, statut, options, total, bouton) reste toujours fixe.
+        # Reconstruite intégralement : un seul QVBoxLayout (c3, fourni par
+        # _make_step_card) porte tous les blocs de la carte dans l'ordre visuel,
+        # chacun séparé par une marge explicite. Seule la liste des frais
+        # annexes (bloc 5, longueur variable selon le niveau) a son propre
+        # QScrollArea borné en hauteur ; le total et le bouton restent toujours
+        # visibles sous elle, jamais à l'intérieur.
         card3, c3 = self._make_step_card("3", "Choix de l'affectation de classe", scrollable=False)
+        c3.setSpacing(0)
 
-        # Niveau scolaire
+        # Bloc 1 — Affectation classe : niveau + classe, grille à 2 colonnes égales
         lbl_niveau = QLabel("NIVEAU SCOLAIRE *")
         lbl_niveau.setStyleSheet(_FIELD_LABEL_STYLE)
         self.cmb_niveau = QComboBox()
@@ -346,7 +349,6 @@ class InscriptionView(QWidget):
         self.cmb_niveau.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_niveau.currentIndexChanged.connect(self.load_classes_par_niveau)
 
-        # Classe
         lbl_classe = QLabel("CLASSE DE DESTINATION *")
         lbl_classe.setStyleSheet(_FIELD_LABEL_STYLE)
         self.cmb_classe = QComboBox()
@@ -355,7 +357,25 @@ class InscriptionView(QWidget):
         self.cmb_classe.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_classe.currentIndexChanged.connect(self.on_classe_changed)
 
-        # Statut d'affectation de l'État
+        grid_affectation = QGridLayout()
+        grid_affectation.setHorizontalSpacing(10)
+        grid_affectation.setVerticalSpacing(4)
+        grid_affectation.setColumnStretch(0, 1)
+        grid_affectation.setColumnStretch(1, 1)
+        grid_affectation.addWidget(lbl_niveau, 0, 0)
+        grid_affectation.addWidget(lbl_classe, 0, 1)
+        grid_affectation.addWidget(self.cmb_niveau, 1, 0)
+        grid_affectation.addWidget(self.cmb_classe, 1, 1)
+        c3.addLayout(grid_affectation)
+
+        # Bloc 2 — Effectif actuel (badge pleine largeur)
+        c3.addSpacing(10)
+        self.lbl_effectif = QLabel("Effectif actuel : — / —")
+        self._set_effectif_style("default")
+        c3.addWidget(self.lbl_effectif)
+
+        # Bloc 3 — Statut affectation (pleine largeur, pour ne tronquer aucune valeur)
+        c3.addSpacing(14)
         lbl_statut_affectation = QLabel("STATUT AFFECTATION *")
         lbl_statut_affectation.setStyleSheet(_FIELD_LABEL_STYLE)
         self.cmb_statut_affectation = QComboBox()
@@ -364,42 +384,23 @@ class InscriptionView(QWidget):
         self.cmb_statut_affectation.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_statut_affectation.addItem("Affecté de l'État", "AFFECTE_ETAT")
         self.cmb_statut_affectation.addItem("Non affecté de l'État", "NON_AFFECTE_ETAT")
+        c3.addWidget(lbl_statut_affectation)
+        c3.addSpacing(4)
+        c3.addWidget(self.cmb_statut_affectation)
 
-        col_niveau = QVBoxLayout()
-        col_niveau.setSpacing(4)
-        col_niveau.addWidget(lbl_niveau)
-        col_niveau.addWidget(self.cmb_niveau)
-
-        col_classe = QVBoxLayout()
-        col_classe.setSpacing(4)
-        col_classe.addWidget(lbl_classe)
-        col_classe.addWidget(self.cmb_classe)
-
-        # Ligne 1 : Niveau scolaire (50%) + Classe de destination (50%)
-        row_affectation = QHBoxLayout()
-        row_affectation.setSpacing(10)
-        row_affectation.addLayout(col_niveau, 1)
-        row_affectation.addLayout(col_classe, 1)
-
-        # Ligne 2 : Effectif actuel
-        self.lbl_effectif = QLabel("Effectif actuel : — / —")
-        self._set_effectif_style("default")
-
-        # Ligne 3 : Statut affectation (pleine largeur, pour ne tronquer aucune valeur)
-        col_statut = QVBoxLayout()
-        col_statut.setSpacing(4)
-        col_statut.addWidget(lbl_statut_affectation)
-        col_statut.addWidget(self.cmb_statut_affectation)
-
-        # Séparateur
+        # Séparateur avant les options de service
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
         sep.setFixedHeight(1)
+        c3.addSpacing(14)
+        c3.addWidget(sep)
 
-        # Options de services
+        # Bloc 4 — Options de services scolarité
+        c3.addSpacing(10)
         lbl_services = QLabel("OPTIONS DE SERVICES SCOLARITÉ")
         lbl_services.setStyleSheet(_FIELD_LABEL_STYLE)
+        c3.addWidget(lbl_services)
 
         self.chk_scolarite = QCheckBox("Scolarité de base")
         self.chk_scolarite.setChecked(True)
@@ -415,45 +416,33 @@ class InscriptionView(QWidget):
         self.chk_cantine = QCheckBox("Option Cantine midi")
         self.chk_cantine.setStyleSheet(_CHK_STYLE)
 
+        c3.addSpacing(6)
         row_base = QHBoxLayout()
         row_base.setSpacing(10)
         row_base.addWidget(self._make_option_row(self.chk_scolarite))
         row_base.addWidget(self._make_option_row(self.chk_nouveau))
+        c3.addLayout(row_base)
 
         # Transport / Cantine désactivés pour la version collège CJGA
         # (voir app.config.Config) — masqués, non proposés en saisie.
         self.row_transport = self._make_option_row(self.chk_transport)
         self.row_transport.setVisible(Config.ENABLE_TRANSPORT)
+        c3.addWidget(self.row_transport)
 
         self.row_cantine = self._make_option_row(self.chk_cantine)
         self.row_cantine.setVisible(Config.ENABLE_CANTINE)
-
-        # ── Zone fixe haute : niveau, classe, effectif, statut, options ────
-        # Regroupée dans son propre QFrame pour bien la séparer visuellement
-        # de la liste des frais annexes (scrollable) et du bloc total/bouton.
-        top_frame = QFrame()
-        top_frame.setStyleSheet("QFrame { background-color: transparent; border: none; }")
-        top_layout = QVBoxLayout(top_frame)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.setSpacing(10)
-        top_layout.addLayout(row_affectation)
-        top_layout.addWidget(self.lbl_effectif)
-        top_layout.addLayout(col_statut)
-        top_layout.addWidget(sep)
-        top_layout.addWidget(lbl_services)
-        top_layout.addLayout(row_base)
-        top_layout.addWidget(self.row_transport)
-        top_layout.addWidget(self.row_cantine)
-        c3.addWidget(top_frame)
+        c3.addWidget(self.row_cantine)
 
         # Séparateur avant la section frais annexes
         sep_frais = QFrame()
         sep_frais.setFrameShape(QFrame.HLine)
         sep_frais.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
         sep_frais.setFixedHeight(1)
+        c3.addSpacing(14)
         c3.addWidget(sep_frais)
 
-        # Frais annexes à l'inscription : liste cochable, dépend du niveau choisi
+        # Bloc 5 — Frais annexes à l'inscription : liste cochable, dépend du niveau choisi
+        c3.addSpacing(10)
         lbl_frais_annexes = QLabel("FRAIS ANNEXES À L'INSCRIPTION")
         lbl_frais_annexes.setStyleSheet(_FIELD_LABEL_STYLE)
         c3.addWidget(lbl_frais_annexes)
@@ -476,33 +465,27 @@ class InscriptionView(QWidget):
         self.frais_annexes_scroll.setFrameShape(QFrame.NoFrame)
         self.frais_annexes_scroll.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
         self.frais_annexes_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.frais_annexes_scroll.setFixedHeight(240)
+        self.frais_annexes_scroll.setFixedHeight(210)
         self.frais_annexes_scroll.setWidget(self.frais_annexes_container)
+        c3.addSpacing(6)
         c3.addWidget(self.frais_annexes_scroll)
 
+        # Bloc 6 — Total des frais annexes (toujours hors du QScrollArea)
+        c3.addSpacing(12)
         self.lbl_total_frais_annexes = QLabel("Total frais annexes sélectionnés : 0 FCFA")
         self.lbl_total_frais_annexes.setStyleSheet(
             f"font-size: 12px; font-weight: 700; color: {COLORS['primary_dark']};"
             "background-color: transparent; border: none;"
         )
+        c3.addWidget(self.lbl_total_frais_annexes)
 
-        # Bouton CTA
+        # Bloc 7 — Bouton final (toujours hors du QScrollArea, pleine largeur)
+        c3.addSpacing(12)
         self.btn_inscrire = QPushButton("Inscrire l'Élève")
         self.btn_inscrire.setStyleSheet(_BTN_INSCRIRE)
         self.btn_inscrire.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_inscrire.clicked.connect(self.on_inscrire)
-
-        # ── Zone fixe basse : total + bouton ───────────────────────────────
-        # Toujours hors du QScrollArea des frais, avec une marge nette au-dessus
-        # du total (séparation avec la liste) et entre le total et le bouton.
-        bottom_frame = QFrame()
-        bottom_frame.setStyleSheet("QFrame { background-color: transparent; border: none; }")
-        bottom_layout = QVBoxLayout(bottom_frame)
-        bottom_layout.setContentsMargins(0, 12, 0, 0)
-        bottom_layout.setSpacing(12)
-        bottom_layout.addWidget(self.lbl_total_frais_annexes)
-        bottom_layout.addWidget(self.btn_inscrire)
-        c3.addWidget(bottom_frame)
+        c3.addWidget(self.btn_inscrire)
 
         main_layout.addWidget(card3, 0, 1, 2, 1)  # rowspan=2 : de card1 à card2
 
