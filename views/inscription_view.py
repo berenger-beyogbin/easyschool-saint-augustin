@@ -331,7 +331,11 @@ class InscriptionView(QWidget):
         main_layout.addWidget(card2, 1, 0)
 
         # ── Carte 3 : Affectation (rowspan=2 → aligne haut sur card1, bas sur card2)
-        card3, c3 = self._make_step_card("3", "Choix de l'affectation de classe", scrollable=True)
+        # La carte elle-même n'est plus scrollable : seule la liste des frais
+        # annexes (longueur variable selon le niveau) a son propre QScrollArea
+        # borné en hauteur, plus bas, pour que le reste de la carte (niveau,
+        # classe, effectif, statut, options, total, bouton) reste toujours fixe.
+        card3, c3 = self._make_step_card("3", "Choix de l'affectation de classe", scrollable=False)
 
         # Niveau scolaire
         lbl_niveau = QLabel("NIVEAU SCOLAIRE *")
@@ -445,10 +449,6 @@ class InscriptionView(QWidget):
         c3.addWidget(lbl_frais_annexes)
 
         # Liste de frais annexes, de longueur variable selon le niveau choisi.
-        # La carte 3 entière est désormais scrollable (voir _make_step_card),
-        # donc cette zone n'a plus besoin de sa propre QScrollArea imbriquée :
-        # ça évitait un double défilement et un écrasement de la dernière ligne
-        # sous le libellé du total (superposition visuelle).
         # Une seule colonne (plutôt qu'une grille 2 colonnes) : les libellés de
         # frais peuvent être longs et doivent pouvoir passer à la ligne sans
         # jamais forcer la carte à s'élargir au-delà de la largeur disponible.
@@ -457,7 +457,18 @@ class InscriptionView(QWidget):
         self.frais_annexes_layout = QVBoxLayout(self.frais_annexes_container)
         self.frais_annexes_layout.setContentsMargins(0, 0, 0, 0)
         self.frais_annexes_layout.setSpacing(6)
-        c3.addWidget(self.frais_annexes_container)
+
+        # Zone scrollable dédiée UNIQUEMENT à la liste des frais annexes,
+        # hauteur bornée : le total et le bouton restent toujours visibles
+        # en dessous, sans dépendre de la longueur de cette liste.
+        self.frais_annexes_scroll = QScrollArea()
+        self.frais_annexes_scroll.setWidgetResizable(True)
+        self.frais_annexes_scroll.setFrameShape(QFrame.NoFrame)
+        self.frais_annexes_scroll.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
+        self.frais_annexes_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.frais_annexes_scroll.setFixedHeight(240)
+        self.frais_annexes_scroll.setWidget(self.frais_annexes_container)
+        c3.addWidget(self.frais_annexes_scroll)
 
         self.lbl_total_frais_annexes = QLabel("Total frais annexes sélectionnés : 0 FCFA")
         self.lbl_total_frais_annexes.setStyleSheet(
