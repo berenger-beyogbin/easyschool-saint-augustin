@@ -6,9 +6,23 @@ from models.article import Article
 from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
+from models.annee_scolaire import TAnneeScolaire
 from app.database import get_session
 
 class StockService:
+    @staticmethod
+    def _validate_open_school_year(session, id_annee: int) -> Tuple[bool, str]:
+        """Bloque tout mouvement de stock si l'année est absente ou clôturée."""
+        if not id_annee:
+            return False, "Aucune annee scolaire configuree active."
+
+        annee = session.get(TAnneeScolaire, id_annee)
+        if not annee:
+            return False, "Annee scolaire introuvable."
+        if annee.Cloturer:
+            return False, "Impossible d'enregistrer un mouvement de stock : l'annee scolaire est cloturee."
+        return True, ""
+
     @staticmethod
     def get_stock_courant() -> List[StockCour]:
         """Recupere la liste complete des stocks courants."""
@@ -38,11 +52,13 @@ class StockService:
         """Augmente le stock courant d'un article et enregistre l'entree."""
         if qte <= 0:
             return False, "La quantite de reapprovisionnement doit etre strictement positive."
-        if not id_annee:
-            return False, "Aucune annee scolaire configuree active."
 
         session = get_session()
         try:
+            ok, msg = StockService._validate_open_school_year(session, id_annee)
+            if not ok:
+                return False, msg
+
             sc = session.query(StockCour).filter_by(IDTArticle=id_art).first()
             if not sc:
                 # Si jamais il n'existe pas, on le cree a la volee
@@ -82,6 +98,10 @@ class StockService:
             
         session = get_session()
         try:
+            ok, msg = StockService._validate_open_school_year(session, id_annee)
+            if not ok:
+                return False, msg
+
             sc = session.query(StockCour).filter_by(IDTArticle=id_art).first()
             if not sc or sc.QuantiteCour < qte:
                 stock_dispo = sc.QuantiteCour if sc else 0

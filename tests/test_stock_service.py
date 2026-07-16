@@ -1,7 +1,5 @@
 from decimal import Decimal
 
-import pytest
-
 from models.article import Article
 from models.stock_cour import StockCour
 from services.stock_service import StockService
@@ -42,7 +40,6 @@ def test_remove_stock_refuses_insufficient_quantity_and_preserves_current_stock(
     assert db_session.get(StockCour, stock.IDStockCour).QuantiteCour == 2
 
 
-@pytest.mark.xfail(strict=True, reason="Lot futur : bloquer les mouvements de stock sur une année clôturée.")
 def test_add_stock_refuses_closed_school_year(db_session):
     annee = make_annee(db_session, cloturer=True)
     article, stock = _make_article_with_stock(db_session, qte=0, libelle="Stylo test")
@@ -58,3 +55,21 @@ def test_add_stock_refuses_closed_school_year(db_session):
     assert ok is False
     assert "clotur" in msg.lower() or "clôtur" in msg.lower()
     assert db_session.get(StockCour, stock.IDStockCour).QuantiteCour == 0
+
+
+def test_remove_stock_refuses_closed_school_year_and_preserves_current_stock(db_session):
+    annee = make_annee(db_session, cloturer=True)
+    article, stock = _make_article_with_stock(db_session, qte=4, libelle="Livre test")
+
+    ok, msg = StockService.remove_stock(
+        article.IDTArticle,
+        qte=1,
+        id_annee=annee.IDTAnneeScolaire,
+        prix_vente=1000,
+        login="TEST",
+    )
+
+    db_session.expire_all()
+    assert ok is False
+    assert "clotur" in msg.lower() or "clôtur" in msg.lower()
+    assert db_session.get(StockCour, stock.IDStockCour).QuantiteCour == 4
