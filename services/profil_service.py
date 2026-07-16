@@ -1,4 +1,5 @@
 from app.database import get_session
+from app.session import AppSession
 from models.profil import Profil
 from models.profil_permission import ProfilPermission
 from models.permission import Permission
@@ -47,6 +48,9 @@ _DEFAULT_PROFILES = [
 
 
 class ProfilService:
+    @staticmethod
+    def _require_users_modifier() -> tuple[bool, str]:
+        return AppSession.require_permission("UTILISATEURS_MODIFIER")
 
     @staticmethod
     def seed_default_profiles():
@@ -110,6 +114,10 @@ class ProfilService:
 
     @staticmethod
     def create(data: dict) -> tuple[bool, str]:
+        allowed, msg = ProfilService._require_users_modifier()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             code = data.get("Code", "").strip().upper()
@@ -137,6 +145,10 @@ class ProfilService:
 
     @staticmethod
     def update(id_profil: int, data: dict) -> tuple[bool, str]:
+        allowed, msg = ProfilService._require_users_modifier()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             profil = session.get(Profil, id_profil)
@@ -167,6 +179,10 @@ class ProfilService:
 
     @staticmethod
     def delete(id_profil: int) -> tuple[bool, str]:
+        allowed, msg = ProfilService._require_users_modifier()
+        if not allowed:
+            return False, msg
+
         from models.utilisateur import Utilisateur
         session = get_session()
         try:
@@ -206,6 +222,10 @@ class ProfilService:
     @staticmethod
     def set_profil_permissions(id_profil: int, codes_accordes: set[str]) -> tuple[bool, str]:
         """Remplace toutes les permissions d'un profil par les codes fournis."""
+        allowed, msg = ProfilService._require_users_modifier()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             all_perms = session.query(Permission).all()

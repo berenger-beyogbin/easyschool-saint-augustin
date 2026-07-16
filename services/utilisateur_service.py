@@ -3,6 +3,7 @@ import hmac
 import os
 from datetime import datetime
 from app.database import get_session
+from app.session import AppSession
 from models.utilisateur import Utilisateur
 from models.profil import Profil
 from sqlalchemy.orm import joinedload
@@ -40,6 +41,9 @@ def _validate_password_strength(password: str) -> tuple[bool, str]:
 
 
 class UtilisateurService:
+    @staticmethod
+    def _require_users_modifier() -> tuple[bool, str]:
+        return AppSession.require_permission("UTILISATEURS_MODIFIER")
 
     @staticmethod
     def seed_default_admin():
@@ -141,6 +145,10 @@ class UtilisateurService:
 
     @staticmethod
     def create(data: dict) -> tuple[bool, str]:
+        allowed, msg = UtilisateurService._require_users_modifier()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             login = data.get("Login", "").strip()
@@ -183,6 +191,10 @@ class UtilisateurService:
 
     @staticmethod
     def update(id_user: int, data: dict) -> tuple[bool, str]:
+        allowed, msg = UtilisateurService._require_users_modifier()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             user = session.get(Utilisateur, id_user)
@@ -227,6 +239,10 @@ class UtilisateurService:
 
     @staticmethod
     def toggle_active(id_user: int) -> tuple[bool, str]:
+        allowed, msg = UtilisateurService._require_users_modifier()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             user = session.get(Utilisateur, id_user)
@@ -285,7 +301,10 @@ class UtilisateurService:
 
     @staticmethod
     def delete(id_user: int) -> tuple[bool, str]:
-        from app.session import AppSession
+        allowed, msg = UtilisateurService._require_users_modifier()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             user = session.get(Utilisateur, id_user)

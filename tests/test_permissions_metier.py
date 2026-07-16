@@ -5,15 +5,21 @@ from decimal import Decimal
 from models.article import Article
 from models.classe import TClasse
 from models.etablissement import EtablissementEcole
+from models.permission import Permission
+from models.profil import Profil
+from models.profil_permission import ProfilPermission
 from models.prestation_annexe import PrestationAnnexe
 from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
+from models.utilisateur import Utilisateur
 from models.versement_scol import VersementScol
 from services.article_service import ArticleService
 from services.classe_service import ClasseService
+from services.profil_service import ProfilService
 from services.prestation_service import PrestationService
 from services.stock_service import StockService
+from services.utilisateur_service import UtilisateurService
 from services.versement_service import VersementService
 from tests.factories import (
     make_annee,
@@ -113,6 +119,34 @@ def _set_user_without_kiosque_write_permission():
     )
 
 
+def _set_user_without_users_modifier_permission():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 1005,
+            "Login": "users_lecture",
+            "Nom": "Users",
+            "ProfilCode": "USERS_READ",
+            "ProfilLibelle": "Utilisateurs lecture",
+            "IsAdmin": False,
+        },
+        permissions={"UTILISATEURS_VIEW"},
+    )
+
+
+def _set_user_with_users_modifier_permission():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 1006,
+            "Login": "users_admin",
+            "Nom": "Users",
+            "ProfilCode": "USERS_WRITE",
+            "ProfilLibelle": "Utilisateurs ecriture",
+            "IsAdmin": False,
+        },
+        permissions={"UTILISATEURS_VIEW", "UTILISATEURS_MODIFIER"},
+    )
+
+
 def _setup_active_param_context(db_session):
     annee = make_annee(db_session)
     etablissement = EtablissementEcole(RaisonSociale="Ecole test")
@@ -150,6 +184,13 @@ def _setup_stock_context(db_session, qte=5):
     db_session.add(stock)
     db_session.commit()
     return annee, article, stock
+
+
+def _make_direct_profil(db_session, code="TEST_PROFILE"):
+    profil = Profil(Code=code, Libelle=code.title(), IsAdmin=False, IsActive=True)
+    db_session.add(profil)
+    db_session.commit()
+    return profil
 
 
 def test_parametres_write_service_requires_modifier_permission(db_session):
@@ -294,3 +335,69 @@ def test_article_write_service_requires_articles_permission(db_session):
     assert ok is False
     assert "KIOSQUE_ARTICLES" in msg
     assert db_session.query(Article).filter_by(Libelle="Cahier interdit").first() is None
+
+
+def test_user_write_service_requires_users_modifier_permission(db_session):
+    profil = _make_direct_profil(db_session)
+    _set_user_without_users_modifier_permission()
+
+    ok, msg = UtilisateurService.create({
+        "Login": "interdit",
+        "Nom": "Interdit",
+        "Password": "secret123",
+        "IDProfil": profil.IDProfil,
+    })
+
+    db_session.expire_all()
+    assert ok is False
+    assert "UTILISATEURS_MODIFIER" in msg
+    assert db_session.query(Utilisateur).filter_by(Login="interdit").first() is None
+
+
+def test_profile_write_service_requires_users_modifier_permission(db_session):
+    _set_user_without_users_modifier_permission()
+
+    ok, msg = ProfilService.create({
+        "Code": "NOPE",
+        "Libelle": "Profil interdit",
+        "IsAdmin": False,
+    })
+
+    db_session.expire_all()
+    assert ok is False
+    assert "UTILISATEURS_MODIFIER" in msg
+    assert db_session.query(Profil).filter_by(Code="NOPE").first() is None
+
+
+def test_profile_write_service_allows_users_modifier_permission(db_session):
+    _set_user_with_users_modifier_permission()
+
+    ok, msg = ProfilService.create({
+        "Code": "OKUSERS",
+        "Libelle": "Profil autorise",
+        "IsAdmin": False,
+    })
+
+    db_session.expire_all()
+    assert ok is True, msg
+    assert db_session.query(Profil).filter_by(Code="OKUSERS").first() is not None
+
+
+def test_profile_permissions_write_requires_users_modifier_permission(db_session):
+    profil = _make_direct_profil(db_session, code="PROFIL_DROITS")
+    permission = Permission(
+        Code="DROIT_TEST",
+        Libelle="Droit test",
+        Module="Tests",
+        Ordre=999,
+    )
+    db_session.add(permission)
+    db_session.commit()
+    _set_user_without_users_modifier_permission()
+
+    ok, msg = ProfilService.set_profil_permissions(profil.IDProfil, {"DROIT_TEST"})
+
+    db_session.expire_all()
+    assert ok is False
+    assert "UTILISATEURS_MODIFIER" in msg
+    assert db_session.query(ProfilPermission).filter_by(IDProfil=profil.IDProfil).count() == 0

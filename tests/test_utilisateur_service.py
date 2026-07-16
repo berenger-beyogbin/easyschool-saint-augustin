@@ -1,9 +1,25 @@
+from app.session import AppSession
 from models.profil import Profil
 from models.utilisateur import Utilisateur
 from services.utilisateur_service import UtilisateurService
 
 
+def _set_users_modifier():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 4000,
+            "Login": "users_admin",
+            "Nom": "Users",
+            "ProfilCode": "USERS_ADMIN",
+            "ProfilLibelle": "Utilisateurs",
+            "IsAdmin": False,
+        },
+        permissions={"UTILISATEURS_MODIFIER"},
+    )
+
+
 def _make_profil(db_session, code="CAISSIER", is_admin=False):
+    _set_users_modifier()
     profil = Profil(Code=code, Libelle=code.title(), IsAdmin=is_admin, IsActive=True)
     db_session.add(profil)
     db_session.commit()
