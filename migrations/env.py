@@ -44,6 +44,7 @@ import models.profil  # noqa: E402,F401
 import models.permission  # noqa: E402,F401
 import models.profil_permission  # noqa: E402,F401
 import models.utilisateur  # noqa: E402,F401
+import models.audit_log  # noqa: E402,F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

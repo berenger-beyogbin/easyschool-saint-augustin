@@ -182,7 +182,9 @@ class ComptabiliteService:
             session.close()
 
     @staticmethod
-    def annuler_mouvement(id_sortie_fin: int, motif: str, login: Optional[str] = None) -> Tuple[bool, str]:
+    def annuler_mouvement(
+        id_sortie_fin: int, motif: str, login: Optional[str] = None, id_utilisateur: Optional[int] = None
+    ) -> Tuple[bool, str]:
         """Annule un mouvement financier (piste d'audit conservee) au lieu de le supprimer
         physiquement. Un mouvement annule reste visible dans les listes mais est exclu
         des agregations de la balance."""
@@ -202,11 +204,19 @@ class ComptabiliteService:
             if annee and annee.Cloturer:
                 return False, "Annulation impossible: l'année pour ce mouvement est clôturée."
 
+            ancien_montant = str(mouvement.Montant)
             mouvement.Annule = True
             mouvement.AnnulePar = login or "admin"
             mouvement.DateAnnulation = datetime.datetime.now()
             mouvement.MotifAnnulation = motif.strip()
             session.commit()
+
+            from services.audit_log_service import AuditLogService
+            AuditLogService.log(
+                action="ANNULER_MOUVEMENT", table_cible="SortieFin", id_cible=id_sortie_fin,
+                id_utilisateur=id_utilisateur, ancienne_valeur=f"Montant={ancien_montant}",
+                nouvelle_valeur="Annule=True", motif=motif.strip(),
+            )
             return True, "Mouvement annulé avec succès !"
         except Exception as e:
             session.rollback()

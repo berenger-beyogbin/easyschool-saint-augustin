@@ -85,6 +85,7 @@ def create_tables():
     import models.permission
     import models.profil_permission
     import models.utilisateur
+    import models.audit_log
 
     Base.metadata.create_all(bind=_engine)
     print("Tables creees avec succes dans PostgreSQL !")

@@ -359,7 +359,9 @@ class VersementService:
         return True, "Versement enregistre avec succes !", new_id
 
     @staticmethod
-    def annuler_versement(id_versement: int, motif: str, login: str = "ADMIN") -> tuple[bool, str]:
+    def annuler_versement(
+        id_versement: int, motif: str, login: str = "ADMIN", id_utilisateur: Optional[int] = None
+    ) -> tuple[bool, str]:
         """Annule un versement (piste d'audit conservee) au lieu de le supprimer
         physiquement. Un versement annule reste visible dans l'historique mais est
         exclu du calcul du reste a payer et des agregations comptables."""
@@ -379,11 +381,19 @@ class VersementService:
             if annee and annee.Cloturer:
                 return False, "Impossible d'annuler un versement appartenant a une annee cloturee."
 
+            ancien_montant_scol = str(v.MontantVersSco)
             v.Annule = True
             v.AnnulePar = login
             v.DateAnnulation = datetime.now()
             v.MotifAnnulation = motif.strip()
             session.commit()
+
+            from services.audit_log_service import AuditLogService
+            AuditLogService.log(
+                action="ANNULER_VERSEMENT", table_cible="VersementScol", id_cible=id_versement,
+                id_utilisateur=id_utilisateur, ancienne_valeur=f"MontantVersSco={ancien_montant_scol}",
+                nouvelle_valeur="Annule=True", motif=motif.strip(),
+            )
 
         except Exception as e:
             session.rollback()

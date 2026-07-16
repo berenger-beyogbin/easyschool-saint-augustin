@@ -34,7 +34,8 @@ Statut de chaque item : `[ ]` a faire, `[~]` en cours, `[x]` fait.
   Référence : [services/comptabilite_service.py](services/comptabilite_service.py). Tests : [tests/test_comptabilite_service.py](tests/test_comptabilite_service.py).
 - [x] **B7** — `ComptabiliteService.delete_mouvement` → `annuler_mouvement(id, motif, login)` et `VersementService.delete_versement` → `annuler_versement(id, motif, login)` : marquent `Annule`/`AnnulePar`/`DateAnnulation`/`MotifAnnulation` au lieu de supprimer. Exclus des agrégations (balance, reste à payer) mais restent visibles dans les listes (badge "(ANNULÉ)" + tooltip motif dans `enregistrement_mouvement_view.py`). Pas de contre-écriture automatique (jugée hors scope immédiat, l'annulation suffit à la traçabilité demandée par la recette #9).
   Migration [6f2b3468174e](migrations/versions/6f2b3468174e_annulation_tracee_sortiefin_.py). Tests : [tests/test_versement_service.py](tests/test_versement_service.py), [tests/test_comptabilite_service.py](tests/test_comptabilite_service.py).
-- [ ] **B8** — Table `AuditLog` : utilisateur par `IDUtilisateur` (pas juste `Login` texte), ancienne/nouvelle valeur, horodatage, motif.
+- [x] **B8** — Table [models/audit_log.py](models/audit_log.py) (`IDUtilisateur` en FK reelle, ancienne/nouvelle valeur, horodatage, motif) + [services/audit_log_service.py](services/audit_log_service.py) (`log`, `get_by_cible`, `get_recent`).
+  **Scope limité** : câblé uniquement dans `annuler_mouvement`/`annuler_versement` (B7), pas dans tous les services — instrumentation plus large à faire au fil de l'eau. Aucune vue UI dédiée pour consulter le journal pour l'instant. Migration [a369634edd2b](migrations/versions/a369634edd2b_creer_table_audit_log.py). Tests : [tests/test_audit_log_service.py](tests/test_audit_log_service.py).
 
 ## Phase C — Industrialisation technique
 

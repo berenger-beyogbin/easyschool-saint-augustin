@@ -357,7 +357,8 @@ class EnregistrementMouvementView(QWidget):
             return
 
         login_util = AppSession.get_logged_in_username() or "admin"
-        success, msg = ComptabiliteService.annuler_mouvement(id_mouv, motif, login_util)
+        id_utilisateur = AppSession.get_current_user_id()
+        success, msg = ComptabiliteService.annuler_mouvement(id_mouv, motif, login_util, id_utilisateur)
         if success:
             QMessageBox.information(self, "Succès", msg)
             self.load_data()
