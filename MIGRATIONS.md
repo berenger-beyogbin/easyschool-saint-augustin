@@ -65,7 +65,30 @@ tables présentes) ; stamper sur la baseline `f0e0bbadf6a8`, pas `head`.
    nommées, détectées comme "supprimées puis rajoutées" à cause de
    l'absence de nom explicite sur les `ForeignKey` actuelles). Supprimer ces
    opérations parasites du fichier avant de committer.
-4. Appliquer : `alembic upgrade head`.
+4. **Rendre chaque opération idempotente** (`IF NOT EXISTS`/`IF EXISTS`, ou
+   vérification d'existence avant un `ADD CONSTRAINT`) — voir "Piège"
+   ci-dessous : ne jamais se fier à `op.add_column`/`op.create_table`/
+   `op.create_check_constraint` bruts sans les rendre conditionnels.
+5. Appliquer : `alembic upgrade head`.
+
+### Piège découvert par la CI (chantier C2, 2026-07) : toujours écrire des migrations idempotentes
+
+Comme le modèle SQLAlchemy est modifié **avant** la révision (étape 1), une
+base entièrement neuve créée via `create_tables()`
+(`Base.metadata.create_all()`) a **déjà** la colonne/contrainte/table cible
+au moment où la révision correspondante est rejouée par-dessus. Un
+`op.add_column`/`op.create_table`/`op.create_check_constraint` non protégé
+échoue alors avec "already exists", uniquement sur une base neuve — jamais
+sur la base de dev/test habituelle (déjà migrée pas à pas). C'est exactement
+ce qu'un `alembic upgrade head` lancé en CI sur une base éphémère toute
+neuve détecte, et que tester uniquement sur une base locale déjà migrée ne
+révèle jamais.
+
+Trois migrations de ce projet ont été corrigées pour cette raison
+(`71dbc5eb1292`, `6f2b3468174e`, `a369634edd2b`) : toutes utilisent
+désormais du SQL brut avec `IF NOT EXISTS` ou une vérification d'existence
+préalable, au lieu des opérations Alembic non protégées générées par
+défaut.
 
 ## Constat fait lors de la mise en place
 

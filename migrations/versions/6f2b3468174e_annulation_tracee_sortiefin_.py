@@ -9,6 +9,11 @@ server_default='false' sur Annule (NOT NULL) : necessaire pour que l'ajout
 de colonne reussisse sur une table contenant deja des lignes (les
 enregistrements existants sont consideres non-annules par defaut).
 
+IF NOT EXISTS (SQL brut plutot que op.add_column) : les modeles SortieFin
+et VersementScol declarent deja ces colonnes, donc une base neuve creee via
+create_tables() (Base.metadata.create_all) les a deja au moment ou cette
+revision est rejouee (bug decouvert par la CI, chantier C2).
+
 Revision ID: 6f2b3468174e
 Revises: 71dbc5eb1292
 Create Date: 2026-07-16 22:22:05.248492
@@ -29,14 +34,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column('SortieFin', sa.Column('Annule', sa.Boolean(), nullable=False, server_default=sa.false()))
-    op.add_column('SortieFin', sa.Column('AnnulePar', sa.String(length=50), nullable=True))
-    op.add_column('SortieFin', sa.Column('DateAnnulation', sa.DateTime(), nullable=True))
-    op.add_column('SortieFin', sa.Column('MotifAnnulation', sa.Text(), nullable=True))
-    op.add_column('VersementScol', sa.Column('Annule', sa.Boolean(), nullable=False, server_default=sa.false()))
-    op.add_column('VersementScol', sa.Column('AnnulePar', sa.String(length=50), nullable=True))
-    op.add_column('VersementScol', sa.Column('DateAnnulation', sa.DateTime(), nullable=True))
-    op.add_column('VersementScol', sa.Column('MotifAnnulation', sa.Text(), nullable=True))
+    for table in ('SortieFin', 'VersementScol'):
+        op.execute(sa.text(
+            f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "Annule" BOOLEAN NOT NULL DEFAULT false'
+        ))
+        op.execute(sa.text(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "AnnulePar" VARCHAR(50)'))
+        op.execute(sa.text(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "DateAnnulation" TIMESTAMP'))
+        op.execute(sa.text(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "MotifAnnulation" TEXT'))
 
 
 def downgrade() -> None:

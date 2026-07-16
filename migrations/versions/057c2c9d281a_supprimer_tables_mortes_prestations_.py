@@ -17,6 +17,13 @@ generees uniquement a cause de contraintes non nommees explicitement dans
 les modeles (bruit de reflection, aucun changement fonctionnel), ont ete
 retirees pour ne garder que la suppression des 3 tables mortes.
 
+Correctif (decouvert par la CI, chantier C2) : les DROP INDEX/DROP TABLE
+utilisent IF EXISTS. Sur une base entierement neuve creee avec le code
+actuel, ces objets n'ont jamais existe (le modele VentilationPrestation et
+le bloc ad hoc qui creait son index ont ete retires du code en meme temps
+que ce refactor) : un DROP sans garde y echouerait, alors que cette
+revision ne doit rien faire de plus qu'un no-op dans ce cas precis.
+
 Revision ID: 057c2c9d281a
 Revises: f0e0bbadf6a8
 Create Date: 2026-07-16 20:47:21.638500
@@ -37,10 +44,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.drop_index(op.f('idx_ventilation_eleve_annee'), table_name='VentilationPrestation')
-    op.drop_table('VentilationPrestation')
-    op.drop_table('PrestationAnnexe')
-    op.drop_table('Prestataire')
+    op.execute(sa.text('DROP INDEX IF EXISTS idx_ventilation_eleve_annee'))
+    op.execute(sa.text('DROP TABLE IF EXISTS "VentilationPrestation"'))
+    op.execute(sa.text('DROP TABLE IF EXISTS "PrestationAnnexe"'))
+    op.execute(sa.text('DROP TABLE IF EXISTS "Prestataire"'))
 
 
 def downgrade() -> None:
