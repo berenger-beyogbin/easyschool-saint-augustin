@@ -6,14 +6,27 @@ import os
 os.environ["DB_NAME"] = "easy_school_test_db"
 
 import pytest
+from sqlalchemy import text
 
 from app.database import init_db, create_tables, get_session, Base
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _test_database():
-    """Cree les tables une fois pour toute la session de test."""
+    """Reconstruit le schema de test une fois pour toute la session.
+
+    La base `easy_school_test_db` peut garder un ancien schema entre deux
+    sessions pytest. `create_all()` n'altère pas les tables existantes ; on
+    recharge donc les modèles via `create_tables()`, puis on supprime/recrée
+    uniquement les tables de la base de test pour garantir un schema aligné
+    sur les modèles courants.
+    """
     engine = init_db()
+    if os.environ.get("DB_NAME") != "easy_school_test_db":
+        raise RuntimeError("Refus de reconstruire le schéma hors base de test.")
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
     create_tables()
     yield engine
 
