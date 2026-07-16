@@ -27,9 +27,11 @@ class VersementsView(QWidget):
 
         self.view_caisse        = CaisseView(self.main_window)
         self.view_scolarite     = MontantScolariteView(self.main_window)
-        self.view_transport     = MontantTransportView(self.main_window)
-        self.view_cantine       = MontantCantineView(self.main_window)
         self.view_autres_frais  = AutresFraisView(self.main_window)
+        # Vues instanciees seulement si leur module est actif (sinon on
+        # construirait une UI pour rien : cf. audit P2-06).
+        self.view_transport = MontantTransportView(self.main_window) if Config.ENABLE_TRANSPORT else None
+        self.view_cantine = MontantCantineView(self.main_window) if Config.ENABLE_CANTINE else None
 
         self.tabs.addTab(self.view_caisse,       "Caisse")
         self.tabs.addTab(self.view_scolarite,    "Scolarité")

@@ -32,11 +32,13 @@ class StatistiquesView(QWidget):
         self.view_inscrits     = StatInscritsView(self.main_window)
         self.view_nouveaux     = StatNouveauxView(self.main_window)
         self.view_scolarite    = StatScolariteView(self.main_window)
-        self.view_cantine      = StatCantineView(self.main_window)
-        self.view_transport    = StatTransportView(self.main_window)
         self.view_vente        = StatVenteView(self.main_window)
         self.view_stock        = StatStockView(self.main_window)
         self.view_alphabetique = ListeAlphabetiqueView(self.main_window)
+        # Vues instanciees seulement si leur module est actif (sinon on
+        # construirait une UI pour rien : cf. audit P2-06).
+        self.view_cantine = StatCantineView(self.main_window) if Config.ENABLE_CANTINE else None
+        self.view_transport = StatTransportView(self.main_window) if Config.ENABLE_TRANSPORT else None
 
         self.tabs.addTab(self.view_inscrits,     "Inscrits")
         self.tabs.addTab(self.view_nouveaux,     "Nouveaux")
