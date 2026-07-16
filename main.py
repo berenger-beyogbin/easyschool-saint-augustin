@@ -12,6 +12,7 @@ from app.session import AppSession
 from app.styles import MESSAGEBOX_STYLE, install_messagebox_autostyle
 from views.main_window import MainWindow
 from views.login_dialog import LoginDialog
+from views.first_run_setup_dialog import FirstRunSetupDialog
 
 
 def _apply_light_palette(app: QApplication) -> None:
@@ -69,7 +70,6 @@ def main():
         from services.compte_service import CompteService
         PermissionService.seed_permissions()
         ProfilService.seed_default_profiles()
-        UtilisateurService.seed_default_admin()
         CompteService.seed_comptes_syscoa()
 
         # 4. Initialisation de la session active avant la fenetre principale
@@ -84,7 +84,16 @@ def main():
         )
         sys.exit(1)
 
-    # 5. Écran de connexion
+    # 5. Premiere configuration (aucun utilisateur en base) : creation du
+    # compte admin avec un mot de passe choisi, au lieu d'un admin/admin123
+    # auto-genere.
+    from services.utilisateur_service import UtilisateurService as _US
+    if not _US.has_any_user():
+        setup_dlg = FirstRunSetupDialog()
+        if setup_dlg.exec() != FirstRunSetupDialog.Accepted:
+            sys.exit(0)
+
+    # 6. Écran de connexion
     login_dlg = LoginDialog()
     if login_dlg.exec() != LoginDialog.Accepted:
         # L'utilisateur a fermé la fenêtre sans se connecter
