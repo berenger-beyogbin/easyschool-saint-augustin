@@ -13,11 +13,14 @@ class TInscription(Base):
     )
 
     IDTInscription = Column(Integer, primary_key=True, autoincrement=True)
-    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="CASCADE"), nullable=False)
-    IDFamille = Column(Integer, ForeignKey("TFamille.IdTFamille", ondelete="CASCADE"), nullable=False)
-    IDEleve = Column(Integer, ForeignKey("Eleve.IDEleve", ondelete="CASCADE"), nullable=False)
-    IDNiveau = Column(Integer, ForeignKey("TNiveau.IDT_Niveau", ondelete="CASCADE"), nullable=False)
-    IDClasse = Column(Integer, ForeignKey("TClasse.IDTClasse", ondelete="CASCADE"), nullable=False)
+    # ON DELETE RESTRICT : une inscription est un document scolaire/financier,
+    # sa disparition ne doit jamais etre un effet de bord de la suppression
+    # d'une annee, d'une famille, d'un eleve, d'un niveau ou d'une classe.
+    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="RESTRICT"), nullable=False)
+    IDFamille = Column(Integer, ForeignKey("TFamille.IdTFamille", ondelete="RESTRICT"), nullable=False)
+    IDEleve = Column(Integer, ForeignKey("Eleve.IDEleve", ondelete="RESTRICT"), nullable=False)
+    IDNiveau = Column(Integer, ForeignKey("TNiveau.IDT_Niveau", ondelete="RESTRICT"), nullable=False)
+    IDClasse = Column(Integer, ForeignKey("TClasse.IDTClasse", ondelete="RESTRICT"), nullable=False)
     
     # Options d'inscription
     Nouveau = Column(Boolean, default=True)

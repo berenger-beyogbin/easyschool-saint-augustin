@@ -17,14 +17,17 @@ class VersementScol(Base):
     )
 
     IDVersementScol = Column(Integer, primary_key=True, autoincrement=True)
-    IDFamille = Column(Integer, ForeignKey("TFamille.IdTFamille", ondelete="CASCADE"), nullable=False)
+    # ON DELETE RESTRICT : un versement est une piece financiere, sa disparition
+    # ne doit jamais etre un effet de bord de la suppression d'une famille,
+    # d'une annee ou d'un eleve.
+    IDFamille = Column(Integer, ForeignKey("TFamille.IdTFamille", ondelete="RESTRICT"), nullable=False)
     DateVers = Column(Date, nullable=False)
     MontantVersTrans = Column(Numeric(12, 2), nullable=False, default=0.0)
     MontantVersSco = Column(Numeric(12, 2), nullable=False, default=0.0)
     MontantCantine = Column(Numeric(12, 2), nullable=False, default=0.0)
     MontantVersAutres = Column(Numeric(12, 2), nullable=False, default=0.0)
-    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="CASCADE"), nullable=False)
-    IDEleve = Column(Integer, ForeignKey("Eleve.IDEleve", ondelete="CASCADE"), nullable=False)
+    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="RESTRICT"), nullable=False)
+    IDEleve = Column(Integer, ForeignKey("Eleve.IDEleve", ondelete="RESTRICT"), nullable=False)
     Restitution = Column(Boolean, default=False)
     Login = Column(String(50), nullable=True)
     Reduction = Column(Boolean, default=False)

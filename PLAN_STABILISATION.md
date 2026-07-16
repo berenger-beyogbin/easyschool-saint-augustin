@@ -21,8 +21,10 @@ Statut de chaque item : `[ ]` a faire, `[~]` en cours, `[x]` fait.
 
 ## Phase B — Stabilisation critique des données
 
-- [ ] **B1** — CASCADE → RESTRICT sur les FK sensibles + migration Alembic dédiée + tests de non-suppression.
-  Références : [models/inscription.py:16-20](models/inscription.py:16), [models/versement_scol.py:20,26-27](models/versement_scol.py:20), [models/stock_entree.py:13-14](models/stock_entree.py:13), [models/stock_sortie.py:13-14](models/stock_sortie.py:13), [models/montant_scol.py:18-19](models/montant_scol.py:18).
+- [x] **B1** — CASCADE → RESTRICT sur les FK sensibles + migration Alembic dédiée + tests de non-suppression.
+  Références : [models/inscription.py](models/inscription.py), [models/versement_scol.py](models/versement_scol.py), [models/stock_entree.py](models/stock_entree.py), [models/stock_sortie.py](models/stock_sortie.py), [models/montant_scol.py](models/montant_scol.py), migration [migrations/versions/1a7f16576697_cascade_vers_restrict_fk_sensibles.py](migrations/versions/1a7f16576697_cascade_vers_restrict_fk_sensibles.py).
+  Vérifié réellement (SQL brut hors application) : suppression d'une classe/famille/année référencée par une inscription → bloquée par la contrainte DB. Tests : [tests/test_db_restrict_constraints.py](tests/test_db_restrict_constraints.py).
+  **Non appliquée sur la base réelle CJGA** — seulement vérifiée sur la base de test jetable. À appliquer après sauvegarde (A3).
 - [ ] **B2** — Vente atomique : créer `StockService.process_sale(cart, annee_id, user_id)` en une seule transaction (une session, verrouillage des lignes de stock, entête + lignes de vente, un seul commit, rollback total si échec).
   Référence : [views/vente_view.py:313-352](views/vente_view.py:313) (boucle `remove_stock()` par article, sessions séparées).
 - [ ] **B3** — Verrouillage concurrent du stock : `SELECT ... FOR UPDATE` ou `UPDATE ... WHERE QuantiteCour >= :qte` + `CHECK (QuantiteCour >= 0)`.

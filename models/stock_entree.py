@@ -10,8 +10,10 @@ class StockEntree(Base):
     __tablename__ = "StockEnt"
 
     IDStockEnt = Column(Integer, primary_key=True, autoincrement=True)
-    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="CASCADE"), nullable=False)
-    IDTArticle = Column(Integer, ForeignKey("TArticle.IDTArticle", ondelete="CASCADE"), nullable=False)
+    # ON DELETE RESTRICT : un mouvement de stock est un historique
+    # d'approvisionnement, il ne doit pas disparaitre avec l'annee ou l'article.
+    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="RESTRICT"), nullable=False)
+    IDTArticle = Column(Integer, ForeignKey("TArticle.IDTArticle", ondelete="RESTRICT"), nullable=False)
     DateEnt = Column(Date, nullable=False)
     QuantiteEnt = Column(Integer, nullable=False)
     Login = Column(String(50), nullable=True)
