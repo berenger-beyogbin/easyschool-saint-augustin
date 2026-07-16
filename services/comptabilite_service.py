@@ -23,6 +23,10 @@ _SYSCOA_RUBRIQUE = {
 
 class ComptabiliteService:
     @staticmethod
+    def _require_saisie_permission() -> Tuple[bool, str]:
+        return AppSession.require_permission("COMPTABILITE_SAISIE")
+
+    @staticmethod
     def generate_code_sortie(session, id_annee: int) -> str:
         """Génère un code séquentiel simple : SF-AAAA-0001."""
         annee = session.query(TAnneeScolaire).filter_by(IDTAnneeScolaire=id_annee).first()
@@ -70,6 +74,9 @@ class ComptabiliteService:
             return False, "Le compte est obligatoire."
         if debit_credit not in ["Debit", "Credit"]:
             return False, "Le mouvement doit être 'Debit' ou 'Credit'."
+        allowed, msg = ComptabiliteService._require_saisie_permission()
+        if not allowed:
+            return False, msg
 
         # Récupération de la session et de l'année scolaire active du Kiosque / AppSession
         active_annee_id = AppSession.get_active_annee_id()
@@ -132,6 +139,9 @@ class ComptabiliteService:
             return False, "Le compte est obligatoire."
         if debit_credit not in ["Debit", "Credit"]:
             return False, "Le mouvement doit être 'Debit' ou 'Credit'."
+        allowed, msg = ComptabiliteService._require_saisie_permission()
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:
@@ -143,6 +153,10 @@ class ComptabiliteService:
             annee = session.query(TAnneeScolaire).filter_by(IDTAnneeScolaire=mouvement.IDAnSco).first()
             if annee and annee.Cloturer:
                 return False, "Modification impossible: l'année pour ce mouvement est clôturée."
+
+            compte = session.query(Compte).filter_by(IDCompte=id_compte).first()
+            if not compte:
+                return False, "Le compte specifie n'existe pas."
 
             mouvement.Benef = benef.strip()
             mouvement.Detail = detail.strip() if detail else None
@@ -163,6 +177,10 @@ class ComptabiliteService:
     @staticmethod
     def delete_mouvement(id_sortie_fin: int) -> Tuple[bool, str]:
         """Supprime un mouvement financier."""
+        allowed, msg = ComptabiliteService._require_saisie_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             mouvement = session.query(SortieFin).filter_by(IDSortieFin=id_sortie_fin).first()
