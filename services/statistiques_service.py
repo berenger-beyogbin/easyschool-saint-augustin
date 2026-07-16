@@ -167,17 +167,15 @@ class StatistiquesService:
                 if ins.Scolarite:
                     m_scol = montants_map.get(ins.IDNiveau)
                     if m_scol:
-                        if ins.famille and ins.famille.EnsCatPrimaire:
-                            scol_due = float(m_scol.MontantEnsPri)
-                        elif ins.famille and ins.famille.EnsCatSecondaire:
-                            scol_due = float(m_scol.MontantEnsSecondaire)
+                        if ins.StatutAffectation == "NON_AFFECTE_ETAT":
+                            scol_due = float(m_scol.MontantNonAffecte)
                         else:
-                            scol_due = float(m_scol.Montant)
+                            scol_due = float(m_scol.MontantAffecte)
 
                     if ins.famille and ins.famille.EbrieAbobote:
                         scol_due = max(0.0, scol_due - 10000.0)
-                    if ins.Nouveau:
-                        scol_due += 10000.0
+                    if ins.Nouveau and ins.StatutAffectation == "AFFECTE_ETAT":
+                        scol_due += 15000.0
                     rang, nb_famille = rang_par_eleve.get(ins.IDEleve, (1, 1))
                     if nb_famille >= 3 and rang >= 3:
                         scol_due = max(0.0, scol_due - 10000.0)

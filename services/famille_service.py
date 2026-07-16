@@ -93,8 +93,6 @@ class FamilleService:
                 NomMere=data.get("NomMere"),
                 ProfessionMere=data.get("ProfessionMere"),
                 TelMere=data.get("TelMere"),
-                EnsCatPrimaire=data.get("EnsCatPrimaire", False),
-                EnsCatSecondaire=data.get("EnsCatSecondaire", False)
             )
             session.add(famille)
             session.commit()
@@ -158,8 +156,6 @@ class FamilleService:
             famille.NomMere = data.get("NomMere")
             famille.ProfessionMere = data.get("ProfessionMere")
             famille.TelMere = data.get("TelMere")
-            famille.EnsCatPrimaire = data.get("EnsCatPrimaire", False)
-            famille.EnsCatSecondaire = data.get("EnsCatSecondaire", False)
 
             session.commit()
             return True, "Famille mise à jour avec succès !"

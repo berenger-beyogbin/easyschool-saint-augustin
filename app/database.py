@@ -73,6 +73,7 @@ def create_tables():
     import models.montant_cantine
     import models.montant_transport
     import models.versement_scol
+    import models.versement_autres_frais
     import models.article
     import models.stock_cour
     import models.stock_entree
@@ -84,9 +85,6 @@ def create_tables():
     import models.permission
     import models.profil_permission
     import models.utilisateur
-    import models.prestataire
-    import models.prestation_annexe
-    import models.ventilation_prestation
 
     Base.metadata.create_all(bind=_engine)
     print("Tables creees avec succes dans PostgreSQL !")
@@ -119,13 +117,44 @@ def create_tables():
     except Exception as e:
         print(f"Avertissement migration 'TInscription': {e}")
 
-    # Ventilation analytique : index de performance sur (IDEleve, IDAnneeScolaire)
+    # Suppression du tarif de scolarité "catégorie enseignant" : la scolarité
+    # ne repose plus que sur le montant standard.
     try:
         with _engine.begin() as conn:
-            conn.execute(text(
-                'CREATE INDEX IF NOT EXISTS idx_ventilation_eleve_annee '
-                'ON "VentilationPrestation" ("IDEleve", "IDAnneeScolaire");'
-            ))
-            print("Index VentilationPrestation créé (ou déjà présent).")
+            conn.execute(text('ALTER TABLE IF EXISTS "MontantScol" DROP COLUMN IF EXISTS "MontantEnsPri";'))
+            conn.execute(text('ALTER TABLE IF EXISTS "MontantScol" DROP COLUMN IF EXISTS "MontantEnsSecondaire";'))
+            conn.execute(text('ALTER TABLE IF EXISTS "TFamille" DROP COLUMN IF EXISTS "EnsCatPrimaire";'))
+            conn.execute(text('ALTER TABLE IF EXISTS "TFamille" DROP COLUMN IF EXISTS "EnsCatSecondaire";'))
+            print("Suppression des colonnes de tarif enseignant (MontantScol/TFamille) terminee avec succes.")
     except Exception as e:
-        print(f"Avertissement index VentilationPrestation : {e}")
+        print(f"Avertissement migration tarif enseignant : {e}")
+
+    # Colonne "MustChangePassword" : residu d'un ancien schema, jamais utilisee
+    # par le modele Utilisateur actuel. Sa presence (NOT NULL sans defaut) fait
+    # echouer toute creation d'utilisateur sur une base deja initialisee avant
+    # sa suppression du modele.
+    try:
+        with _engine.begin() as conn:
+            conn.execute(text('ALTER TABLE IF EXISTS "Utilisateur" DROP COLUMN IF EXISTS "MustChangePassword";'))
+            print("Suppression de la colonne obsolete 'MustChangePassword' (Utilisateur) terminee avec succes.")
+    except Exception as e:
+        print(f"Avertissement migration 'Utilisateur' (MustChangePassword) : {e}")
+
+    # Scolarité à deux tarifs selon le statut d'affectation de l'État
+    # (Non affecté / Affecté, cf. TInscription.StatutAffectation) : remplace
+    # l'ancien montant unique "Montant" par MontantNonAffecte / MontantAffecte,
+    # en reprenant l'ancienne valeur comme point de depart pour les deux.
+    try:
+        with _engine.begin() as conn:
+            conn.execute(text('ALTER TABLE IF EXISTS "MontantScol" ADD COLUMN IF NOT EXISTS "MontantNonAffecte" NUMERIC(12,2) NOT NULL DEFAULT 0;'))
+            conn.execute(text('ALTER TABLE IF EXISTS "MontantScol" ADD COLUMN IF NOT EXISTS "MontantAffecte" NUMERIC(12,2) NOT NULL DEFAULT 0;'))
+            has_montant = conn.execute(text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'MontantScol' AND column_name = 'Montant';"
+            )).first()
+            if has_montant:
+                conn.execute(text('UPDATE "MontantScol" SET "MontantNonAffecte" = "Montant", "MontantAffecte" = "Montant";'))
+                conn.execute(text('ALTER TABLE "MontantScol" DROP COLUMN "Montant";'))
+            print("Mise a jour de table 'MontantScol' (tarifs Non affecte/Affecte) terminee avec succes.")
+    except Exception as e:
+        print(f"Avertissement migration 'MontantScol' (tarifs affectation) : {e}")

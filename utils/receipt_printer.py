@@ -300,19 +300,16 @@ class ReceiptPrinter:
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                          f"Numéro :  {data.get('numero', '')}")
 
-        # Motif / Mode de paiement / Titulaire — enrichissement CJGA
+        # Motif / Mode de paiement — enrichissement CJGA
         # (valeurs UI temporaires, non persistées en base à ce stade)
         y_info += row_h
         painter.setFont(_font(8, bold=True))
         painter.drawText(QRectF(X + mm(3), y_info, CW * 0.36, row_h),
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                          f"Motif :  {data.get('motif', 'Scolarité')}")
-        painter.drawText(QRectF(X + CW * 0.37, y_info, CW * 0.34, row_h),
+        painter.drawText(QRectF(X + CW * 0.37, y_info, CW * 0.63, row_h),
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                          f"Mode :  {data.get('mode_paiement', 'Espèce')}")
-        painter.drawText(QRectF(X + CW * 0.70, y_info, CW * 0.30, row_h),
-                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                         f"Titulaire :  {data.get('titulaire', 'Non précisé')}")
 
         # Séparateur pointillé
         y_dot_h = y_info + row_h + mm(1.5)

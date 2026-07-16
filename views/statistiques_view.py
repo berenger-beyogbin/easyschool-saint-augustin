@@ -10,7 +10,6 @@ from views.stat_cantine_view import StatCantineView
 from views.stat_transport_view import StatTransportView
 from views.stat_vente_view import StatVenteView
 from views.stat_stock_view import StatStockView
-from views.stat_prestataire_view import StatPrestatairesView
 from views.liste_alphabetique_view import ListeAlphabetiqueView
 
 
@@ -38,7 +37,6 @@ class StatistiquesView(QWidget):
         self.view_transport    = StatTransportView(self.main_window)
         self.view_vente        = StatVenteView(self.main_window)
         self.view_stock        = StatStockView(self.main_window)
-        self.view_prestataires = StatPrestatairesView(self.main_window)
         self.view_alphabetique = ListeAlphabetiqueView(self.main_window)
 
         self.tabs.addTab(self.view_inscrits,     "Inscrits")
@@ -50,7 +48,6 @@ class StatistiquesView(QWidget):
             self.tabs.addTab(self.view_transport, "Transport")
         self.tabs.addTab(self.view_vente,        "Vente")
         self.tabs.addTab(self.view_stock,        "Stock")
-        self.tabs.addTab(self.view_prestataires, "Prestataires")
         self.tabs.addTab(self.view_alphabetique, "Liste Alphabétique")
 
         self.tabs.currentChanged.connect(self.on_tab_changed)

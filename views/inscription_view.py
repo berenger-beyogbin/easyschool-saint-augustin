@@ -2,7 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QHeaderView, QComboBox, QCheckBox, QFrame,
-    QDialog, QDialogButtonBox, QScrollArea, QSizePolicy
+    QDialog, QDialogButtonBox, QScrollArea, QSizePolicy,
+    QListWidget, QListWidgetItem, QAbstractItemView
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -91,6 +92,43 @@ QCheckBox::indicator:checked:hover {{
 }}
 """
 
+_FRAIS_LIST_STYLE = f"""
+QListWidget {{
+    background-color: {COLORS['card']};
+    border: 1px solid {COLORS['border']};
+    border-radius: 7px;
+    outline: none;
+    font-size: 12px;
+    color: {COLORS['text_soft']};
+}}
+QListWidget::item {{
+    padding: 8px 10px;
+    border-bottom: 1px solid {COLORS['border']};
+}}
+QListWidget::item:hover {{
+    background-color: {COLORS['surface_soft']};
+}}
+QListWidget::indicator {{
+    width: 18px;
+    height: 18px;
+    border: 2px solid {COLORS['input_border']};
+    border-radius: 4px;
+    background-color: {COLORS['card']};
+}}
+QListWidget::indicator:unchecked:hover {{
+    border-color: {COLORS['primary']};
+    background-color: {COLORS['surface_soft']};
+}}
+QListWidget::indicator:checked {{
+    background-color: {COLORS['primary']};
+    border-color: {COLORS['primary']};
+}}
+QListWidget::indicator:checked:hover {{
+    background-color: {COLORS['primary_dark']};
+    border-color: {COLORS['primary_dark']};
+}}
+"""
+
 _BTN_INSCRIRE = f"""
 QPushButton {{
     background-color: {COLORS['success']};
@@ -137,7 +175,7 @@ class InscriptionView(QWidget):
         self._mode_modification = False
         self._id_inscription_courante = None
         self._inscriptions_map = {}  # {id_eleve: TInscription}
-        self._frais_checkboxes = []  # [(QCheckBox, frais_dict)] — liste dynamique selon le niveau
+        self._frais_items = []  # [(QListWidgetItem, frais_dict)] — liste dynamique selon le niveau
         self._form_enabled = False
         self.setStyleSheet(f"background-color: {COLORS['bg']};")
         self.init_ui()
@@ -226,15 +264,21 @@ class InscriptionView(QWidget):
             }
         """)
         row = QHBoxLayout(frame)
-        row.setContentsMargins(12, 7, 12, 7)
-        row.setSpacing(10)
+        if wrap_text is not None:
+            # Lignes de la liste des frais annexes : plus compactes pour
+            # afficher davantage d'éléments avant de devoir défiler.
+            row.setContentsMargins(10, 4, 10, 4)
+            row.setSpacing(8)
+        else:
+            row.setContentsMargins(12, 7, 12, 7)
+            row.setSpacing(10)
         row.addWidget(checkbox)
         if wrap_text is not None:
             checkbox.setText("")
             lbl = QLabel(wrap_text)
             lbl.setWordWrap(True)
             lbl.setStyleSheet(
-                f"font-size: 12px; font-weight: 500; color: {COLORS['text_soft']};"
+                f"font-size: 11px; font-weight: 500; color: {COLORS['text_soft']};"
                 "background-color: transparent; border: none;"
             )
             row.addWidget(lbl, 1)
@@ -448,27 +492,21 @@ class InscriptionView(QWidget):
         c3.addWidget(lbl_frais_annexes)
 
         # Liste de frais annexes, de longueur variable selon le niveau choisi.
-        # Une seule colonne (plutôt qu'une grille 2 colonnes) : les libellés de
-        # frais peuvent être longs et doivent pouvoir passer à la ligne sans
-        # jamais forcer la carte à s'élargir au-delà de la largeur disponible.
-        self.frais_annexes_container = QFrame()
-        self.frais_annexes_container.setStyleSheet("QFrame { background-color: transparent; border: none; }")
-        self.frais_annexes_layout = QVBoxLayout(self.frais_annexes_container)
-        self.frais_annexes_layout.setContentsMargins(0, 0, 0, 0)
-        self.frais_annexes_layout.setSpacing(6)
-
-        # Zone scrollable dédiée UNIQUEMENT à la liste des frais annexes,
-        # hauteur bornée : le total et le bouton restent toujours visibles
-        # en dessous, sans dépendre de la longueur de cette liste.
-        self.frais_annexes_scroll = QScrollArea()
-        self.frais_annexes_scroll.setWidgetResizable(True)
-        self.frais_annexes_scroll.setFrameShape(QFrame.NoFrame)
-        self.frais_annexes_scroll.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
-        self.frais_annexes_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.frais_annexes_scroll.setFixedHeight(210)
-        self.frais_annexes_scroll.setWidget(self.frais_annexes_container)
+        # QListWidget gère nativement son propre défilement (ascenseur vertical
+        # affiché automatiquement seulement si le contenu dépasse la hauteur
+        # fixée) : plus robuste qu'un QScrollArea+QVBoxLayout artisanal, qui
+        # provoquait un chevauchement visuel avec le total affiché en dessous.
+        self.frais_annexes_list = QListWidget()
+        self.frais_annexes_list.setStyleSheet(_FRAIS_LIST_STYLE)
+        self.frais_annexes_list.setFrameShape(QFrame.NoFrame)
+        self.frais_annexes_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.frais_annexes_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.frais_annexes_list.setSelectionMode(QAbstractItemView.NoSelection)
+        self.frais_annexes_list.setFocusPolicy(Qt.NoFocus)
+        self.frais_annexes_list.setFixedHeight(130)
+        self.frais_annexes_list.itemChanged.connect(self._update_total_frais_annexes)
         c3.addSpacing(6)
-        c3.addWidget(self.frais_annexes_scroll)
+        c3.addWidget(self.frais_annexes_list)
 
         # Bloc 6 — Total des frais annexes (toujours hors du QScrollArea)
         c3.addSpacing(12)
@@ -497,10 +535,8 @@ class InscriptionView(QWidget):
         for w in [self.cmb_niveau, self.cmb_classe, self.cmb_statut_affectation,
                   self.chk_scolarite, self.chk_nouveau,
                   self.chk_transport, self.chk_cantine,
-                  self.btn_inscrire]:
+                  self.btn_inscrire, self.frais_annexes_list]:
             w.setEnabled(enabled)
-        for chk, _frais in self._frais_checkboxes:
-            chk.setEnabled(enabled)
 
     def _prefill_inscription(self, inscription):
         """Pré-remplit le formulaire à partir d'une inscription existante."""
@@ -536,13 +572,11 @@ class InscriptionView(QWidget):
     # ── Frais annexes cochables ───────────────────────────────────────────────
 
     def _clear_frais_annexes_layout(self):
-        """Retire tous les widgets actuellement affichés dans la section frais annexes."""
-        while self.frais_annexes_layout.count():
-            item = self.frais_annexes_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-        self._frais_checkboxes = []
+        """Retire toutes les entrées actuellement affichées dans la liste des frais annexes."""
+        self.frais_annexes_list.blockSignals(True)
+        self.frais_annexes_list.clear()
+        self.frais_annexes_list.blockSignals(False)
+        self._frais_items = []
 
     def _load_frais_annexes(self, id_niveau):
         """
@@ -563,26 +597,24 @@ class InscriptionView(QWidget):
         frais_list = InscriptionAutresFraisService.get_frais_proposes(id_niveau, id_annee)
 
         if not frais_list:
-            lbl_vide = QLabel("Aucun frais annexe paramétré pour ce niveau.")
-            lbl_vide.setStyleSheet(
-                f"font-size: 11px; font-style: italic; color: {COLORS['muted']};"
-                "background-color: transparent; border: none;"
-            )
-            lbl_vide.setWordWrap(True)
-            self.frais_annexes_layout.addWidget(lbl_vide)
+            lbl_vide = QListWidgetItem("Aucun frais annexe paramétré pour ce niveau.")
+            lbl_vide.setFlags(Qt.ItemIsEnabled)
+            self.frais_annexes_list.addItem(lbl_vide)
             self._update_total_frais_annexes()
             return
 
+        self.frais_annexes_list.blockSignals(True)
         for frais in frais_list:
             libelle = frais.get("LibelleFrais") or frais.get("CodeFrais") or "Frais"
             montant = frais.get("MontantFrais") or 0
-            chk = QCheckBox()
-            chk.setStyleSheet(_CHK_STYLE)
-            chk.setEnabled(self._form_enabled)
-            chk.toggled.connect(self._update_total_frais_annexes)
             libelle_complet = f"{libelle} — {format_fcfa(montant)}"
-            self.frais_annexes_layout.addWidget(self._make_option_row(chk, wrap_text=libelle_complet))
-            self._frais_checkboxes.append((chk, frais))
+            item = QListWidgetItem(libelle_complet)
+            item.setToolTip(libelle_complet)
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            self.frais_annexes_list.addItem(item)
+            self._frais_items.append((item, frais))
+        self.frais_annexes_list.blockSignals(False)
 
         self._update_total_frais_annexes()
 
@@ -590,8 +622,8 @@ class InscriptionView(QWidget):
         """Recalcule et affiche le total des frais annexes actuellement cochés."""
         total = sum(
             (frais.get("MontantFrais") or 0)
-            for chk, frais in self._frais_checkboxes
-            if chk.isChecked()
+            for item, frais in self._frais_items
+            if item.checkState() == Qt.Checked
         )
         self.lbl_total_frais_annexes.setText(f"Total frais annexes sélectionnés : {format_fcfa(total)}")
 
@@ -601,9 +633,11 @@ class InscriptionView(QWidget):
             return
         coches = InscriptionAutresFraisService.get_frais_coches(id_inscription)
         ids_montant_coches = {c["IDMontantAutres"] for c in coches if c.get("IDMontantAutres")}
-        for chk, frais in self._frais_checkboxes:
+        self.frais_annexes_list.blockSignals(True)
+        for item, frais in self._frais_items:
             if frais.get("IDMontantAutres") in ids_montant_coches:
-                chk.setChecked(True)
+                item.setCheckState(Qt.Checked)
+        self.frais_annexes_list.blockSignals(False)
         self._update_total_frais_annexes()
 
     # ── Helpers effectif ──────────────────────────────────────────────────────
@@ -883,7 +917,8 @@ class InscriptionView(QWidget):
 
         # Frais annexes actuellement cochés (IDMontantAutres du catalogue paramétré)
         ids_montant_frais = [
-            frais["IDMontantAutres"] for chk, frais in self._frais_checkboxes if chk.isChecked()
+            frais["IDMontantAutres"] for item, frais in self._frais_items
+            if item.checkState() == Qt.Checked
         ]
 
         payload = {

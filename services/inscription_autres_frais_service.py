@@ -8,6 +8,7 @@ from models.inscription import TInscription
 from models.inscription_autres_frais import InscriptionAutresFrais
 from models.autres_frais import AutresFrais
 from models.montant_autres_frais import MontantAutresFrais
+from models.versement_autres_frais import VersementAutresFrais
 
 
 class InscriptionAutresFraisService:
@@ -42,6 +43,43 @@ class InscriptionAutresFraisService:
             ]
         except Exception as e:
             print(f"Erreur get_frais_coches InscriptionAutresFrais : {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_frais_impayes(id_inscription: int) -> List[dict]:
+        """
+        Retourne les frais coches pour une inscription qui n'ont pas encore ete regles
+        par un versement (aucune ligne VersementAutresFrais associee). Utilise a la caisse
+        pour ne proposer que les frais restant a payer.
+        """
+        session = get_session()
+        try:
+            lignes = session.query(InscriptionAutresFrais).outerjoin(
+                VersementAutresFrais,
+                VersementAutresFrais.IDInscriptionAutresFrais == InscriptionAutresFrais.IDInscriptionAutresFrais
+            ).filter(
+                InscriptionAutresFrais.IDTInscription == id_inscription,
+                VersementAutresFrais.IDVersementAutresFrais.is_(None)
+            ).all()
+
+            return [
+                {
+                    "IDInscriptionAutresFrais": l.IDInscriptionAutresFrais,
+                    "IDTInscription": l.IDTInscription,
+                    "IDAutres_Frais": l.IDAutres_Frais,
+                    "CodeFraisSnapshot": l.CodeFraisSnapshot,
+                    "LibelleSnapshot": l.LibelleSnapshot,
+                    "MontantApplique": l.MontantApplique,
+                    "Obligatoire": l.Obligatoire,
+                    "DateCreation": l.DateCreation,
+                    "Login": l.Login,
+                }
+                for l in lignes
+            ]
+        except Exception as e:
+            print(f"Erreur get_frais_impayes InscriptionAutresFrais : {e}")
             return []
         finally:
             session.close()

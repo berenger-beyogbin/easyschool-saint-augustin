@@ -1,26 +1,27 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QFrame,
-    QDateEdit, QAbstractItemView, QComboBox
+    QDateEdit, QAbstractItemView, QListWidget, QListWidgetItem
 )
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
 from services.versement_service import VersementService
+from services.inscription_autres_frais_service import InscriptionAutresFraisService
 from app.session import AppSession
 from app.config import Config
 from utils.receipt_printer import ReceiptPrinter
 from app.styles import (
     COLORS, INPUT_STYLE, DATE_STYLE, BUTTON_SUCCESS,
-    BUTTON_SECONDARY, TABLE_STYLE, COMBO_STYLE, apply_card_shadow
+    BUTTON_SECONDARY, TABLE_STYLE, apply_card_shadow, format_fcfa
 )
 from views.ui_components import FinancialSection, FinancialRow, make_separator
 
 
-# ─── Valeurs UI temporaires du reçu (non persistées en base) ─────────────────
-# Ces informations ne sont pas encore des colonnes de VersementScol : elles ne
-# sont transmises qu'au reçu imprimé, le temps d'une phase ulterieure dédiée.
-MODES_PAIEMENT = ["Espèce", "Mobile Money", "Chèque", "Virement"]
-TITULAIRES_PAIEMENT = ["Non précisé", "Père", "Mère", "Tuteur", "Autre"]
+# ─── Valeur UI temporaire du reçu (non persistée en base) ────────────────────
+# Le mode de paiement n'est pas encore une colonne de VersementScol : la
+# caisse encaissant essentiellement des espèces, la valeur est fixée par
+# défaut pour le reçu, le temps d'une phase ulterieure dédiée si besoin.
+MODE_PAIEMENT_DEFAUT = "Espèce"
 
 
 def _compute_motif(m_scol: float, m_trans: float, m_cant: float, m_autres: float = 0) -> str:
@@ -63,6 +64,43 @@ _CHIP_SUCCESS = (
     "background-color: #DCFCE7; border: 1px solid #86EFAC;"
     "border-radius: 10px; padding: 3px 10px;"
 )
+
+_FRAIS_LIST_STYLE = f"""
+QListWidget {{
+    background-color: {COLORS['card']};
+    border: 1px solid {COLORS['border']};
+    border-radius: 7px;
+    outline: none;
+    font-size: 12px;
+    color: {COLORS['text_soft']};
+}}
+QListWidget::item {{
+    padding: 6px 10px;
+    border-bottom: 1px solid {COLORS['border']};
+}}
+QListWidget::item:hover {{
+    background-color: {COLORS['surface_soft']};
+}}
+QListWidget::indicator {{
+    width: 16px;
+    height: 16px;
+    border: 2px solid {COLORS['input_border']};
+    border-radius: 4px;
+    background-color: {COLORS['card']};
+}}
+QListWidget::indicator:unchecked:hover {{
+    border-color: {COLORS['primary']};
+    background-color: {COLORS['surface_soft']};
+}}
+QListWidget::indicator:checked {{
+    background-color: {COLORS['primary']};
+    border-color: {COLORS['primary']};
+}}
+QListWidget::indicator:checked:hover {{
+    background-color: {COLORS['primary_dark']};
+    border-color: {COLORS['primary_dark']};
+}}
+"""
 
 
 # ─── Widget toggle ON/OFF ────────────────────────────────────────────────────
@@ -117,34 +155,23 @@ class ToggleSwitch(QPushButton):
 def _make_field_group(label_text: str, widget) -> QVBoxLayout:
     """Label uppercase + champ de saisie."""
     vbox = QVBoxLayout()
-    vbox.setSpacing(4)
+    vbox.setContentsMargins(0, 0, 0, 0)
+    vbox.setSpacing(2)
     lbl = QLabel(label_text.upper())
     lbl.setStyleSheet(
         "font-size: 10px; font-weight: 700; color: #94A3B8;"
         "background-color: transparent; border: none; letter-spacing: 0.8px;"
     )
+    # Le libellé ne doit jamais forcer le groupe à dépasser la largeur du champ
+    # (ex. « AUTRES FRAIS » plus long que le QLineEdit de 130px) :
+    # il se limite à cette largeur et passe à la ligne au besoin.
+    field_width = widget.maximumWidth()
+    if 0 < field_width < 16777215:
+        lbl.setFixedWidth(field_width)
+        lbl.setWordWrap(True)
     vbox.addWidget(lbl)
     vbox.addWidget(widget)
     return vbox
-
-
-def _make_subtitle(text: str) -> QLabel:
-    """Petit sous-titre de zone (ex. « Montants à encaisser »)."""
-    lbl = QLabel(text.upper())
-    lbl.setStyleSheet(
-        f"font-size: 10px; font-weight: 800; color: {COLORS['primary']};"
-        "background-color: transparent; border: none; letter-spacing: 0.8px;"
-    )
-    return lbl
-
-
-def _make_vseparator() -> QFrame:
-    """Filet vertical discret séparant deux zones d'un formulaire."""
-    sep = QFrame()
-    sep.setFrameShape(QFrame.VLine)
-    sep.setStyleSheet(f"color: {COLORS['border']}; background-color: {COLORS['border']}; border: none;")
-    sep.setFixedWidth(1)
-    return sep
 
 
 def _make_panel(accent_color: str) -> tuple:
@@ -214,37 +241,6 @@ class CaisseView(QWidget):
 
     def _build_search_panel(self, parent_layout):
         panel, layout = _make_panel(COLORS['primary'])
-
-        # Titre + badge compteur
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.setSpacing(10)
-
-        text_block = QVBoxLayout()
-        text_block.setSpacing(2)
-        lbl_title = QLabel("Rechercher un élève inscrit")
-        lbl_title.setStyleSheet(
-            f"font-size: 14px; font-weight: 700; color: {COLORS['text']};"
-            "background-color: transparent; border: none;"
-        )
-        lbl_sub = QLabel("Cliquez sur une ligne pour accéder aux informations financières")
-        lbl_sub.setStyleSheet(
-            f"font-size: 11px; color: {COLORS['muted']};"
-            "background-color: transparent; border: none;"
-        )
-        text_block.addWidget(lbl_title)
-        text_block.addWidget(lbl_sub)
-        header_row.addLayout(text_block, 1)
-
-        self.lbl_count = QLabel("")
-        self.lbl_count.setStyleSheet(
-            f"font-size: 11px; font-weight: 700; color: {COLORS['primary']};"
-            f"background-color: {COLORS['primary_soft']}; border: 1px solid #BFDBFE;"
-            "border-radius: 10px; padding: 2px 10px;"
-        )
-        self.lbl_count.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        header_row.addWidget(self.lbl_count)
-        layout.addLayout(header_row)
 
         # Barre de recherche
         search_row = QHBoxLayout()
@@ -321,127 +317,126 @@ class CaisseView(QWidget):
 
         layout.addWidget(make_separator())
 
-        # Corps du formulaire : 2 zones horizontales côte à côte, séparées par
-        # un filet vertical, pour regrouper visuellement les champs par usage.
-        #   Zone gauche « Montants »  : Date, Scolarité, Autres frais (+ Transport/Cantine si activés)
-        #   Zone droite « Paiement »  : Mode de paiement, Titulaire, Réduction, Bouton Valider
-        FIELD_H = 38
+        # Corps du formulaire : un unique bandeau horizontal regroupant tous
+        # les champs (montants + paiement), pour limiter la hauteur de cette
+        # carte et laisser un maximum de place au tableau d'historique en
+        # dessous. Champs volontairement compacts (FIELD_H/AMOUNT_W réduits).
+        FIELD_H = 32
         AMOUNT_W = 130
 
         form_row = QHBoxLayout()
-        form_row.setSpacing(20)
-
-        # ── Zone gauche : Montants ────────────────────────────────────────
-        zone_montants = QVBoxLayout()
-        zone_montants.setSpacing(8)
-        zone_montants.addWidget(_make_subtitle("Montants à encaisser"))
-
-        montants_row = QHBoxLayout()
-        montants_row.setSpacing(14)
+        form_row.setSpacing(12)
 
         self.txt_date = QDateEdit()
         self.txt_date.setCalendarPopup(True)
         self.txt_date.setDisplayFormat("dd/MM/yyyy")
         self.txt_date.setDate(QDate.currentDate())
         self.txt_date.setStyleSheet(DATE_STYLE)
-        self.txt_date.setFixedWidth(AMOUNT_W + 20)
+        self.txt_date.setFixedWidth(AMOUNT_W + 30)
         self.txt_date.setFixedHeight(FIELD_H)
-        montants_row.addLayout(_make_field_group("Date", self.txt_date))
+        grp_date = _make_field_group("Date", self.txt_date)
+        form_row.addLayout(grp_date)
+        form_row.setAlignment(grp_date, Qt.AlignTop)
 
         self.txt_vers_scol = QLineEdit("0")
         self.txt_vers_scol.setStyleSheet(INPUT_STYLE)
+        self.txt_vers_scol.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.txt_vers_scol.setFixedWidth(AMOUNT_W)
         self.txt_vers_scol.setFixedHeight(FIELD_H)
-        self.txt_vers_scol.textChanged.connect(self._update_valider_button)
-        montants_row.addLayout(_make_field_group("Scolarité (F CFA)", self.txt_vers_scol))
-
-        self.txt_vers_autres = QLineEdit("0")
-        self.txt_vers_autres.setStyleSheet(INPUT_STYLE)
-        self.txt_vers_autres.setFixedWidth(AMOUNT_W)
-        self.txt_vers_autres.setFixedHeight(FIELD_H)
-        self.txt_vers_autres.textChanged.connect(self._update_valider_button)
-        # Visible seulement si l'élève a des autres frais dus (voir refresh_eleve_profile).
-        self.grp_vers_autres = QWidget()
-        self.grp_vers_autres.setLayout(_make_field_group("Autres frais (F CFA)", self.txt_vers_autres))
-        self.grp_vers_autres.setVisible(False)
-        montants_row.addWidget(self.grp_vers_autres)
+        self.txt_vers_scol.textChanged.connect(lambda: self._format_amount_field(self.txt_vers_scol))
+        grp_scol = _make_field_group("Scolarité", self.txt_vers_scol)
+        form_row.addLayout(grp_scol)
+        form_row.setAlignment(grp_scol, Qt.AlignTop)
 
         self.txt_vers_trans = QLineEdit("0")
         self.txt_vers_trans.setStyleSheet(INPUT_STYLE)
+        self.txt_vers_trans.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.txt_vers_trans.setFixedWidth(AMOUNT_W)
         self.txt_vers_trans.setFixedHeight(FIELD_H)
-        self.txt_vers_trans.textChanged.connect(self._update_valider_button)
+        self.txt_vers_trans.textChanged.connect(lambda: self._format_amount_field(self.txt_vers_trans))
         # Transport désactivé pour la version collège CJGA — champ masqué,
         # la valeur interne reste "0" (aucune saisie possible).
         self.grp_vers_trans = QWidget()
-        self.grp_vers_trans.setLayout(_make_field_group("Transport (F CFA)", self.txt_vers_trans))
+        self.grp_vers_trans.setStyleSheet("background-color: transparent; border: none;")
+        self.grp_vers_trans.setLayout(_make_field_group("Transport", self.txt_vers_trans))
         self.grp_vers_trans.setVisible(Config.ENABLE_TRANSPORT)
-        montants_row.addWidget(self.grp_vers_trans)
+        form_row.addWidget(self.grp_vers_trans)
+        form_row.setAlignment(self.grp_vers_trans, Qt.AlignTop)
 
         self.txt_vers_cant = QLineEdit("0")
         self.txt_vers_cant.setStyleSheet(INPUT_STYLE)
+        self.txt_vers_cant.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.txt_vers_cant.setFixedWidth(AMOUNT_W)
         self.txt_vers_cant.setFixedHeight(FIELD_H)
-        self.txt_vers_cant.textChanged.connect(self._update_valider_button)
+        self.txt_vers_cant.textChanged.connect(lambda: self._format_amount_field(self.txt_vers_cant))
         # Cantine désactivée pour la version collège CJGA — champ masqué,
         # la valeur interne reste "0" (aucune saisie possible).
         self.grp_vers_cant = QWidget()
-        self.grp_vers_cant.setLayout(_make_field_group("Cantine (F CFA)", self.txt_vers_cant))
+        self.grp_vers_cant.setStyleSheet("background-color: transparent; border: none;")
+        self.grp_vers_cant.setLayout(_make_field_group("Cantine", self.txt_vers_cant))
         self.grp_vers_cant.setVisible(Config.ENABLE_CANTINE)
-        montants_row.addWidget(self.grp_vers_cant)
+        form_row.addWidget(self.grp_vers_cant)
+        form_row.setAlignment(self.grp_vers_cant, Qt.AlignTop)
 
-        montants_row.addStretch()
-        zone_montants.addLayout(montants_row)
-        zone_montants.addStretch()
+        form_row.addStretch(1)
 
-        form_row.addLayout(zone_montants, 3)
-        form_row.addWidget(_make_vseparator())
+        # Bloc "Autres frais" : liste cochable des frais annexes retenus à
+        # l'inscription de l'élève, pour que la caissière sélectionne ceux
+        # que ce versement couvre. Masqué si l'élève n'a aucun frais annexe.
+        self.grp_autres_frais = QWidget()
+        self.grp_autres_frais.setStyleSheet("background-color: transparent; border: none;")
+        autres_layout = QVBoxLayout(self.grp_autres_frais)
+        autres_layout.setContentsMargins(0, 0, 0, 0)
+        autres_layout.setSpacing(2)
 
-        # ── Zone droite : Paiement ────────────────────────────────────────
-        zone_paiement = QVBoxLayout()
-        zone_paiement.setSpacing(8)
-        zone_paiement.addWidget(_make_subtitle("Informations de paiement"))
+        lbl_autres = QLabel("AUTRES FRAIS À VERSER")
+        lbl_autres.setStyleSheet(
+            "font-size: 10px; font-weight: 700; color: #94A3B8;"
+            "background-color: transparent; border: none; letter-spacing: 0.8px;"
+        )
+        autres_layout.addWidget(lbl_autres)
 
-        infos_row = QHBoxLayout()
-        infos_row.setSpacing(14)
+        self.list_autres_frais = QListWidget()
+        self.list_autres_frais.setStyleSheet(_FRAIS_LIST_STYLE)
+        self.list_autres_frais.setFrameShape(QFrame.NoFrame)
+        self.list_autres_frais.setFixedWidth(280)
+        self.list_autres_frais.setFixedHeight(2 * FIELD_H + 22)
+        self.list_autres_frais.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list_autres_frais.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.list_autres_frais.setSelectionMode(QAbstractItemView.NoSelection)
+        self.list_autres_frais.setFocusPolicy(Qt.NoFocus)
+        self.list_autres_frais.itemChanged.connect(self._update_autres_frais_total)
+        autres_layout.addWidget(self.list_autres_frais)
 
-        self.combo_mode_paiement = QComboBox()
-        self.combo_mode_paiement.addItems(MODES_PAIEMENT)
-        self.combo_mode_paiement.setStyleSheet(COMBO_STYLE)
-        self.combo_mode_paiement.setFixedWidth(140)
-        self.combo_mode_paiement.setFixedHeight(FIELD_H)
-        infos_row.addLayout(_make_field_group("Mode de paiement", self.combo_mode_paiement))
+        self.lbl_total_autres_frais = QLabel("Total sélectionné : 0 FCFA")
+        self.lbl_total_autres_frais.setStyleSheet(
+            f"font-size: 10px; font-weight: 700; color: {COLORS['purple']};"
+            "background-color: transparent; border: none;"
+        )
+        autres_layout.addWidget(self.lbl_total_autres_frais)
 
-        self.combo_titulaire = QComboBox()
-        self.combo_titulaire.addItems(TITULAIRES_PAIEMENT)
-        self.combo_titulaire.setStyleSheet(COMBO_STYLE)
-        self.combo_titulaire.setFixedWidth(130)
-        self.combo_titulaire.setFixedHeight(FIELD_H)
-        infos_row.addLayout(_make_field_group("Titulaire", self.combo_titulaire))
-        infos_row.addStretch()
-        zone_paiement.addLayout(infos_row)
+        self._autres_frais_items = []
+        self.grp_autres_frais.setVisible(False)
+        form_row.addWidget(self.grp_autres_frais)
+        form_row.setAlignment(self.grp_autres_frais, Qt.AlignTop)
 
-        # Réduction + Valider regroupés sur une même ligne, alignés à droite
-        # pour que le bouton reste ancré près du reste du bloc (pas de vide).
-        action_row = QHBoxLayout()
-        action_row.setSpacing(14)
-        action_row.addStretch()
+        form_row.addStretch(1)
 
-        reduc_vbox = QVBoxLayout()
-        reduc_vbox.setSpacing(4)
+        btn_vbox = QVBoxLayout()
+        btn_vbox.setSpacing(4)
+        btn_vbox.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
+
         lbl_reduc = QLabel("RÉDUCTION")
         lbl_reduc.setStyleSheet(
             "font-size: 10px; font-weight: 700; color: #94A3B8;"
             "background-color: transparent; border: none; letter-spacing: 0.8px;"
         )
+        lbl_reduc.setAlignment(Qt.AlignHCenter)
         self.toggle_reduction = ToggleSwitch()
-        reduc_vbox.addWidget(lbl_reduc)
-        reduc_vbox.addWidget(self.toggle_reduction)
-        action_row.addLayout(reduc_vbox)
+        btn_vbox.addWidget(lbl_reduc, 0, Qt.AlignHCenter)
+        btn_vbox.addWidget(self.toggle_reduction, 0, Qt.AlignHCenter)
+        btn_vbox.addSpacing(10)
 
-        btn_vbox = QVBoxLayout()
-        btn_vbox.setSpacing(4)
-        btn_vbox.setAlignment(Qt.AlignBottom)
         self.btn_valider_versement = QPushButton("✓  Valider")
         self.btn_valider_versement.setStyleSheet(f"""
             QPushButton {{
@@ -452,24 +447,19 @@ class CaisseView(QWidget):
                 font-size: 13px;
                 border-radius: 8px;
                 border: none;
-                min-height: 38px;
+                min-height: 32px;
                 letter-spacing: 0.3px;
             }}
             QPushButton:hover {{ background-color: #15803D; }}
             QPushButton:pressed {{ background-color: #166534; }}
             QPushButton:disabled {{ background-color: #E5E7EB; color: #9CA3AF; }}
         """)
-        self.btn_valider_versement.setMinimumWidth(150)
+        self.btn_valider_versement.setMinimumWidth(130)
         self.btn_valider_versement.setCursor(Qt.PointingHandCursor)
         self.btn_valider_versement.setEnabled(False)
         self.btn_valider_versement.clicked.connect(self.on_validate_and_save)
         btn_vbox.addWidget(self.btn_valider_versement)
-        action_row.addLayout(btn_vbox)
-
-        zone_paiement.addLayout(action_row)
-        zone_paiement.addStretch()
-
-        form_row.addLayout(zone_paiement, 2)
+        form_row.addLayout(btn_vbox)
 
         layout.addLayout(form_row)
         parent_layout.addWidget(self.panel_versement)
@@ -656,8 +646,6 @@ class CaisseView(QWidget):
 
     def display_eleves(self, items):
         self.table_eleves.setRowCount(len(items))
-        count = len(items)
-        self.lbl_count.setText(f"{count} élève{'s' if count > 1 else ''}")
 
         for i, qi in enumerate(items):
             m_mat    = qi.eleve.Matricule if qi.eleve else "—"
@@ -711,16 +699,68 @@ class CaisseView(QWidget):
         self.txt_vers_trans.setEnabled(opts["transport"] and fin["trans_reste"] > 0)
         self.txt_vers_cant.setEnabled(opts["cantine"]   and fin["cant_reste"]  > 0)
 
-        # Autres frais : champ visible seulement si l'élève a un montant dû ou un reste à payer.
-        self.grp_vers_autres.setVisible(fin["autres_due"] > 0 or fin["autres_reste"] > 0)
-        self.txt_vers_autres.setEnabled(opts["autres"] and fin["autres_reste"] > 0)
-
         self.txt_vers_scol.setText("0" if self.txt_vers_scol.isEnabled() else "")
         self.txt_vers_trans.setText("0" if self.txt_vers_trans.isEnabled() else "")
         self.txt_vers_cant.setText("0" if self.txt_vers_cant.isEnabled() else "")
-        self.txt_vers_autres.setText("0" if self.txt_vers_autres.isEnabled() else "")
 
+        self._load_autres_frais_versement(fin.get("id_inscription"))
         self.load_history()
+
+    def _load_autres_frais_versement(self, id_inscription):
+        """Recharge la liste cochable des autres frais retenus pour l'inscription de l'élève."""
+        self.list_autres_frais.blockSignals(True)
+        self.list_autres_frais.clear()
+        self._autres_frais_items = []
+        self.list_autres_frais.blockSignals(False)
+
+        if not id_inscription:
+            self.grp_autres_frais.setVisible(False)
+            self._update_autres_frais_total()
+            return
+
+        frais_coches = InscriptionAutresFraisService.get_frais_impayes(id_inscription)
+        self.grp_autres_frais.setVisible(bool(frais_coches))
+        if not frais_coches:
+            self._update_autres_frais_total()
+            return
+
+        self.list_autres_frais.blockSignals(True)
+        for frais in frais_coches:
+            libelle = frais.get("LibelleSnapshot") or frais.get("CodeFraisSnapshot") or "Frais"
+            montant = frais.get("MontantApplique") or 0
+            item = QListWidgetItem(f"{libelle} — {format_fcfa(montant)}")
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            self.list_autres_frais.addItem(item)
+            self._autres_frais_items.append((item, frais))
+        self.list_autres_frais.blockSignals(False)
+
+        # Hauteur ajustée au nombre réel de lignes visibles (2 max, le reste
+        # défile) : évite qu'une ligne partiellement affichée ne ressemble à
+        # une ligne vide en bas de la liste.
+        row_h = self.list_autres_frais.sizeHintForRow(0)
+        visible_rows = min(len(frais_coches), 2)
+        self.list_autres_frais.setFixedHeight(visible_rows * row_h + 2)
+
+        self._update_autres_frais_total()
+
+    def _update_autres_frais_total(self):
+        """Recalcule le total des autres frais coches et rafraîchit l'état du bouton Valider."""
+        total = sum(
+            float(frais.get("MontantApplique") or 0)
+            for item, frais in self._autres_frais_items
+            if item.checkState() == Qt.Checked
+        )
+        self.lbl_total_autres_frais.setText(f"Total sélectionné : {format_fcfa(total)}")
+        self._update_valider_button()
+
+    def _get_montant_autres_frais_coches(self) -> float:
+        """Somme des montants des autres frais actuellement coches dans la liste de versement."""
+        return sum(
+            float(frais.get("MontantApplique") or 0)
+            for item, frais in self._autres_frais_items
+            if item.checkState() == Qt.Checked
+        )
 
     def _update_financial_panel(self, fin):
         def fmt(v):
@@ -816,10 +856,16 @@ class CaisseView(QWidget):
             m_scol   = _parse_input(self.txt_vers_scol.text())
             m_trans  = _parse_input(self.txt_vers_trans.text())
             m_cant   = _parse_input(self.txt_vers_cant.text())
-            m_autres = _parse_input(self.txt_vers_autres.text())
+            m_autres = self._get_montant_autres_frais_coches()
         except ValueError:
             QMessageBox.critical(self, "Erreur", "Un des montants saisis est incorrect.")
             return
+
+        ids_autres_frais = [
+            frais["IDInscriptionAutresFrais"]
+            for item, frais in self._autres_frais_items
+            if item.checkState() == Qt.Checked
+        ]
 
         reduction_active = self.toggle_reduction.isChecked()
 
@@ -838,11 +884,11 @@ class CaisseView(QWidget):
             reduction=reduction_active,
             impaye=False,
             restitution=False,
-            login=AppSession.get_logged_in_username()
+            login=AppSession.get_logged_in_username(),
+            ids_autres_frais=ids_autres_frais,
         )
         if success:
             self.toggle_reduction.setChecked(False)
-            self.combo_titulaire.setCurrentIndex(0)
             self.txt_date.setDate(QDate.currentDate())
             self.refresh_eleve_profile()
 
@@ -871,8 +917,7 @@ class CaisseView(QWidget):
                 "numero":        str(new_id) if new_id else "—",
                 # Enrichissement CJGA — valeurs UI temporaires (non persistées en base)
                 "motif":         _compute_motif(m_scol, m_trans, m_cant, m_autres),
-                "mode_paiement": self.combo_mode_paiement.currentText(),
-                "titulaire":     self.combo_titulaire.currentText(),
+                "mode_paiement": MODE_PAIEMENT_DEFAUT,
                 "total_recu":    m_scol + m_trans + m_cant + m_autres,
                 # SCOLARITE
                 "scol_active": fin_before["options"]["scolarite"],
@@ -901,6 +946,15 @@ class CaisseView(QWidget):
         else:
             QMessageBox.critical(self, "Erreur de versement", msg)
 
+    def _format_amount_field(self, line_edit: QLineEdit):
+        """Reformate en direct un champ montant : chiffres uniquement, séparateur de milliers, curseur en fin."""
+        line_edit.blockSignals(True)
+        raw = "".join(ch for ch in line_edit.text() if ch.isdigit())
+        line_edit.setText(_fmt_input(raw) if raw else "")
+        line_edit.setCursorPosition(len(line_edit.text()))
+        line_edit.blockSignals(False)
+        self._update_valider_button()
+
     def _update_valider_button(self):
         try:
             total = 0
@@ -910,8 +964,7 @@ class CaisseView(QWidget):
                 total += _parse_input(self.txt_vers_trans.text())
             if self.txt_vers_cant.isEnabled():
                 total += _parse_input(self.txt_vers_cant.text())
-            if self.txt_vers_autres.isEnabled():
-                total += _parse_input(self.txt_vers_autres.text())
+            total += self._get_montant_autres_frais_coches()
         except Exception:
             total = 0
         self.btn_valider_versement.setEnabled(total > 0)
@@ -920,8 +973,7 @@ class CaisseView(QWidget):
         self.txt_vers_scol.setText("")
         self.txt_vers_trans.setText("")
         self.txt_vers_cant.setText("")
-        self.txt_vers_autres.setText("")
-        self.grp_vers_autres.setVisible(False)
+        self._load_autres_frais_versement(None)
         self.table_history.setRowCount(0)
 
     def clear_financial_panel(self):
@@ -939,3 +991,5 @@ class CaisseView(QWidget):
         self.fs_trans.setVisible(False)
         self.fs_cant.setVisible(False)
         self.fs_autres.setVisible(False)
+        self.grp_autres_frais.setVisible(False)
+        self.lbl_total_autres_frais.setText("Total sélectionné : 0 F")

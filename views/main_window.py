@@ -22,7 +22,6 @@ from .comptabilite_view import ComptabiliteView
 from .statistiques_view import StatistiquesView
 from .dashboard_view import DashboardView
 from .utilisateurs_view import UtilisateursView
-from .prestation_config_view import PrestationConfigView
 
 from app.styles import (
     COLORS, SIDEBAR_MENU_STYLE, TAB_STYLE, COMBO_STYLE, BUTTON_SECONDARY
@@ -625,13 +624,9 @@ class MainWindow(QMainWindow):
         tab_autres.addTab(ReligionView(), "Religions")
         tab_autres.currentChanged.connect(self.refresh_active_view)
 
-        # Onglet 5 : Prestations annexes
-        self.prestation_config_view = PrestationConfigView(self)
-
         self.tab_parametres_onglets.addTab(tab_generaux, "Généraux")
         self.tab_parametres_onglets.addTab(tab_classes, "Classes")
         self.tab_parametres_onglets.addTab(tab_autres, "Autres réglages")
-        self.tab_parametres_onglets.addTab(self.prestation_config_view, "Prestations")
         self.tab_parametres_onglets.currentChanged.connect(self.refresh_active_view)
 
         layout_param_base.addWidget(self.tab_parametres_onglets)

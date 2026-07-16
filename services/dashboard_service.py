@@ -379,16 +379,14 @@ class DashboardService:
                 m_scol = montants_par_niveau.get(ins.IDNiveau)
                 if not m_scol:
                     continue
-                if ins.famille and ins.famille.EnsCatPrimaire:
-                    montant_du = float(m_scol.MontantEnsPri or 0)
-                elif ins.famille and ins.famille.EnsCatSecondaire:
-                    montant_du = float(m_scol.MontantEnsSecondaire or 0)
+                if ins.StatutAffectation == "NON_AFFECTE_ETAT":
+                    montant_du = float(m_scol.MontantNonAffecte or 0)
                 else:
-                    montant_du = float(m_scol.Montant or 0)
+                    montant_du = float(m_scol.MontantAffecte or 0)
                 if ins.famille and ins.famille.EbrieAbobote:
                     montant_du = max(0.0, montant_du - 10000.0)
-                if ins.Nouveau:
-                    montant_du += 10000.0
+                if ins.Nouveau and ins.StatutAffectation == "AFFECTE_ETAT":
+                    montant_du += 15000.0
                 rang, nb_famille = rang_par_eleve.get(ins.IDEleve, (1, 1))
                 if nb_famille >= 3 and rang >= 3:
                     montant_du = max(0.0, montant_du - 10000.0)

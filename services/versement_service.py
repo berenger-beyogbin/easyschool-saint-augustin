@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import date
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -13,6 +13,7 @@ from models.montant_cantine import MontantCantine
 from models.montant_autres_frais import MontantAutresFrais
 from models.inscription_autres_frais import InscriptionAutresFrais
 from models.versement_scol import VersementScol
+from models.versement_autres_frais import VersementAutresFrais
 from app.database import get_session
 
 class VersementService:
@@ -87,7 +88,8 @@ class VersementService:
             "cant_due": 0.0, "cant_paye": 0.0, "cant_reste": 0.0,
             "autres_due": 0.0, "autres_paye": 0.0, "autres_reste": 0.0,
             "total_due": 0.0, "total_paye": 0.0, "total_reduc": 0.0, "total_reste": 0.0,
-            "options": {"scolarite": False, "transport": False, "cantine": False, "autres": False}
+            "options": {"scolarite": False, "transport": False, "cantine": False, "autres": False},
+            "id_inscription": None
         }
 
         if not id_annee or not id_eleve:
@@ -105,6 +107,7 @@ class VersementService:
             if not ins:
                 return res
 
+            res["id_inscription"] = ins.IDTInscription
             res["options"] = {
                 "scolarite": bool(ins.Scolarite),
                 "transport": bool(ins.Transport),
@@ -118,20 +121,19 @@ class VersementService:
                     (MontantScol.IDTAnneeScolaire == id_annee) & (MontantScol.IDNiveau == ins.IDNiveau)
                 ).first()
                 if m_scol:
-                    if ins.famille and ins.famille.EnsCatPrimaire:
-                        res["scol_due"] = float(m_scol.MontantEnsPri)
-                    elif ins.famille and ins.famille.EnsCatSecondaire:
-                        res["scol_due"] = float(m_scol.MontantEnsSecondaire)
+                    if ins.StatutAffectation == "NON_AFFECTE_ETAT":
+                        res["scol_due"] = float(m_scol.MontantNonAffecte)
                     else:
-                        res["scol_due"] = float(m_scol.Montant)
+                        res["scol_due"] = float(m_scol.MontantAffecte)
 
                 # Réduction Ebrié d'Abobo-té : -10 000 F sur la scolarité
                 if ins.famille and ins.famille.EbrieAbobote:
                     res["scol_due"] = max(0.0, res["scol_due"] - 10000.0)
 
-                # Nouvel élève : +10 000 F de frais d'inscription
-                if ins.Nouveau:
-                    res["scol_due"] += 10000.0
+                # Nouvel élève affecté de l'État : +15 000 F de frais d'inscription.
+                # Un nouvel élève non affecté n'a pas de surcharge.
+                if ins.Nouveau and ins.StatutAffectation == "AFFECTE_ETAT":
+                    res["scol_due"] += 15000.0
 
                 # Famille 3+ enfants : -10 000 F à partir du 3e inscrit (ordre IDTInscription)
                 if ins.IDFamille:
@@ -245,9 +247,15 @@ class VersementService:
         reduction: bool = False,
         impaye: bool = False,
         restitution: bool = False,
-        login: str = "ADMIN"
-    ) -> tuple[bool, str]:
-        """Enregistre un versement dans la table VersementScol après validations métier."""
+        login: str = "ADMIN",
+        ids_autres_frais: Optional[List[int]] = None,
+    ) -> tuple[bool, str, Optional[int]]:
+        """Enregistre un versement dans la table VersementScol après validations métier.
+
+        ids_autres_frais : IDInscriptionAutresFrais des frais annexes que ce versement solde.
+        Chacun est lie au versement via VersementAutresFrais, ce qui le retire ensuite de la
+        liste des frais encore a verser proposee a la caisse.
+        """
         if not id_annee:
             return False, "Aucune annee scolaire active.", None
         if not id_eleve or not id_famille:
@@ -256,6 +264,8 @@ class VersementService:
             return False, "Les montants verses ne peuvent pas être negatifs.", None
         if m_scol + m_trans + m_cant + m_autres == 0:
             return False, "Le total du versement doit être superieur a 0 FCFA.", None
+
+        ids_autres_frais = list({i for i in (ids_autres_frais or []) if i})
 
         session = get_session()
         try:
@@ -278,6 +288,28 @@ class VersementService:
                 if m_autres > fin["autres_reste"]:
                     return False, f"Le versement autres frais ({m_autres} F) depasse le reste a payer ({fin['autres_reste']} F).", None
 
+            # Validation des frais annexes selectionnes : existent, non deja regles, et
+            # leur somme correspond bien au montant "autres frais" du versement.
+            lignes_autres_frais = []
+            if ids_autres_frais:
+                lignes_autres_frais = session.query(InscriptionAutresFrais).filter(
+                    InscriptionAutresFrais.IDInscriptionAutresFrais.in_(ids_autres_frais)
+                ).all()
+                ids_trouves = {l.IDInscriptionAutresFrais for l in lignes_autres_frais}
+                ids_invalides = set(ids_autres_frais) - ids_trouves
+                if ids_invalides:
+                    return False, f"Frais annexe(s) introuvable(s) : {sorted(ids_invalides)}.", None
+
+                deja_regles = session.query(VersementAutresFrais.IDInscriptionAutresFrais).filter(
+                    VersementAutresFrais.IDInscriptionAutresFrais.in_(ids_autres_frais)
+                ).all()
+                if deja_regles:
+                    return False, "Un ou plusieurs frais annexes selectionnes ont deja ete regles par un autre versement.", None
+
+                total_frais = sum(float(l.MontantApplique) for l in lignes_autres_frais)
+                if abs(total_frais - m_autres) > 0.01:
+                    return False, "Le montant des autres frais ne correspond pas aux frais annexes selectionnes.", None
+
             # Enregistrement
             n_vers = VersementScol(
                 IDTAnneeScolaire=id_annee,
@@ -295,6 +327,14 @@ class VersementService:
             )
 
             session.add(n_vers)
+            session.flush()  # attribue IDVersementScol avant de lier les frais annexes
+
+            for ligne in lignes_autres_frais:
+                session.add(VersementAutresFrais(
+                    IDVersementScol=n_vers.IDVersementScol,
+                    IDInscriptionAutresFrais=ligne.IDInscriptionAutresFrais,
+                ))
+
             session.commit()
             new_id = n_vers.IDVersementScol
 
@@ -303,13 +343,6 @@ class VersementService:
             return False, f"Erreur lors de l'enregistrement de versement : {str(e)}", None
         finally:
             session.close()
-
-        # Recalcul de la ventilation analytique (hors transaction principale)
-        try:
-            from services.ventilation_service import VentilationService
-            VentilationService.recalculate_student_ventilation(id_eleve, id_annee)
-        except Exception as e:
-            print(f"Avertissement recalcul ventilation après versement : {e}")
 
         return True, "Versement enregistre avec succes !", new_id
 
@@ -337,12 +370,5 @@ class VersementService:
             return False, f"Erreur : {e}"
         finally:
             session.close()
-
-        # Recalcul de la ventilation analytique (hors transaction principale)
-        try:
-            from services.ventilation_service import VentilationService
-            VentilationService.recalculate_student_ventilation(id_eleve_v, id_annee_v)
-        except Exception as e:
-            print(f"Avertissement recalcul ventilation après suppression versement : {e}")
 
         return True, "Versement annule avec succes !"

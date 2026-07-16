@@ -72,9 +72,6 @@ def main():
         UtilisateurService.seed_default_admin()
         CompteService.seed_comptes_syscoa()
 
-        from services.prestation_service import PrestationService
-        PrestationService.seed_default_prestations()
-
         # 4. Initialisation de la session active avant la fenetre principale
         AppSession.initialize_session()
 

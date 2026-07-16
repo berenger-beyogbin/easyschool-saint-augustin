@@ -51,10 +51,10 @@ class FamilleListView(QWidget):
 
         # 2. Tableau d'affichage
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
-            "Responsable", "Profession", "Adresse", "Cellulaire", 
-            "Email", "Primaire", "Secondaire", "Ebrie Abobote"
+            "Responsable", "Profession", "Adresse", "Cellulaire",
+            "Email", "Ebrie Abobote"
         ])
         
         apply_table_style(self.table)
@@ -112,10 +112,8 @@ class FamilleListView(QWidget):
             self.table.setItem(i, 3, QTableWidgetItem(fam.CellulaireResponsable or ""))
             self.table.setItem(i, 4, QTableWidgetItem(fam.EmailResponsable or ""))
             
-            # Booléens sous forme d'indicateurs textuels "OUI" ou "NON"
-            self.table.setItem(i, 5, QTableWidgetItem("OUI" if fam.EnsCatPrimaire else "NON"))
-            self.table.setItem(i, 6, QTableWidgetItem("OUI" if fam.EnsCatSecondaire else "NON"))
-            self.table.setItem(i, 7, QTableWidgetItem("OUI" if fam.EbrieAbobote else "NON"))
+            # Booléen sous forme d'indicateur textuel "OUI" ou "NON"
+            self.table.setItem(i, 5, QTableWidgetItem("OUI" if fam.EbrieAbobote else "NON"))
 
 
     def get_selected_id(self) -> int | None:

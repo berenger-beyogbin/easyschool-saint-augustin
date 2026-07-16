@@ -21,8 +21,6 @@ PERMISSIONS_CATALOG = [
     ("PARAMETRES_MODIFIER",     "Modification des paramètres",           "Paramètres",       71),
     ("UTILISATEURS_VIEW",       "Accès à la gestion des utilisateurs",   "Utilisateurs",     80),
     ("UTILISATEURS_MODIFIER",   "Modification des utilisateurs/profils", "Utilisateurs",     81),
-    ("PRESTATIONS_VIEW",        "Accès aux rapports prestataires",       "Prestations",      90),
-    ("PRESTATIONS_MODIFIER",    "Paramétrage des prestations annexes",   "Prestations",      91),
 ]
 
 

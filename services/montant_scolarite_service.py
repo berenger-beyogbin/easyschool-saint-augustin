@@ -34,8 +34,8 @@ class MontantScolariteService:
             session.close()
 
     @staticmethod
-    def save_montant_scolarite(id_annee: int, id_niveau: int, montant: float, montant_pri: float, montant_sec: float) -> tuple[bool, str]:
-        """Cree ou met a jour les montants scolaires d'un niveau."""
+    def save_montant_scolarite(id_annee: int, id_niveau: int, montant_non_affecte: float, montant_affecte: float) -> tuple[bool, str]:
+        """Cree ou met a jour les montants de scolarite (non affecte / affecte) d'un niveau."""
         if not id_annee or not id_niveau:
             return False, "Annee scolaire et niveau sont requis."
 
@@ -46,16 +46,14 @@ class MontantScolariteService:
             ).first()
 
             if m:
-                m.Montant = montant
-                m.MontantEnsPri = montant_pri
-                m.MontantEnsSecondaire = montant_sec
+                m.MontantNonAffecte = montant_non_affecte
+                m.MontantAffecte = montant_affecte
             else:
                 m = MontantScol(
                     IDTAnneeScolaire=id_annee,
                     IDNiveau=id_niveau,
-                    Montant=montant,
-                    MontantEnsPri=montant_pri,
-                    MontantEnsSecondaire=montant_sec
+                    MontantNonAffecte=montant_non_affecte,
+                    MontantAffecte=montant_affecte,
                 )
                 session.add(m)
             session.commit()
@@ -67,8 +65,8 @@ class MontantScolariteService:
             session.close()
 
     @staticmethod
-    def apply_common_amount_to_all_levels(id_annee: int, montant: float, montant_pri: float, montant_sec: float) -> tuple[bool, str]:
-        """Applique une valeur commune de scolarité pour tous les niveaux de l'année scolaire active."""
+    def apply_common_amount_to_all_levels(id_annee: int, montant_non_affecte: float, montant_affecte: float) -> tuple[bool, str]:
+        """Applique des valeurs communes de scolarité (non affecte / affecte) pour tous les niveaux de l'année scolaire active."""
         if not id_annee:
             return False, "Aucune annee scolaire active."
 
@@ -86,16 +84,14 @@ class MontantScolariteService:
                 ).first()
 
                 if m:
-                    m.Montant = montant
-                    m.MontantEnsPri = montant_pri
-                    m.MontantEnsSecondaire = montant_sec
+                    m.MontantNonAffecte = montant_non_affecte
+                    m.MontantAffecte = montant_affecte
                 else:
                     m = MontantScol(
                         IDTAnneeScolaire=id_annee,
                         IDNiveau=niv.IDT_Niveau,
-                        Montant=montant,
-                        MontantEnsPri=montant_pri,
-                        MontantEnsSecondaire=montant_sec
+                        MontantNonAffecte=montant_non_affecte,
+                        MontantAffecte=montant_affecte,
                     )
                     session.add(m)
 
