@@ -59,7 +59,10 @@ Statut de chaque item : `[ ]` a faire, `[~]` en cours, `[x]` fait.
   - E402 (2) : import déplacé en haut de fichier (`eleve_form_view.py`), import dupliqué en fin de fichier supprimé (`article_list_view.py`, `QDialog` était déjà importé correctement, l'import du bas était mort).
   - E722 (1, `approvisionnement_view.py`) : `except:` → `except Exception:`.
   Vérifié : 134 fichiers compilent, 52/52 tests passent après chaque étape.
-- [ ] **C6** — Signature de code et versionnement de l'exécutable PyInstaller.
+- [x] **C6** — Versionnement fait : [app/version.py](app/version.py) (source unique, `__version__ = "2.0.0"`), [version_info.txt](version_info.txt) (métadonnées Windows de l'exécutable : FileVersion, ProductVersion, ProductName, CompanyName), référencé depuis [EasySchool.spec](EasySchool.spec) (`version='version_info.txt'`). Les badges de version dans `login_dialog.py`/`main_window.py` lisent désormais `app/version.py` au lieu d'un `"2.0"` codé en dur à deux endroits différents.
+  **Découverte en cours de route** : `EasySchool.spec` n'était pas du tout suivi par Git (règle `.gitignore` pointant vers un chemin `packaging/easy_school.spec` qui n'existe pas) — corrigé, le spec est maintenant versionné.
+  Vérifié réellement : build PyInstaller complet exécuté, propriétés du fichier `.exe` produit inspectées (`FileVersion`/`ProductVersion` = 2.0.0.0, `ProductName` = Easy School, etc.) — pas seulement une relecture du spec.
+  **Signature de code non faite** : nécessite un certificat de signature (achat/décision externe, hors scope technique).
 
 ## Phase D — Refactorisation et évolutivité
 

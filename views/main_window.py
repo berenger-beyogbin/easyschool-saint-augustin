@@ -26,6 +26,7 @@ from app.styles import (
     COLORS, SIDEBAR_MENU_STYLE, TAB_STYLE, COMBO_STYLE, BUTTON_SECONDARY
 )
 from app.config import Config
+from app.version import __version__
 
 
 class AvatarLabel(QLabel):
@@ -358,7 +359,7 @@ class MainWindow(QMainWindow):
         )
         logo_title_row.addWidget(lbl_logo_top)
 
-        lbl_logo_sub = QLabel("2.0")
+        lbl_logo_sub = QLabel(".".join(__version__.split(".")[:2]))
         lbl_logo_sub.setStyleSheet(
             f"color: #FFFFFF; background-color: {COLORS['primary']}; font-size: 11px;"
             "font-weight: bold; border-radius: 5px; padding: 1px 6px;"

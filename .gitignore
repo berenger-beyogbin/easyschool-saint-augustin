@@ -75,8 +75,10 @@ backup_installed_exe_*/
 /backups/
 
 # === PYINSTALLER ===
+# EasySchool.spec est intentionnellement suivi (configuration de packaging
+# reproductible, audit C6) : exclusion generique + exception explicite.
 *.spec
-!packaging/easy_school.spec
+!/EasySchool.spec
 
 # === ASSETS GÉNÉRÉS ===
 assets/photos_eleves/
