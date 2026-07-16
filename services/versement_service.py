@@ -13,6 +13,7 @@ from models.inscription_autres_frais import InscriptionAutresFrais
 from models.versement_scol import VersementScol
 from models.versement_autres_frais import VersementAutresFrais
 from app.database import get_session
+from services.tarification_service import TarificationService
 import logging
 logger = logging.getLogger(__name__)
 
@@ -116,38 +117,21 @@ class VersementService:
                 "autres": bool(ins.AutresFrais)
             }
 
-            # 2. Calculer le montant du de Scolarite
+            # 2. Calculer le montant du de Scolarite (regles centralisees : TarificationService)
             if ins.Scolarite:
                 m_scol = session.query(MontantScol).filter(
                     (MontantScol.IDTAnneeScolaire == id_annee) & (MontantScol.IDNiveau == ins.IDNiveau)
                 ).first()
-                if m_scol:
-                    if ins.StatutAffectation == "NON_AFFECTE_ETAT":
-                        res["scol_due"] = float(m_scol.MontantNonAffecte)
-                    else:
-                        res["scol_due"] = float(m_scol.MontantAffecte)
-
-                # Réduction Ebrié d'Abobo-té : -10 000 F sur la scolarité
-                if ins.famille and ins.famille.EbrieAbobote:
-                    res["scol_due"] = max(0.0, res["scol_due"] - 10000.0)
-
-                # Nouvel élève affecté de l'État : +15 000 F de frais d'inscription.
-                # Un nouvel élève non affecté n'a pas de surcharge.
-                if ins.Nouveau and ins.StatutAffectation == "AFFECTE_ETAT":
-                    res["scol_due"] += 15000.0
-
-                # Famille 3+ enfants : -10 000 F à partir du 3e inscrit (ordre IDTInscription)
-                if ins.IDFamille:
-                    ids_famille = [
-                        r[0] for r in session.query(TInscription.IDTInscription).filter(
-                            TInscription.IDFamille == ins.IDFamille,
-                            TInscription.IDTAnneeScolaire == id_annee,
-                        ).order_by(TInscription.IDTInscription.asc()).all()
-                    ]
-                    if len(ids_famille) >= 3:
-                        rank = ids_famille.index(ins.IDTInscription) + 1
-                        if rank >= 3:
-                            res["scol_due"] = max(0.0, res["scol_due"] - 10000.0)
+                rang, nb_famille = TarificationService.get_rang_famille_pour_inscription(session, ins, id_annee)
+                res["scol_due"] = TarificationService.calculer_scolarite_due(
+                    montant_affecte=m_scol.MontantAffecte if m_scol else 0,
+                    montant_non_affecte=m_scol.MontantNonAffecte if m_scol else 0,
+                    statut_affectation=ins.StatutAffectation,
+                    ebrie_abobote=bool(ins.famille and ins.famille.EbrieAbobote),
+                    nouveau=bool(ins.Nouveau),
+                    rang_famille=rang,
+                    nb_enfants_famille=nb_famille,
+                )
 
             # 3. Calculer le montant du de Transport
             if ins.Transport:

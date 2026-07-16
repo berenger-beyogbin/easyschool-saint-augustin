@@ -66,7 +66,8 @@ Statut de chaque item : `[ ]` a faire, `[~]` en cours, `[x]` fait.
 
 ## Phase D — Refactorisation et évolutivité
 
-- [ ] **D1** — Centraliser les règles de tarification (réduction Ebrié d'Abobo-té, supplément nouveaux élèves, réduction 3e enfant) actuellement dupliquées dans `versement_service.py`, `dashboard_service.py`, `statistiques_service.py`.
+- [x] **D1** — [services/tarification_service.py](services/tarification_service.py) : `calculer_scolarite_due()` (formule complète), `get_rang_famille_pour_inscription()` / `get_rangs_famille_par_eleve()` (rang dans la fratrie, versions ciblée et bulk). `versement_service.py`, `dashboard_service.py`, `statistiques_service.py` appellent désormais ce service unique au lieu de dupliquer la formule indépendamment.
+  Comportement préservé à l'identique par construction (les 4 tests existants de `test_versement_service.py` sur ces règles passent toujours sans modification). Vérifié en plus : 11 nouveaux tests unitaires sur `TarificationService`, et un test d'intégration manuel confirmant que `dashboard_service`/`statistiques_service` calculent bien 105 000 F (100 000 − 10 000 Ebrié + 15 000 nouvel élève) pour le même cas.
 - [ ] **D2** — Entités `Vente`/`VenteLigne` structurées (entête, total, numéro de reçu, mode de paiement, statut, annulation).
 - [ ] **D3** — Normaliser les Kits (`Kit`/`KitArticle` relationnels au lieu de chaînes de texte).
 - [ ] **D4** — Scinder les gros fichiers : `utils/list_printer.py` (1490 lignes), `app/styles.py` (1284), `views/caisse_view.py` (995), `views/inscription_view.py` (972), `views/main_window.py` (776), `views/utilisateurs_view.py` (747).

@@ -13,6 +13,7 @@ from models.stock_sortie import StockSortie
 from models.article import Article
 from models.stock_cour import StockCour
 from models.sortie_fin import SortieFin
+from services.tarification_service import TarificationService
 from models.etablissement import EtablissementEcole
 import logging
 logger = logging.getLogger(__name__)
@@ -363,35 +364,24 @@ class DashboardService:
 
             verses_par_eleve = {v.IDEleve: float(v.total_verse) for v in versements}
 
-            # Pré-calcul des rangs par famille pour la règle 3e enfant
-            from collections import defaultdict
-            fam_buckets = defaultdict(list)
-            for row in session.query(
-                TInscription.IDFamille, TInscription.IDEleve, TInscription.IDTInscription
-            ).filter(TInscription.IDTAnneeScolaire == id_annee
-            ).order_by(TInscription.IDFamille, TInscription.IDTInscription.asc()).all():
-                fam_buckets[row.IDFamille].append(row.IDEleve)
-            rang_par_eleve = {}
-            for id_fam, eleve_ids in fam_buckets.items():
-                for idx, id_el in enumerate(eleve_ids):
-                    rang_par_eleve[id_el] = (idx + 1, len(eleve_ids))
+            # Rangs par famille pour la regle 3e enfant (centralise : TarificationService)
+            rang_par_eleve = TarificationService.get_rangs_famille_par_eleve(session, id_annee)
 
             result = []
             for ins in inscriptions:
                 m_scol = montants_par_niveau.get(ins.IDNiveau)
                 if not m_scol:
                     continue
-                if ins.StatutAffectation == "NON_AFFECTE_ETAT":
-                    montant_du = float(m_scol.MontantNonAffecte or 0)
-                else:
-                    montant_du = float(m_scol.MontantAffecte or 0)
-                if ins.famille and ins.famille.EbrieAbobote:
-                    montant_du = max(0.0, montant_du - 10000.0)
-                if ins.Nouveau and ins.StatutAffectation == "AFFECTE_ETAT":
-                    montant_du += 15000.0
                 rang, nb_famille = rang_par_eleve.get(ins.IDEleve, (1, 1))
-                if nb_famille >= 3 and rang >= 3:
-                    montant_du = max(0.0, montant_du - 10000.0)
+                montant_du = TarificationService.calculer_scolarite_due(
+                    montant_affecte=m_scol.MontantAffecte,
+                    montant_non_affecte=m_scol.MontantNonAffecte,
+                    statut_affectation=ins.StatutAffectation,
+                    ebrie_abobote=bool(ins.famille and ins.famille.EbrieAbobote),
+                    nouveau=bool(ins.Nouveau),
+                    rang_famille=rang,
+                    nb_enfants_famille=nb_famille,
+                )
                 if montant_du == 0:
                     continue
                 total_verse = verses_par_eleve.get(ins.IDEleve, 0)
