@@ -182,22 +182,32 @@ class ComptabiliteService:
             session.close()
 
     @staticmethod
-    def delete_mouvement(id_sortie_fin: int) -> Tuple[bool, str]:
-        """Supprime un mouvement financier."""
+    def annuler_mouvement(id_sortie_fin: int, motif: str, login: Optional[str] = None) -> Tuple[bool, str]:
+        """Annule un mouvement financier (piste d'audit conservee) au lieu de le supprimer
+        physiquement. Un mouvement annule reste visible dans les listes mais est exclu
+        des agregations de la balance."""
+        if not motif or not motif.strip():
+            return False, "Le motif d'annulation est obligatoire."
+
         session = get_session()
         try:
             mouvement = session.query(SortieFin).filter_by(IDSortieFin=id_sortie_fin).first()
             if not mouvement:
                 return False, "Mouvement inexistant."
+            if mouvement.Annule:
+                return False, "Ce mouvement est deja annule."
 
             # Vérifier si l'année est clôturée
             annee = session.query(TAnneeScolaire).filter_by(IDTAnneeScolaire=mouvement.IDAnSco).first()
             if annee and annee.Cloturer:
-                return False, "Suppression impossible: l'année pour ce mouvement est clôturée."
+                return False, "Annulation impossible: l'année pour ce mouvement est clôturée."
 
-            session.delete(mouvement)
+            mouvement.Annule = True
+            mouvement.AnnulePar = login or "admin"
+            mouvement.DateAnnulation = datetime.datetime.now()
+            mouvement.MotifAnnulation = motif.strip()
             session.commit()
-            return True, "Mouvement supprimé avec succès !"
+            return True, "Mouvement annulé avec succès !"
         except Exception as e:
             session.rollback()
             return False, f"Erreur base de données : {str(e)}"
@@ -282,7 +292,7 @@ class ComptabiliteService:
                 SortieFin.IDCompte.label("IDCompte"),
                 func.coalesce(func.sum(case((SortieFin.DebitCredit == 'Debit', SortieFin.Montant), else_=0)), 0).label("debit"),
                 func.coalesce(func.sum(case((SortieFin.DebitCredit == 'Credit', SortieFin.Montant), else_=0)), 0).label("credit")
-            ).filter(SortieFin.IDAnSco == id_annee)
+            ).filter(SortieFin.IDAnSco == id_annee, SortieFin.Annule == False)
 
             if date_debut:
                 sf_sub_q = sf_sub_q.filter(SortieFin.DateSortie >= date_debut)
@@ -339,7 +349,8 @@ class ComptabiliteService:
                 func.coalesce(func.sum(VersementScol.MontantVersAutres), 0),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False
             )
             if date_debut:
                 q_vers = q_vers.filter(VersementScol.DateVers >= date_debut)

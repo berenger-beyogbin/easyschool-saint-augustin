@@ -113,3 +113,57 @@ def test_create_mouvement_allows_credit_on_non_reserved_account(db_session):
     )
 
     assert ok is True
+
+
+def test_annuler_mouvement_excludes_it_from_balance_but_stays_visible(db_session):
+    """Recette #9 : une ecriture annulee reste visible avec son motif, mais
+    n'est plus comptee dans la balance."""
+    annee = make_annee(db_session)
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+    compte_libre = Compte(NumCompte="6011", LibCompte="Achats fournitures")
+    db_session.add(compte_libre)
+    db_session.commit()
+
+    ok, msg = ComptabiliteService.create_mouvement(
+        benef="Fournisseur X", montant=8000, date_sortie=date.today(),
+        id_compte=compte_libre.IDCompte, debit_credit="Debit",
+    )
+    assert ok is True
+    mouvement = ComptabiliteService.get_all_mouvements(annee.IDTAnneeScolaire)[0]
+
+    balance_avant = ComptabiliteService.get_balance_comptes(annee.IDTAnneeScolaire)
+    ligne_avant = next(i for i in balance_avant if i["NumCompte"] == "6011")
+    assert ligne_avant["Debit"] == 8000.0
+
+    ok, msg = ComptabiliteService.annuler_mouvement(
+        mouvement.IDSortieFin, motif="Doublon de saisie", login="caissier1"
+    )
+    assert ok is True
+
+    balance_apres = ComptabiliteService.get_balance_comptes(annee.IDTAnneeScolaire)
+    ligne_apres = next(i for i in balance_apres if i["NumCompte"] == "6011")
+    assert ligne_apres["Debit"] == 0.0  # exclu de la balance
+
+    # Reste visible dans le journal, avec son motif
+    mouvements = ComptabiliteService.get_all_mouvements(annee.IDTAnneeScolaire)
+    m_annule = next(m for m in mouvements if m.IDSortieFin == mouvement.IDSortieFin)
+    assert m_annule.Annule is True
+    assert m_annule.MotifAnnulation == "Doublon de saisie"
+    assert m_annule.AnnulePar == "caissier1"
+
+
+def test_annuler_mouvement_requires_motif(db_session):
+    annee = make_annee(db_session)
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+    compte_libre = Compte(NumCompte="6011", LibCompte="Achats fournitures")
+    db_session.add(compte_libre)
+    db_session.commit()
+    ComptabiliteService.create_mouvement(
+        benef="Fournisseur X", montant=8000, date_sortie=date.today(),
+        id_compte=compte_libre.IDCompte, debit_credit="Debit",
+    )
+    mouvement = ComptabiliteService.get_all_mouvements(annee.IDTAnneeScolaire)[0]
+
+    ok, msg = ComptabiliteService.annuler_mouvement(mouvement.IDSortieFin, motif="")
+    assert ok is False
+    assert "motif" in msg.lower()

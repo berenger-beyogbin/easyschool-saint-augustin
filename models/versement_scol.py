@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Numeric, Boolean, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Date, DateTime, Numeric, Boolean, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -32,6 +32,14 @@ class VersementScol(Base):
     Login = Column(String(50), nullable=True)
     Reduction = Column(Boolean, default=False)
     Impaye = Column(Boolean, default=False)
+
+    # Annulation tracee : un versement enregistre n'est jamais supprime
+    # physiquement, il est marque annule (piste d'audit conservee, exclu des
+    # agregations financieres).
+    Annule = Column(Boolean, nullable=False, default=False)
+    AnnulePar = Column(String(50), nullable=True)
+    DateAnnulation = Column(DateTime, nullable=True)
+    MotifAnnulation = Column(Text, nullable=True)
 
     # Relations
     famille = relationship("TFamille")

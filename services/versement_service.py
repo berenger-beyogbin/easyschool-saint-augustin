@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-from datetime import date
+from datetime import date, datetime
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from models.inscription import TInscription
@@ -188,7 +188,8 @@ class VersementService:
             ).filter(
                 (VersementScol.IDTAnneeScolaire == id_annee) &
                 (VersementScol.IDEleve == id_eleve) &
-                (VersementScol.Reduction == False)
+                (VersementScol.Reduction == False) &
+                (VersementScol.Annule == False)
             ).first()
 
             if totals:
@@ -206,7 +207,8 @@ class VersementService:
             ).filter(
                 (VersementScol.IDTAnneeScolaire == id_annee) &
                 (VersementScol.IDEleve == id_eleve) &
-                (VersementScol.Reduction == True)
+                (VersementScol.Reduction == True) &
+                (VersementScol.Annule == False)
             ).first()
 
             scol_reduc   = float(reductions[0]) if reductions and reductions[0] is not None else 0.0
@@ -357,22 +359,30 @@ class VersementService:
         return True, "Versement enregistre avec succes !", new_id
 
     @staticmethod
-    def delete_versement(id_versement: int) -> tuple[bool, str]:
-        """Supprime un versement existent."""
+    def annuler_versement(id_versement: int, motif: str, login: str = "ADMIN") -> tuple[bool, str]:
+        """Annule un versement (piste d'audit conservee) au lieu de le supprimer
+        physiquement. Un versement annule reste visible dans l'historique mais est
+        exclu du calcul du reste a payer et des agregations comptables."""
+        if not motif or not motif.strip():
+            return False, "Le motif d'annulation est obligatoire."
+
         session = get_session()
         try:
             v = session.get(VersementScol, id_versement)
             if not v:
                 return False, "Versement introuvable."
-            
+            if v.Annule:
+                return False, "Ce versement est deja annule."
+
             # Verifier si l'annee est cloturee
             annee = session.get(TAnneeScolaire, v.IDTAnneeScolaire)
             if annee and annee.Cloturer:
-                return False, "Impossible de supprimer un versement appartenant a une annee cloturee."
+                return False, "Impossible d'annuler un versement appartenant a une annee cloturee."
 
-            id_eleve_v = v.IDEleve
-            id_annee_v = v.IDTAnneeScolaire
-            session.delete(v)
+            v.Annule = True
+            v.AnnulePar = login
+            v.DateAnnulation = datetime.now()
+            v.MotifAnnulation = motif.strip()
             session.commit()
 
         except Exception as e:
@@ -381,4 +391,4 @@ class VersementService:
         finally:
             session.close()
 
-        return True, "Versement annule avec succes !"
+        return True, "Versement annulé avec succès !"

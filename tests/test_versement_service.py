@@ -204,7 +204,7 @@ def test_autres_frais_montant_incoherent_rejete(db_session):
     assert "correspond" in msg.lower()
 
 
-def test_delete_versement_blocked_when_annee_cloturee(db_session):
+def test_annuler_versement_blocked_when_annee_cloturee(db_session):
     annee, niveau, classe, famille, eleve, ins = _setup_base(db_session)
     ok, msg, new_id = VersementService.create_versement(
         annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
@@ -215,9 +215,49 @@ def test_delete_versement_blocked_when_annee_cloturee(db_session):
     annee.Cloturer = True
     db_session.commit()
 
-    ok, msg = VersementService.delete_versement(new_id)
+    ok, msg = VersementService.annuler_versement(new_id, motif="Erreur de saisie")
     assert ok is False
     assert "cloturee" in msg.lower()
+
+
+def test_annuler_versement_requires_motif(db_session):
+    annee, niveau, classe, famille, eleve, ins = _setup_base(db_session)
+    ok, msg, new_id = VersementService.create_versement(
+        annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
+        date.today(), m_scol=10000, m_trans=0, m_cant=0, m_autres=0,
+    )
+    assert ok is True
+
+    ok, msg = VersementService.annuler_versement(new_id, motif="")
+    assert ok is False
+    assert "motif" in msg.lower()
+
+
+def test_annuler_versement_excludes_it_from_reste_a_payer(db_session):
+    """Recette #9 : une ecriture annulee reste visible (avec son motif) mais
+    n'est plus comptee comme un paiement reel."""
+    annee, niveau, classe, famille, eleve, ins = _setup_base(db_session)
+    ok, msg, new_id = VersementService.create_versement(
+        annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
+        date.today(), m_scol=10000, m_trans=0, m_cant=0, m_autres=0,
+    )
+    assert ok is True
+
+    fin_avant = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
+    assert fin_avant["scol_paye"] == 10000.0
+
+    ok, msg = VersementService.annuler_versement(new_id, motif="Erreur de saisie caissier")
+    assert ok is True
+
+    fin_apres = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
+    assert fin_apres["scol_paye"] == 0.0
+    assert fin_apres["scol_reste"] == 100000.0
+
+    # Reste visible dans l'historique, avec son motif
+    versements = VersementService.get_versements_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
+    v_annule = next(v for v in versements if v.IDVersementScol == new_id)
+    assert v_annule.Annule is True
+    assert v_annule.MotifAnnulation == "Erreur de saisie caissier"
 
 
 def test_create_versement_concurrent_never_exceeds_reste_a_payer(db_session):
