@@ -19,6 +19,7 @@ _SYSCOA_RUBRIQUE = {
     "7042": "transport",
     "7043": "cantine",
     "7044": "vente",
+    "7045": "autres",
 }
 
 class ComptabiliteService:
@@ -315,6 +316,7 @@ class ComptabiliteService:
                 func.coalesce(func.sum(VersementScol.MontantVersSco), 0),
                 func.coalesce(func.sum(VersementScol.MontantVersTrans), 0),
                 func.coalesce(func.sum(VersementScol.MontantCantine), 0),
+                func.coalesce(func.sum(VersementScol.MontantVersAutres), 0),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
                 VersementScol.Reduction == False
@@ -324,9 +326,10 @@ class ComptabiliteService:
             if date_fin:
                 q_vers = q_vers.filter(VersementScol.DateVers <= date_fin)
             row = q_vers.first()
-            scol  = float(row[0]) if row else 0.0
-            trans = float(row[1]) if row else 0.0
-            cant  = float(row[2]) if row else 0.0
+            scol   = float(row[0]) if row else 0.0
+            trans  = float(row[1]) if row else 0.0
+            cant   = float(row[2]) if row else 0.0
+            autres = float(row[3]) if row else 0.0
 
             q_vente = session.query(
                 func.coalesce(func.sum(StockSortie.QuantiteSort * StockSortie.Prix_vente), 0)
@@ -338,9 +341,9 @@ class ComptabiliteService:
             vente_row = q_vente.first()
             vente = float(vente_row[0]) if vente_row else 0.0
 
-            return {"scolarite": scol, "transport": trans, "cantine": cant, "vente": vente}
+            return {"scolarite": scol, "transport": trans, "cantine": cant, "vente": vente, "autres": autres}
         except Exception as e:
             print(f"Erreur get_totaux_entrees_rubriques : {e}")
-            return {"scolarite": 0.0, "transport": 0.0, "cantine": 0.0, "vente": 0.0}
+            return {"scolarite": 0.0, "transport": 0.0, "cantine": 0.0, "vente": 0.0, "autres": 0.0}
         finally:
             session.close()
