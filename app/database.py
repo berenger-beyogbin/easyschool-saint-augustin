@@ -103,7 +103,8 @@ def create_tables():
     try:
         with _engine.begin() as conn:
             conn.execute(text('ALTER TABLE IF EXISTS "Utilisateur" ADD COLUMN IF NOT EXISTS "ImprimanteDefaut" VARCHAR(255);'))
-            print("Mise a jour de table 'Utilisateur' (ajout colonne ImprimanteDefaut) terminee avec succes.")
+            conn.execute(text('ALTER TABLE IF EXISTS "Utilisateur" ADD COLUMN IF NOT EXISTS "MustChangePassword" BOOLEAN DEFAULT FALSE NOT NULL;'))
+            print("Mise a jour de table 'Utilisateur' (colonnes preferences/securite) terminee avec succes.")
     except Exception as e:
         print(f"Avertissement migration 'Utilisateur': {e}")
 

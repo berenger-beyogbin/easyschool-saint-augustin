@@ -14,6 +14,7 @@ class Utilisateur(Base):
     Email = Column(String(150))
     IDProfil = Column(Integer, ForeignKey("Profil.IDProfil"), nullable=False)
     IsActive = Column(Boolean, default=True, nullable=False)
+    MustChangePassword = Column(Boolean, default=False, nullable=False)
     DateCreation = Column(DateTime, default=func.now())
     DernierAcces = Column(DateTime)
     ImprimanteDefaut = Column(String(255), nullable=True)

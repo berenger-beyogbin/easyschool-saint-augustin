@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import os
 from datetime import datetime
 from app.database import get_session
@@ -11,19 +12,31 @@ from sqlalchemy.orm import joinedload
 # Hachage des mots de passe (PBKDF2-SHA256, stdlib uniquement)
 # ---------------------------------------------------------------------------
 
+PBKDF2_ITERATIONS = 200_000
+PASSWORD_MIN_LENGTH = 8
+
+
 def _hash_password(password: str) -> str:
     salt = os.urandom(16).hex()
-    h = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000)
+    h = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), PBKDF2_ITERATIONS)
     return f"{salt}:{h.hex()}"
 
 
 def _verify_password(password: str, stored: str) -> bool:
     try:
         salt, h = stored.split(":", 1)
-        computed = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000)
-        return computed.hex() == h
+        computed = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), PBKDF2_ITERATIONS)
+        return hmac.compare_digest(computed.hex(), h)
     except Exception:
         return False
+
+
+def _validate_password_strength(password: str) -> tuple[bool, str]:
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return False, f"Le mot de passe doit contenir au moins {PASSWORD_MIN_LENGTH} caractères."
+    if not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+        return False, "Le mot de passe doit contenir au moins une lettre et un chiffre."
+    return True, ""
 
 
 class UtilisateurService:
@@ -40,15 +53,16 @@ class UtilisateurService:
                 return
             admin = Utilisateur(
                 Login="admin",
-                MotDePasseHash=_hash_password("admin123"),
+                MotDePasseHash=_hash_password(os.environ.get("EASY_SCHOOL_DEFAULT_ADMIN_PASSWORD", "admin123")),
                 Nom="Administrateur",
                 Prenoms="Système",
                 IDProfil=admin_profil.IDProfil,
                 IsActive=True,
+                MustChangePassword=True,
             )
             session.add(admin)
             session.commit()
-            print("Compte admin créé — login: admin / mot de passe: admin123")
+            print("Compte admin cree - login: admin / changement de mot de passe requis.")
         except Exception as e:
             session.rollback()
             print(f"Erreur seeding admin : {e}")
@@ -91,6 +105,7 @@ class UtilisateurService:
                 "ProfilLibelle": user.profil.Libelle if user.profil else "",
                 "IsAdmin": user.profil.IsAdmin if user.profil else False,
                 "ImprimanteDefaut": user.ImprimanteDefaut or None,
+                "MustChangePassword": bool(user.MustChangePassword),
             }
             return True, "Connexion réussie.", user_data
         except Exception as e:
@@ -139,8 +154,9 @@ class UtilisateurService:
                 return False, "Le nom est obligatoire."
             if not password:
                 return False, "Le mot de passe est obligatoire."
-            if len(password) < 6:
-                return False, "Le mot de passe doit contenir au moins 6 caractères."
+            ok_pwd, msg_pwd = _validate_password_strength(password)
+            if not ok_pwd:
+                return False, msg_pwd
             if not id_profil:
                 return False, "Le profil est obligatoire."
 
@@ -195,9 +211,11 @@ class UtilisateurService:
 
             new_pwd = data.get("Password", "").strip()
             if new_pwd:
-                if len(new_pwd) < 6:
-                    return False, "Le mot de passe doit contenir au moins 6 caractères."
+                ok_pwd, msg_pwd = _validate_password_strength(new_pwd)
+                if not ok_pwd:
+                    return False, msg_pwd
                 user.MotDePasseHash = _hash_password(new_pwd)
+                user.MustChangePassword = False
 
             session.commit()
             return True, "Utilisateur mis à jour avec succès !"
@@ -234,6 +252,31 @@ class UtilisateurService:
             user.ImprimanteDefaut = printer_name or None
             session.commit()
             return True, "Préférence d'imprimante enregistrée."
+        except Exception as e:
+            session.rollback()
+            return False, f"Erreur : {str(e)}"
+        finally:
+            session.close()
+
+    @staticmethod
+    def change_password(id_user: int, old_password: str, new_password: str) -> tuple[bool, str]:
+        session = get_session()
+        try:
+            user = session.get(Utilisateur, id_user)
+            if not user:
+                return False, "Utilisateur introuvable."
+            if not _verify_password(old_password, user.MotDePasseHash):
+                return False, "Mot de passe actuel incorrect."
+
+            new_password = new_password.strip()
+            ok_pwd, msg_pwd = _validate_password_strength(new_password)
+            if not ok_pwd:
+                return False, msg_pwd
+
+            user.MotDePasseHash = _hash_password(new_password)
+            user.MustChangePassword = False
+            session.commit()
+            return True, "Mot de passe modifié avec succès."
         except Exception as e:
             session.rollback()
             return False, f"Erreur : {str(e)}"

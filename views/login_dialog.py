@@ -5,6 +5,104 @@ from PySide6.QtCore import Qt
 from app.styles import COLORS
 
 
+class PasswordChangeDialog(QDialog):
+    """Dialogue minimal de changement obligatoire du mot de passe."""
+
+    def __init__(self, user_id: int, old_password: str, parent=None):
+        super().__init__(parent)
+        self.user_id = user_id
+        self.old_password = old_password
+        self.setWindowTitle("Changement de mot de passe requis")
+        self.setFixedSize(420, 300)
+        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        self._build_ui()
+
+    def _build_ui(self):
+        self.setStyleSheet(f"background-color: {COLORS['sidebar_bg']};")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 28, 30, 24)
+        layout.setSpacing(12)
+
+        title = QLabel("Choisissez un nouveau mot de passe")
+        title.setStyleSheet("color: #FFFFFF; font-size: 17px; font-weight: bold; background-color: transparent;")
+        layout.addWidget(title)
+
+        hint = QLabel("Il doit contenir au moins 8 caractères, avec une lettre et un chiffre.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: rgba(255,255,255,0.55); font-size: 12px; background-color: transparent;")
+        layout.addWidget(hint)
+
+        field_style = """
+            QLineEdit {
+                background-color: rgba(255,255,255,0.08);
+                border: 1px solid rgba(255,255,255,0.15);
+                border-radius: 8px;
+                color: #FFFFFF;
+                font-size: 14px;
+                padding: 0 12px;
+            }
+            QLineEdit:focus { border: 1px solid #2563EB; }
+        """
+
+        self.field_new_pwd = QLineEdit()
+        self.field_new_pwd.setEchoMode(QLineEdit.Password)
+        self.field_new_pwd.setPlaceholderText("Nouveau mot de passe")
+        self.field_new_pwd.setFixedHeight(42)
+        self.field_new_pwd.setStyleSheet(field_style)
+        layout.addWidget(self.field_new_pwd)
+
+        self.field_confirm_pwd = QLineEdit()
+        self.field_confirm_pwd.setEchoMode(QLineEdit.Password)
+        self.field_confirm_pwd.setPlaceholderText("Confirmer le mot de passe")
+        self.field_confirm_pwd.setFixedHeight(42)
+        self.field_confirm_pwd.setStyleSheet(field_style)
+        layout.addWidget(self.field_confirm_pwd)
+
+        self.lbl_error = QLabel("")
+        self.lbl_error.setWordWrap(True)
+        self.lbl_error.setMinimumHeight(18)
+        self.lbl_error.setStyleSheet("color: #F87171; font-size: 12px; background-color: transparent;")
+        layout.addWidget(self.lbl_error)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        self.btn_save = QPushButton("Enregistrer")
+        self.btn_save.setCursor(Qt.PointingHandCursor)
+        self.btn_save.setFixedHeight(40)
+        self.btn_save.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['primary']};
+                color: #FFFFFF;
+                font-weight: bold;
+                border-radius: 8px;
+                padding: 0 18px;
+            }}
+            QPushButton:hover {{ background-color: {COLORS['primary_dark']}; }}
+        """)
+        self.btn_save.clicked.connect(self._save)
+        buttons.addWidget(self.btn_save)
+        layout.addLayout(buttons)
+
+        self.field_new_pwd.returnPressed.connect(self._save)
+        self.field_confirm_pwd.returnPressed.connect(self._save)
+        self.field_new_pwd.setFocus()
+
+    def _save(self):
+        from services.utilisateur_service import UtilisateurService
+
+        new_password = self.field_new_pwd.text()
+        confirm_password = self.field_confirm_pwd.text()
+        if new_password != confirm_password:
+            self.lbl_error.setText("Les deux mots de passe ne correspondent pas.")
+            return
+
+        ok, msg = UtilisateurService.change_password(self.user_id, self.old_password, new_password)
+        if ok:
+            self.accept()
+        else:
+            self.lbl_error.setText(msg)
+
+
 class LoginDialog(QDialog):
     """Écran de connexion affiché au démarrage de l'application."""
 
@@ -171,6 +269,16 @@ class LoginDialog(QDialog):
         ok, msg, user_data = UtilisateurService.authenticate(login, password)
 
         if ok:
+            if user_data and user_data.get("MustChangePassword"):
+                change_dialog = PasswordChangeDialog(user_data["IDUtilisateur"], password, self)
+                if change_dialog.exec() != QDialog.Accepted:
+                    self.lbl_error.setText("Le changement du mot de passe est requis pour continuer.")
+                    self.btn_login.setEnabled(True)
+                    self.btn_login.setText("Se connecter")
+                    self.field_pwd.clear()
+                    self.field_pwd.setFocus()
+                    return
+                user_data["MustChangePassword"] = False
             self.authenticated_user_data = user_data
             self.accept()
         else:
