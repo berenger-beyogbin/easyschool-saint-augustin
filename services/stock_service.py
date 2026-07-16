@@ -110,6 +110,71 @@ class StockService:
             session.close()
 
     @staticmethod
+    def process_sale(cart: dict, id_annee: int, login: str) -> Tuple[bool, str]:
+        """
+        Enregistre une vente multi-articles en une seule transaction : verrouille
+        (SELECT ... FOR UPDATE) les lignes de stock concernees, verifie toutes les
+        quantites, puis debite tous les stocks et cree toutes les lignes de vente
+        en un seul commit. Aucune ecriture partielle en cas d'echec, et le
+        verrouillage empeche deux ventes concurrentes de survendre le meme stock.
+
+        cart : {id_article: {"qte": int, "pu": float, "nom": str (optionnel, pour les messages)}}
+        """
+        if not cart:
+            return False, "Le panier est vide."
+        if not id_annee:
+            return False, "Aucune annee scolaire active n'est configuree."
+
+        session = get_session()
+        try:
+            id_articles = list(cart.keys())
+            stocks = (
+                session.query(StockCour)
+                .filter(StockCour.IDTArticle.in_(id_articles))
+                .with_for_update()
+                .all()
+            )
+            stock_par_article = {s.IDTArticle: s for s in stocks}
+
+            erreurs = []
+            for id_art, info in cart.items():
+                qte = info["qte"]
+                nom = info.get("nom", f"Article #{id_art}")
+                sc = stock_par_article.get(id_art)
+                dispo = sc.QuantiteCour if sc else 0
+                if qte <= 0:
+                    erreurs.append(f"- {nom} : quantite invalide.")
+                elif qte > dispo:
+                    erreurs.append(f"- {nom} : demande {qte}, disponible {dispo}.")
+
+            if erreurs:
+                session.rollback()
+                return False, "Vente annulee, stock insuffisant :\n" + "\n".join(erreurs)
+
+            now_time = datetime.datetime.now().time()
+            today = datetime.date.today()
+            for id_art, info in cart.items():
+                sc = stock_par_article[id_art]
+                sc.QuantiteCour -= info["qte"]
+                session.add(StockSortie(
+                    IDTAnneeScolaire=id_annee,
+                    IDTArticle=id_art,
+                    DateSort=today,
+                    QuantiteSort=info["qte"],
+                    Prix_vente=Decimal(str(info["pu"])),
+                    HeureSortie=now_time,
+                    Login=login,
+                ))
+
+            session.commit()
+            return True, f"Vente finalisee avec succes ! {len(cart)} article(s)/KIT(s) debite(s) des stocks."
+        except Exception as e:
+            session.rollback()
+            return False, f"Erreur lors de l'enregistrement de la vente : {str(e)}"
+        finally:
+            session.close()
+
+    @staticmethod
     def get_alertes_stock() -> List[dict]:
         """Retourne la liste des articles dont le stock courant est inferieur ou egal au seuil d'alerte."""
         session = get_session()

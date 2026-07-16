@@ -13,6 +13,8 @@ from models.montant_transport import MontantTransport
 from models.montant_cantine import MontantCantine
 from models.autres_frais import AutresFrais
 from models.inscription_autres_frais import InscriptionAutresFrais
+from models.article import Article
+from models.stock_cour import StockCour
 
 
 def make_annee(session, libelle="2026-2027", cloturer=False):
@@ -107,6 +109,17 @@ def make_montant_cantine(session, annee, niveau, montant=20000):
     session.add(m)
     session.commit()
     return m
+
+
+def make_article_avec_stock(session, libelle="Cahier", pu=500, quantite=10, kit=False):
+    art = Article(Libelle=libelle, PU=pu, KIT=kit, QTESeuil=0)
+    session.add(art)
+    session.commit()
+
+    sc = StockCour(IDTArticle=art.IDTArticle, QuantiteCour=quantite)
+    session.add(sc)
+    session.commit()
+    return art, sc
 
 
 def make_inscription_autres_frais(session, inscription, code="TENUE", libelle="Tenue", montant=6000):
