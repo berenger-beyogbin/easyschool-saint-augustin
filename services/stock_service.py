@@ -7,6 +7,9 @@ from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class StockService:
     @staticmethod
@@ -15,8 +18,8 @@ class StockService:
         session = get_session()
         try:
             return session.query(StockCour).all()
-        except Exception as e:
-            print(f"Erreur get_stock_courant : {e}")
+        except Exception:
+            logger.exception("Erreur get_stock_courant")
             return []
         finally:
             session.close()
@@ -27,8 +30,8 @@ class StockService:
         session = get_session()
         try:
             return session.query(StockCour).filter_by(IDTArticle=id_art).first()
-        except Exception as e:
-            print(f"Erreur get_stock_by_article : {e}")
+        except Exception:
+            logger.exception("Erreur get_stock_by_article")
             return None
         finally:
             session.close()
@@ -192,8 +195,8 @@ class StockService:
                     "stock": sc.QuantiteCour
                 })
             return alertes
-        except Exception as e:
-            print(f"Erreur get_alertes_stock : {e}")
+        except Exception:
+            logger.exception("Erreur get_alertes_stock")
             return []
         finally:
             session.close()
@@ -211,8 +214,8 @@ class StockService:
             if date_fin:
                 q = q.filter(StockEntree.DateEnt <= date_fin)
             return q.order_by(StockEntree.DateEnt.desc(), StockEntree.IDStockEnt.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_stock_history_entrees : {e}")
+        except Exception:
+            logger.exception("Erreur get_stock_history_entrees")
             return []
         finally:
             session.close()
@@ -230,8 +233,8 @@ class StockService:
             if date_fin:
                 q = q.filter(StockSortie.DateSort <= date_fin)
             return q.order_by(StockSortie.DateSort.desc(), StockSortie.HeureSortie.desc(), StockSortie.IDStockSort.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_stock_history_sorties : {e}")
+        except Exception:
+            logger.exception("Erreur get_stock_history_sorties")
             return []
         finally:
             session.close()

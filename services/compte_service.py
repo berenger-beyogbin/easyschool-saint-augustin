@@ -4,6 +4,9 @@ from app.database import get_session
 from models.compte import Compte
 from models.type_sortie import TypeSortie
 from models.sortie_fin import SortieFin
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Comptes de produits SYSCOA/OHADA créés automatiquement au démarrage
 SYSCOA_INCOME_ACCOUNTS = {
@@ -21,8 +24,8 @@ class CompteService:
         session = get_session()
         try:
             return session.query(Compte).order_by(Compte.NumCompte.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_all_comptes : {e}")
+        except Exception:
+            logger.exception("Erreur get_all_comptes")
             return []
         finally:
             session.close()
@@ -33,8 +36,8 @@ class CompteService:
         session = get_session()
         try:
             return session.query(Compte).filter_by(IDCompte=id_compte).first()
-        except Exception as e:
-            print(f"Erreur get_compte_by_id : {e}")
+        except Exception:
+            logger.exception("Erreur get_compte_by_id")
             return None
         finally:
             session.close()
@@ -53,8 +56,8 @@ class CompteService:
                     Compte.LibCompte.ilike(search_pattern)
                 )
             ).order_by(Compte.NumCompte.asc()).all()
-        except Exception as e:
-            print(f"Erreur search_comptes : {e}")
+        except Exception:
+            logger.exception("Erreur search_comptes")
             return []
         finally:
             session.close()
@@ -129,9 +132,9 @@ class CompteService:
                 if not existing:
                     session.add(Compte(NumCompte=num, LibCompte=lib))
             session.commit()
-        except Exception as e:
+        except Exception:
             session.rollback()
-            print(f"Erreur seed_comptes_syscoa : {e}")
+            logger.exception("Erreur seed_comptes_syscoa")
         finally:
             session.close()
 

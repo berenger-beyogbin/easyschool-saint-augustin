@@ -9,6 +9,9 @@ from models.inscription_autres_frais import InscriptionAutresFrais
 from models.autres_frais import AutresFrais
 from models.montant_autres_frais import MontantAutresFrais
 from models.versement_autres_frais import VersementAutresFrais
+import logging
+logger = logging.getLogger(__name__)
+
 
 
 class InscriptionAutresFraisService:
@@ -41,8 +44,8 @@ class InscriptionAutresFraisService:
                 }
                 for ligne in lignes
             ]
-        except Exception as e:
-            print(f"Erreur get_frais_coches InscriptionAutresFrais : {e}")
+        except Exception:
+            logger.exception("Erreur get_frais_coches InscriptionAutresFrais")
             return []
         finally:
             session.close()
@@ -78,8 +81,8 @@ class InscriptionAutresFraisService:
                 }
                 for ligne in lignes
             ]
-        except Exception as e:
-            print(f"Erreur get_frais_impayes InscriptionAutresFrais : {e}")
+        except Exception:
+            logger.exception("Erreur get_frais_impayes InscriptionAutresFrais")
             return []
         finally:
             session.close()
@@ -95,8 +98,8 @@ class InscriptionAutresFraisService:
                 InscriptionAutresFrais.IDTInscription == id_inscription
             ).scalar()
             return total if total is not None else Decimal("0")
-        except Exception as e:
-            print(f"Erreur calculer_total_frais_coches InscriptionAutresFrais : {e}")
+        except Exception:
+            logger.exception("Erreur calculer_total_frais_coches InscriptionAutresFrais")
             return Decimal("0")
         finally:
             session.close()
@@ -127,8 +130,8 @@ class InscriptionAutresFraisService:
                 }
                 for m in montants
             ]
-        except Exception as e:
-            print(f"Erreur get_frais_proposes InscriptionAutresFrais : {e}")
+        except Exception:
+            logger.exception("Erreur get_frais_proposes InscriptionAutresFrais")
             return []
         finally:
             session.close()

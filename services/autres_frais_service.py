@@ -1,6 +1,9 @@
 from typing import List
 from models.autres_frais import AutresFrais
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class AutresFraisService:
     @staticmethod
@@ -9,8 +12,8 @@ class AutresFraisService:
         session = get_session()
         try:
             return session.query(AutresFrais).order_by(AutresFrais.CodeFrais.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_all_autres_frais : {e}")
+        except Exception:
+            logger.exception("Erreur get_all_autres_frais")
             return []
         finally:
             session.close()
@@ -21,8 +24,8 @@ class AutresFraisService:
         session = get_session()
         try:
             return session.get(AutresFrais, id_frais)
-        except Exception as e:
-            print(f"Erreur get_autres_frais_by_id : {e}")
+        except Exception:
+            logger.exception("Erreur get_autres_frais_by_id")
             return None
         finally:
             session.close()

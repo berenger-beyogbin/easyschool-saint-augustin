@@ -1,5 +1,8 @@
 from app.database import get_session
 from models.permission import Permission
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Catalogue complet des fonctionnalités de l'application
 PERMISSIONS_CATALOG = [
@@ -35,9 +38,9 @@ class PermissionService:
                 if not session.query(Permission).filter_by(Code=code).first():
                     session.add(Permission(Code=code, Libelle=libelle, Module=module, Ordre=ordre))
             session.commit()
-        except Exception as e:
+        except Exception:
             session.rollback()
-            print(f"Erreur seeding permissions : {e}")
+            logger.exception("Erreur seeding permissions")
         finally:
             session.close()
 

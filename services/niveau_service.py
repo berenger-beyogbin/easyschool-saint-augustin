@@ -2,6 +2,9 @@ from typing import List
 from models.niveau import TNiveau
 from models.cycle import TCycle
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class NiveauService:
     @staticmethod
@@ -16,8 +19,8 @@ class NiveauService:
                 IDAnneeScolaire=active_annee_id,
                 IDEtablissement_Ecole=active_etab_id
             ).order_by(TCycle.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur recuperation cycles : {e}")
+        except Exception:
+            logger.exception("Erreur recuperation cycles")
             return []
         finally:
             session.close()
@@ -43,8 +46,8 @@ class NiveauService:
                     "IDT_Cycle": n.IDT_Cycle
                 })
             return resultat
-        except Exception as e:
-            print(f"Erreur recuperation niveaux : {e}")
+        except Exception:
+            logger.exception("Erreur recuperation niveaux")
             return []
         finally:
             session.close()

@@ -2,6 +2,9 @@ from app.database import get_session
 from models.profil import Profil
 from models.profil_permission import ProfilPermission
 from models.permission import Permission
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Profils par défaut avec leurs permissions initiales
 _DEFAULT_PROFILES = [
@@ -77,9 +80,9 @@ class ProfilService:
                                 Accordee=True,
                             ))
             session.commit()
-        except Exception as e:
+        except Exception:
             session.rollback()
-            print(f"Erreur seeding profils : {e}")
+            logger.exception("Erreur seeding profils")
         finally:
             session.close()
 

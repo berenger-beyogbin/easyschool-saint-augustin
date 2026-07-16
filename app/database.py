@@ -1,7 +1,10 @@
+import logging
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from .config import Config
+
+logger = logging.getLogger(__name__)
 
 # Base declarative pour tous les modeles SQLAlchemy
 Base = declarative_base()
@@ -90,7 +93,7 @@ def create_tables():
     import models.audit_log  # noqa: F401
 
     Base.metadata.create_all(bind=_engine)
-    print("Tables creees avec succes dans PostgreSQL !")
+    logger.info("Tables creees avec succes dans PostgreSQL !")
 
     # ------------------------------------------------------------------------
     # SECTION GELEE (audit 2026-07-16, chantier C1) : ces blocs de migration
@@ -109,7 +112,7 @@ def create_tables():
         with _engine.begin() as conn:
             conn.execute(text('ALTER TABLE IF EXISTS "VersementScol" ADD COLUMN IF NOT EXISTS "MontantCantine" NUMERIC(12,2) DEFAULT 0;'))
             conn.execute(text('ALTER TABLE IF EXISTS "VersementScol" ADD COLUMN IF NOT EXISTS "MontantVersAutres" NUMERIC(12,2) DEFAULT 0;'))
-            print("Mise a jour de table 'VersementScol' (ajout colonnes) terminee avec succes.")
+            logger.info("Mise a jour de table 'VersementScol' (ajout colonnes) terminee avec succes.")
     except Exception as e:
         raise RuntimeError(f"Echec de la migration 'VersementScol' (ajout colonnes) : {e}") from e
 
@@ -117,7 +120,7 @@ def create_tables():
     try:
         with _engine.begin() as conn:
             conn.execute(text('ALTER TABLE IF EXISTS "Utilisateur" ADD COLUMN IF NOT EXISTS "ImprimanteDefaut" VARCHAR(255);'))
-            print("Mise a jour de table 'Utilisateur' (ajout colonne ImprimanteDefaut) terminee avec succes.")
+            logger.info("Mise a jour de table 'Utilisateur' (ajout colonne ImprimanteDefaut) terminee avec succes.")
     except Exception as e:
         raise RuntimeError(f"Echec de la migration 'Utilisateur' (ImprimanteDefaut) : {e}") from e
 
@@ -128,7 +131,7 @@ def create_tables():
                 'ALTER TABLE IF EXISTS "TInscription" '
                 'ADD COLUMN IF NOT EXISTS "StatutAffectation" VARCHAR(20) NOT NULL DEFAULT \'AFFECTE_ETAT\';'
             ))
-            print("Mise a jour de table 'TInscription' (ajout colonne StatutAffectation) terminee avec succes.")
+            logger.info("Mise a jour de table 'TInscription' (ajout colonne StatutAffectation) terminee avec succes.")
     except Exception as e:
         raise RuntimeError(f"Echec de la migration 'TInscription' (StatutAffectation) : {e}") from e
 
@@ -140,7 +143,7 @@ def create_tables():
             conn.execute(text('ALTER TABLE IF EXISTS "MontantScol" DROP COLUMN IF EXISTS "MontantEnsSecondaire";'))
             conn.execute(text('ALTER TABLE IF EXISTS "TFamille" DROP COLUMN IF EXISTS "EnsCatPrimaire";'))
             conn.execute(text('ALTER TABLE IF EXISTS "TFamille" DROP COLUMN IF EXISTS "EnsCatSecondaire";'))
-            print("Suppression des colonnes de tarif enseignant (MontantScol/TFamille) terminee avec succes.")
+            logger.info("Suppression des colonnes de tarif enseignant (MontantScol/TFamille) terminee avec succes.")
     except Exception as e:
         raise RuntimeError(f"Echec de la migration tarif enseignant (MontantScol/TFamille) : {e}") from e
 
@@ -151,7 +154,7 @@ def create_tables():
     try:
         with _engine.begin() as conn:
             conn.execute(text('ALTER TABLE IF EXISTS "Utilisateur" DROP COLUMN IF EXISTS "MustChangePassword";'))
-            print("Suppression de la colonne obsolete 'MustChangePassword' (Utilisateur) terminee avec succes.")
+            logger.info("Suppression de la colonne obsolete 'MustChangePassword' (Utilisateur) terminee avec succes.")
     except Exception as e:
         raise RuntimeError(f"Echec de la migration 'Utilisateur' (MustChangePassword) : {e}") from e
 
@@ -170,7 +173,7 @@ def create_tables():
             if has_montant:
                 conn.execute(text('UPDATE "MontantScol" SET "MontantNonAffecte" = "Montant", "MontantAffecte" = "Montant";'))
                 conn.execute(text('ALTER TABLE "MontantScol" DROP COLUMN "Montant";'))
-            print("Mise a jour de table 'MontantScol' (tarifs Non affecte/Affecte) terminee avec succes.")
+            logger.info("Mise a jour de table 'MontantScol' (tarifs Non affecte/Affecte) terminee avec succes.")
     except Exception as e:
         raise RuntimeError(f"Echec de la migration 'MontantScol' (tarifs affectation) : {e}") from e
 
@@ -213,6 +216,6 @@ def create_tables():
                 ).first()
                 if not exists:
                     conn.execute(text(ddl))
-            print("Contraintes d'integrite financiere verifiees/ajoutees avec succes.")
+            logger.info("Contraintes d'integrite financiere verifiees/ajoutees avec succes.")
     except Exception as e:
         raise RuntimeError(f"Echec de la migration des contraintes d'integrite : {e}") from e

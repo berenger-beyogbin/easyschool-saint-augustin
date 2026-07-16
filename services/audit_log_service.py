@@ -2,6 +2,9 @@ from typing import List, Optional
 from sqlalchemy.orm import joinedload
 from app.database import get_session
 from models.audit_log import AuditLog
+import logging
+logger = logging.getLogger(__name__)
+
 
 
 class AuditLogService:
@@ -30,9 +33,9 @@ class AuditLogService:
                 Motif=motif,
             ))
             session.commit()
-        except Exception as e:
+        except Exception:
             session.rollback()
-            print(f"Erreur AuditLogService.log : {e}")
+            logger.exception("Erreur AuditLogService.log")
         finally:
             session.close()
 
@@ -44,8 +47,8 @@ class AuditLogService:
                 AuditLog.TableCible == table_cible,
                 AuditLog.IDCible == id_cible,
             ).order_by(AuditLog.DateAction.desc()).all()
-        except Exception as e:
-            print(f"Erreur AuditLogService.get_by_cible : {e}")
+        except Exception:
+            logger.exception("Erreur AuditLogService.get_by_cible")
             return []
         finally:
             session.close()
@@ -57,8 +60,8 @@ class AuditLogService:
             return session.query(AuditLog).options(joinedload(AuditLog.utilisateur)).order_by(
                 AuditLog.DateAction.desc()
             ).limit(limit).all()
-        except Exception as e:
-            print(f"Erreur AuditLogService.get_recent : {e}")
+        except Exception:
+            logger.exception("Erreur AuditLogService.get_recent")
             return []
         finally:
             session.close()

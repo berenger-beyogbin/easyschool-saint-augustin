@@ -14,6 +14,9 @@ from models.article import Article
 from models.stock_cour import StockCour
 from models.sortie_fin import SortieFin
 from models.etablissement import EtablissementEcole
+import logging
+logger = logging.getLogger(__name__)
+
 
 
 class DashboardService:
@@ -49,8 +52,8 @@ class DashboardService:
                 "localite": etab.Localite or "",
                 "telephone": etab.Telephone or "",
             }
-        except Exception as e:
-            print(f"Erreur get_etablissement_info : {e}")
+        except Exception:
+            logger.exception("Erreur get_etablissement_info")
             return {"nom": "Erreur chargement", "sigle": "", "localite": "", "telephone": ""}
         finally:
             session.close()
@@ -145,8 +148,8 @@ class DashboardService:
                 "total_depenses": total_depenses,
                 "total_recettes": total_recettes,
             }
-        except Exception as e:
-            print(f"Erreur get_dashboard_summary : {e}")
+        except Exception:
+            logger.exception("Erreur get_dashboard_summary")
             return defaults
         finally:
             session.close()
@@ -181,8 +184,8 @@ class DashboardService:
                     "classe": classe,
                 })
             return result
-        except Exception as e:
-            print(f"Erreur get_latest_inscriptions : {e}")
+        except Exception:
+            logger.exception("Erreur get_latest_inscriptions")
             return []
         finally:
             session.close()
@@ -217,8 +220,8 @@ class DashboardService:
                     "transport": DashboardService.format_fcfa(v.MontantVersTrans),
                 })
             return result
-        except Exception as e:
-            print(f"Erreur get_latest_versements : {e}")
+        except Exception:
+            logger.exception("Erreur get_latest_versements")
             return []
         finally:
             session.close()
@@ -251,8 +254,8 @@ class DashboardService:
                     "montant": DashboardService.format_fcfa(montant),
                 })
             return result
-        except Exception as e:
-            print(f"Erreur get_latest_ventes : {e}")
+        except Exception:
+            logger.exception("Erreur get_latest_ventes")
             return []
         finally:
             session.close()
@@ -277,8 +280,8 @@ class DashboardService:
                     "seuil": seuil,
                 })
             return result
-        except Exception as e:
-            print(f"Erreur get_stock_alerts : {e}")
+        except Exception:
+            logger.exception("Erreur get_stock_alerts")
             return []
         finally:
             session.close()
@@ -318,8 +321,8 @@ class DashboardService:
 
             result.sort(key=lambda x: x["pct"], reverse=True)
             return result[:limit]
-        except Exception as e:
-            print(f"Erreur get_classes_capacity_alerts : {e}")
+        except Exception:
+            logger.exception("Erreur get_classes_capacity_alerts")
             return []
         finally:
             session.close()
@@ -409,8 +412,8 @@ class DashboardService:
             for r in result:
                 r.pop("_reste_raw", None)
             return result[:limit]
-        except Exception as e:
-            print(f"Erreur get_impayes_scolarite : {e}")
+        except Exception:
+            logger.exception("Erreur get_impayes_scolarite")
             return []
         finally:
             session.close()

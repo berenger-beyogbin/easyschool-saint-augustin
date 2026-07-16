@@ -1,5 +1,8 @@
 from models.etablissement import EtablissementEcole
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class EtablissementService:
     @staticmethod
@@ -32,7 +35,7 @@ class EtablissementService:
             return ecole
         except Exception as e:
             session.rollback()
-            print(f"Erreur de lecture de l'etablissement : {e}")
+            logger.exception("Erreur de lecture de l'etablissement")
             raise e
         finally:
             session.close()
@@ -66,9 +69,9 @@ class EtablissementService:
 
             session.commit()
             return True
-        except Exception as e:
+        except Exception:
             session.rollback()
-            print(f"Erreur d'enregistrement de l'etablissement : {e}")
+            logger.exception("Erreur d'enregistrement de l'etablissement")
             return False
         finally:
             session.close()

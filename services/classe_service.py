@@ -3,6 +3,9 @@ from models.classe import TClasse
 from models.niveau import TNiveau
 from app.database import get_session
 from app.session import AppSession
+import logging
+logger = logging.getLogger(__name__)
+
 
 class ClasseService:
     @staticmethod
@@ -17,8 +20,8 @@ class ClasseService:
                 IDAnneeScolaire=active_annee_id,
                 IDEtablissement_Ecole=active_etab_id
             ).all()
-        except Exception as e:
-            print(f"Erreur get_niveaux_par_cycle : {e}")
+        except Exception:
+            logger.exception("Erreur get_niveaux_par_cycle")
             return []
         finally:
             session.close()
@@ -45,8 +48,8 @@ class ClasseService:
                     "NiveauLibelle": c.niveau.Libelle if c.niveau else "Non defini"
                 })
             return resultat
-        except Exception as e:
-            print(f"Erreur get_all TClasse : {e}")
+        except Exception:
+            logger.exception("Erreur get_all TClasse")
             return []
         finally:
             session.close()

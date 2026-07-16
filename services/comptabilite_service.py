@@ -10,6 +10,9 @@ from models.sortie_fin import SortieFin
 from models.annee_scolaire import TAnneeScolaire
 from models.versement_scol import VersementScol
 from models.stock_sortie import StockSortie
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Correspondance NumCompte SYSCOA → clé rubrique dans get_totaux_entrees_rubriques
 _SYSCOA_RUBRIQUE = {
@@ -235,8 +238,8 @@ class ComptabiliteService:
             return session.query(SortieFin).options(joinedload(SortieFin.compte))\
                 .filter_by(IDAnSco=id_annee)\
                 .order_by(SortieFin.DateSortie.desc(), SortieFin.IDSortieFin.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_all_mouvements : {e}")
+        except Exception:
+            logger.exception("Erreur get_all_mouvements")
             return []
         finally:
             session.close()
@@ -252,8 +255,8 @@ class ComptabiliteService:
                     SortieFin.DateSortie >= date_debut,
                     SortieFin.DateSortie <= date_fin
                 ).order_by(SortieFin.DateSortie.desc(), SortieFin.IDSortieFin.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_mouvements_by_period : {e}")
+        except Exception:
+            logger.exception("Erreur get_mouvements_by_period")
             return []
         finally:
             session.close()
@@ -279,8 +282,8 @@ class ComptabiliteService:
                 q = q.filter(SortieFin.DateSortie <= date_fin)
                 
             return q.order_by(SortieFin.DateSortie.desc(), SortieFin.IDSortieFin.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_etat_sorties : {e}")
+        except Exception:
+            logger.exception("Erreur get_etat_sorties")
             return []
         finally:
             session.close()
@@ -339,8 +342,8 @@ class ComptabiliteService:
                     item["Solde"] = item["Credit"] - item["Debit"]
 
             return balance_list
-        except Exception as e:
-            print(f"Erreur get_balance_comptes : {e}")
+        except Exception:
+            logger.exception("Erreur get_balance_comptes")
             return []
         finally:
             session.close()
@@ -381,8 +384,8 @@ class ComptabiliteService:
             vente = float(vente_row[0]) if vente_row else 0.0
 
             return {"scolarite": scol, "transport": trans, "cantine": cant, "vente": vente, "autres": autres}
-        except Exception as e:
-            print(f"Erreur get_totaux_entrees_rubriques : {e}")
+        except Exception:
+            logger.exception("Erreur get_totaux_entrees_rubriques")
             return {"scolarite": 0.0, "transport": 0.0, "cantine": 0.0, "vente": 0.0, "autres": 0.0}
         finally:
             session.close()

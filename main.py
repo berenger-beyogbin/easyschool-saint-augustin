@@ -8,11 +8,15 @@ from PySide6.QtGui import QPalette, QColor, QIcon
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from app.database import init_db, test_connection, create_tables
+from app.logging_config import setup_logging
 from app.session import AppSession
 from app.styles import MESSAGEBOX_STYLE, install_messagebox_autostyle
 from views.main_window import MainWindow
 from views.login_dialog import LoginDialog
 from views.first_run_setup_dialog import FirstRunSetupDialog
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def _apply_light_palette(app: QApplication) -> None:
@@ -36,7 +40,8 @@ def _apply_light_palette(app: QApplication) -> None:
 
 def main():
     """Point d'entree principal d'Easy School 2.0."""
-    print("Initialisation de l'application Easy School 2.0...")
+    setup_logging()
+    logger.info("Initialisation de l'application Easy School 2.0...")
 
     # 1. Demarrage de l'interface graphique PySide6 (Application Qt) en premier
     app = QApplication(sys.argv)
@@ -75,7 +80,7 @@ def main():
         AppSession.initialize_session()
 
     except Exception as e:
-        print(f"Erreur au démarrage de l'application: {e}")
+        logger.exception("Erreur au démarrage de l'application")
         QMessageBox.critical(
             None,
             "Erreur de démarrage",

@@ -1,6 +1,9 @@
 from typing import List, Optional, Tuple
 from app.database import get_session
 from models.type_sortie import TypeSortie
+import logging
+logger = logging.getLogger(__name__)
+
 
 class TypeSortieService:
     @staticmethod
@@ -9,8 +12,8 @@ class TypeSortieService:
         session = get_session()
         try:
             return session.query(TypeSortie).order_by(TypeSortie.LibelleSortie.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_all_type_sorties : {e}")
+        except Exception:
+            logger.exception("Erreur get_all_type_sorties")
             return []
         finally:
             session.close()
@@ -21,8 +24,8 @@ class TypeSortieService:
         session = get_session()
         try:
             return session.query(TypeSortie).filter_by(IDTypeSortie=id_type_sortie).first()
-        except Exception as e:
-            print(f"Erreur get_type_sortie_by_id : {e}")
+        except Exception:
+            logger.exception("Erreur get_type_sortie_by_id")
             return None
         finally:
             session.close()
@@ -33,8 +36,8 @@ class TypeSortieService:
         session = get_session()
         try:
             return session.query(TypeSortie).filter_by(IDCompte=id_compte).order_by(TypeSortie.LibelleSortie.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_type_sorties_by_compte : {e}")
+        except Exception:
+            logger.exception("Erreur get_type_sorties_by_compte")
             return []
         finally:
             session.close()

@@ -13,6 +13,9 @@ from models.inscription_autres_frais import InscriptionAutresFrais
 from models.versement_scol import VersementScol
 from models.versement_autres_frais import VersementAutresFrais
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class VersementService:
     @staticmethod
@@ -28,8 +31,8 @@ class VersementService:
                 joinedload(TInscription.classe),
                 joinedload(TInscription.niveau)
             ).filter(TInscription.IDTAnneeScolaire == id_annee).all()
-        except Exception as e:
-            print(f"Erreur get_eleves_inscrits : {e}")
+        except Exception:
+            logger.exception("Erreur get_eleves_inscrits")
             return []
         finally:
             session.close()
@@ -57,8 +60,8 @@ class VersementService:
                     (Eleve.Matricule.ilike(q_clean))
                 )
             ).all()
-        except Exception as e:
-            print(f"Erreur search_eleves_inscrits : {e}")
+        except Exception:
+            logger.exception("Erreur search_eleves_inscrits")
             return []
         finally:
             session.close()
@@ -71,8 +74,8 @@ class VersementService:
             return session.query(VersementScol).filter(
                 (VersementScol.IDTAnneeScolaire == id_annee) & (VersementScol.IDEleve == id_eleve)
             ).order_by(VersementScol.DateVers.desc(), VersementScol.IDVersementScol.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_versements_eleve : {e}")
+        except Exception:
+            logger.exception("Erreur get_versements_eleve")
             return []
         finally:
             session.close()
@@ -227,8 +230,8 @@ class VersementService:
             res["total_paye"]  = res["scol_paye"]  + res["trans_paye"]  + res["cant_paye"]  + res["autres_paye"]
             res["total_reste"] = res["scol_reste"] + res["trans_reste"] + res["cant_reste"] + res["autres_reste"]
 
-        except Exception as e:
-            print(f"Erreur get_infos_financieres_eleve : {e}")
+        except Exception:
+            logger.exception("Erreur get_infos_financieres_eleve")
         finally:
             session.close()
 
