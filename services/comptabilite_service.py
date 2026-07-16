@@ -93,6 +93,17 @@ class ComptabiliteService:
             if not compte:
                 return False, "Le compte spécifié n'existe pas."
 
+            # Comptes de produits SYSCOA (7041-7045) : alimentes automatiquement par
+            # get_totaux_entrees_rubriques depuis les versements/ventes. Un credit manuel
+            # sur ces comptes s'ajouterait a ce calcul automatique et compterait la
+            # recette deux fois dans la balance.
+            if debit_credit == "Credit" and compte.NumCompte in _SYSCOA_RUBRIQUE:
+                return False, (
+                    f"Le compte {compte.NumCompte} ({compte.LibCompte}) est alimente "
+                    "automatiquement par les versements et ventes : un credit manuel "
+                    "compterait cette recette deux fois dans la balance."
+                )
+
             # Génération automatique du CodeSortie
             code = ComptabiliteService.generate_code_sortie(session, active_annee_id)
 
@@ -144,6 +155,15 @@ class ComptabiliteService:
             annee = session.query(TAnneeScolaire).filter_by(IDTAnneeScolaire=mouvement.IDAnSco).first()
             if annee and annee.Cloturer:
                 return False, "Modification impossible: l'année pour ce mouvement est clôturée."
+
+            # Comptes de produits SYSCOA (7041-7045) : voir create_mouvement, meme raison.
+            compte = session.query(Compte).filter_by(IDCompte=id_compte).first()
+            if compte and debit_credit == "Credit" and compte.NumCompte in _SYSCOA_RUBRIQUE:
+                return False, (
+                    f"Le compte {compte.NumCompte} ({compte.LibCompte}) est alimente "
+                    "automatiquement par les versements et ventes : un credit manuel "
+                    "compterait cette recette deux fois dans la balance."
+                )
 
             mouvement.Benef = benef.strip()
             mouvement.Detail = detail.strip() if detail else None

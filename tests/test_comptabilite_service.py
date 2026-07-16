@@ -1,5 +1,6 @@
 from datetime import date
 
+from app.session import AppSession
 from models.compte import Compte
 from models.versement_scol import VersementScol
 from services.comptabilite_service import ComptabiliteService, _SYSCOA_RUBRIQUE
@@ -65,3 +66,50 @@ def test_balance_comptes_credits_autres_frais_exactly_once(db_session):
         item for item in balance if item["NumCompte"] != "7045" and item["Credit"] == 6000.0
     ]
     assert autres_lignes_avec_montant == []
+
+
+def test_create_mouvement_rejects_manual_credit_on_reserved_syscoa_account(db_session):
+    """Un credit manuel sur un compte SYSCOA reserve (7041-7045) doublerait la
+    recette deja calculee automatiquement dans la balance : doit etre refuse."""
+    annee = make_annee(db_session)
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+    _seed_comptes_syscoa(db_session)
+    compte_scol = db_session.query(Compte).filter_by(NumCompte="7041").first()
+
+    ok, msg = ComptabiliteService.create_mouvement(
+        benef="Test", montant=5000, date_sortie=date.today(),
+        id_compte=compte_scol.IDCompte, debit_credit="Credit",
+    )
+
+    assert ok is False
+    assert "automatiquement" in msg.lower()
+
+
+def test_create_mouvement_allows_debit_on_reserved_syscoa_account(db_session):
+    """Un debit (ex: correction) reste possible sur un compte SYSCOA reserve."""
+    annee = make_annee(db_session)
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+    _seed_comptes_syscoa(db_session)
+    compte_scol = db_session.query(Compte).filter_by(NumCompte="7041").first()
+
+    ok, msg = ComptabiliteService.create_mouvement(
+        benef="Test", montant=5000, date_sortie=date.today(),
+        id_compte=compte_scol.IDCompte, debit_credit="Debit",
+    )
+
+    assert ok is True
+
+
+def test_create_mouvement_allows_credit_on_non_reserved_account(db_session):
+    annee = make_annee(db_session)
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+    compte_libre = Compte(NumCompte="6011", LibCompte="Achats fournitures")
+    db_session.add(compte_libre)
+    db_session.commit()
+
+    ok, msg = ComptabiliteService.create_mouvement(
+        benef="Test", montant=5000, date_sortie=date.today(),
+        id_compte=compte_libre.IDCompte, debit_credit="Credit",
+    )
+
+    assert ok is True
