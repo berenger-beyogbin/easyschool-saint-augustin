@@ -117,3 +117,54 @@ def create_tables():
             print("Index VentilationPrestation créé (ou déjà présent).")
     except Exception as e:
         print(f"Avertissement index VentilationPrestation : {e}")
+
+    # Idempotent upgrade: proteger l'historique sensible contre les suppressions
+    # indirectes. Les anciennes bases pouvaient avoir ON DELETE CASCADE sur les
+    # inscriptions et versements ; on remplace ces FK par ON DELETE RESTRICT.
+    critical_restrict_fks = [
+        ("TInscription", "TInscription_IDTAnneeScolaire_fkey", "IDTAnneeScolaire", "TAnneeScolaire", "IDTAnneeScolaire"),
+        ("TInscription", "TInscription_IDFamille_fkey", "IDFamille", "TFamille", "IdTFamille"),
+        ("TInscription", "TInscription_IDEleve_fkey", "IDEleve", "Eleve", "IDEleve"),
+        ("TInscription", "TInscription_IDNiveau_fkey", "IDNiveau", "TNiveau", "IDT_Niveau"),
+        ("TInscription", "TInscription_IDClasse_fkey", "IDClasse", "TClasse", "IDTClasse"),
+        ("VersementScol", "VersementScol_IDFamille_fkey", "IDFamille", "TFamille", "IdTFamille"),
+        ("VersementScol", "VersementScol_IDTAnneeScolaire_fkey", "IDTAnneeScolaire", "TAnneeScolaire", "IDTAnneeScolaire"),
+        ("VersementScol", "VersementScol_IDEleve_fkey", "IDEleve", "Eleve", "IDEleve"),
+    ]
+    try:
+        with _engine.begin() as conn:
+            for table_name, constraint_name, column_name, ref_table, ref_column in critical_restrict_fks:
+                conn.execute(text(f'''
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.referential_constraints rc
+        JOIN information_schema.table_constraints tc
+          ON tc.constraint_schema = rc.constraint_schema
+         AND tc.constraint_name = rc.constraint_name
+        WHERE tc.table_schema = 'public'
+          AND tc.table_name = '{table_name}'
+          AND tc.constraint_name = '{constraint_name}'
+          AND rc.delete_rule <> 'RESTRICT'
+    ) THEN
+        ALTER TABLE "{table_name}" DROP CONSTRAINT IF EXISTS "{constraint_name}";
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE table_schema = 'public'
+          AND table_name = '{table_name}'
+          AND constraint_name = '{constraint_name}'
+    ) THEN
+        ALTER TABLE "{table_name}"
+        ADD CONSTRAINT "{constraint_name}"
+        FOREIGN KEY ("{column_name}") REFERENCES "{ref_table}" ("{ref_column}")
+        ON DELETE RESTRICT;
+    END IF;
+END $$;
+'''))
+            print("Contraintes critiques d'historique verifiees en ON DELETE RESTRICT.")
+    except Exception as e:
+        print(f"Avertissement migration contraintes historiques : {e}")
