@@ -39,7 +39,7 @@ Statut de chaque item : `[ ]` a faire, `[~]` en cours, `[x]` fait.
 
 ## Phase C — Industrialisation technique
 
-- [ ] **C1** — Alembic comme seul mécanisme de migration ; retirer progressivement les blocs `ALTER TABLE` ad hoc de `app/database.py::create_tables()`.
+- [x] **C1** — Section ad hoc de `app/database.py::create_tables()` gelée (commentaire explicite : plus aucun nouveau bloc, tout changement de schéma futur passe par Alembic — déjà le cas depuis B1). Chaque bloc échoue désormais explicitement (`raise`) au lieu de continuer en silence sur un `print` si son `ALTER TABLE` échoue réellement ; `main.py` affiche alors une erreur de démarrage claire. **Retrait complet des blocs existants volontairement pas fait** : risque réel sur la base CJGA dont l'état exact n'est pas connu depuis cette session. Vérifié : suite de tests complète + une base neuve créée depuis zéro démarrent toutes les deux sans erreur.
 - [ ] **C2** — CI avec PostgreSQL éphémère, tests indépendants de `easy_school_test_db`, exécution Ruff + pytest + migrations sur chaque pull request.
 - [ ] **C3** — Logging structuré : remplacer les ~173 `except Exception` / ~99 `print()` / 2 `except:` nus par un logging avec identifiant d'incident et message utilisateur neutre.
 - [ ] **C4** — Sauvegardes automatiques (quotidiennes, chiffrées, rotation) + restauration testée mensuellement.

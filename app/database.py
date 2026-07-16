@@ -89,7 +89,19 @@ def create_tables():
 
     Base.metadata.create_all(bind=_engine)
     print("Tables creees avec succes dans PostgreSQL !")
-    
+
+    # ------------------------------------------------------------------------
+    # SECTION GELEE (audit 2026-07-16, chantier C1) : ces blocs de migration
+    # ad hoc restent en place pour amener a jour les bases installees avant
+    # l'introduction d'Alembic, mais AUCUN NOUVEAU BLOC NE DOIT ETRE AJOUTE ICI.
+    # Tout changement de schema futur passe par une revision Alembic
+    # (voir MIGRATIONS.md). Chaque bloc echoue desormais explicitement (au
+    # lieu de continuer en silence sur un simple print) si son ALTER TABLE
+    # echoue reellement : main.py affiche alors une erreur de demarrage
+    # claire plutot que de laisser l'application tourner sur un schema
+    # partiellement migre.
+    # ------------------------------------------------------------------------
+
     # Idempotent upgrade of VersementScol to add MontantCantine and MontantVersAutres fields if they already existed
     try:
         with _engine.begin() as conn:
@@ -97,7 +109,7 @@ def create_tables():
             conn.execute(text('ALTER TABLE IF EXISTS "VersementScol" ADD COLUMN IF NOT EXISTS "MontantVersAutres" NUMERIC(12,2) DEFAULT 0;'))
             print("Mise a jour de table 'VersementScol' (ajout colonnes) terminee avec succes.")
     except Exception as e:
-        print(f"Avertissement migration 'VersementScol': {e}")
+        raise RuntimeError(f"Echec de la migration 'VersementScol' (ajout colonnes) : {e}") from e
 
     # Idempotent upgrade: imprimante par défaut par utilisateur
     try:
@@ -105,7 +117,7 @@ def create_tables():
             conn.execute(text('ALTER TABLE IF EXISTS "Utilisateur" ADD COLUMN IF NOT EXISTS "ImprimanteDefaut" VARCHAR(255);'))
             print("Mise a jour de table 'Utilisateur' (ajout colonne ImprimanteDefaut) terminee avec succes.")
     except Exception as e:
-        print(f"Avertissement migration 'Utilisateur': {e}")
+        raise RuntimeError(f"Echec de la migration 'Utilisateur' (ImprimanteDefaut) : {e}") from e
 
     # Idempotent upgrade : statut d'affectation de l'État sur les inscriptions
     try:
@@ -116,7 +128,7 @@ def create_tables():
             ))
             print("Mise a jour de table 'TInscription' (ajout colonne StatutAffectation) terminee avec succes.")
     except Exception as e:
-        print(f"Avertissement migration 'TInscription': {e}")
+        raise RuntimeError(f"Echec de la migration 'TInscription' (StatutAffectation) : {e}") from e
 
     # Suppression du tarif de scolarité "catégorie enseignant" : la scolarité
     # ne repose plus que sur le montant standard.
@@ -128,7 +140,7 @@ def create_tables():
             conn.execute(text('ALTER TABLE IF EXISTS "TFamille" DROP COLUMN IF EXISTS "EnsCatSecondaire";'))
             print("Suppression des colonnes de tarif enseignant (MontantScol/TFamille) terminee avec succes.")
     except Exception as e:
-        print(f"Avertissement migration tarif enseignant : {e}")
+        raise RuntimeError(f"Echec de la migration tarif enseignant (MontantScol/TFamille) : {e}") from e
 
     # Colonne "MustChangePassword" : residu d'un ancien schema, jamais utilisee
     # par le modele Utilisateur actuel. Sa presence (NOT NULL sans defaut) fait
@@ -139,7 +151,7 @@ def create_tables():
             conn.execute(text('ALTER TABLE IF EXISTS "Utilisateur" DROP COLUMN IF EXISTS "MustChangePassword";'))
             print("Suppression de la colonne obsolete 'MustChangePassword' (Utilisateur) terminee avec succes.")
     except Exception as e:
-        print(f"Avertissement migration 'Utilisateur' (MustChangePassword) : {e}")
+        raise RuntimeError(f"Echec de la migration 'Utilisateur' (MustChangePassword) : {e}") from e
 
     # Scolarité à deux tarifs selon le statut d'affectation de l'État
     # (Non affecté / Affecté, cf. TInscription.StatutAffectation) : remplace
@@ -158,7 +170,7 @@ def create_tables():
                 conn.execute(text('ALTER TABLE "MontantScol" DROP COLUMN "Montant";'))
             print("Mise a jour de table 'MontantScol' (tarifs Non affecte/Affecte) terminee avec succes.")
     except Exception as e:
-        print(f"Avertissement migration 'MontantScol' (tarifs affectation) : {e}")
+        raise RuntimeError(f"Echec de la migration 'MontantScol' (tarifs affectation) : {e}") from e
 
     # Contraintes d'integrite financiere : ajoutees ici pour les bases deja
     # initialisees avant leur introduction dans les modeles (create_all ne les
@@ -201,4 +213,4 @@ def create_tables():
                     conn.execute(text(ddl))
             print("Contraintes d'integrite financiere verifiees/ajoutees avec succes.")
     except Exception as e:
-        print(f"Avertissement migration contraintes d'integrite : {e}")
+        raise RuntimeError(f"Echec de la migration des contraintes d'integrite : {e}") from e
