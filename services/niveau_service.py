@@ -91,6 +91,7 @@ class NiveauService:
     def delete_niveau(id_niveau: int) -> tuple[bool, str]:
         """Supprime un niveau."""
         from models.classe import TClasse
+        from models.inscription import TInscription
         session = get_session()
         try:
             niveau = session.get(TNiveau, id_niveau)
@@ -99,6 +100,12 @@ class NiveauService:
                 has_classes = session.query(TClasse).filter_by(IDT_Niveau=id_niveau).first() is not None
                 if has_classes:
                     return False, "Impossible de supprimer ce niveau car il contient déjà des classes."
+
+                # Verifier si des inscriptions referencent directement ce niveau
+                # (TInscription.IDNiveau est en ON DELETE CASCADE)
+                has_inscriptions = session.query(TInscription).filter_by(IDNiveau=id_niveau).first() is not None
+                if has_inscriptions:
+                    return False, "Impossible de supprimer ce niveau car il possede deja une inscription."
 
                 session.delete(niveau)
                 session.commit()

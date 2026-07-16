@@ -95,11 +95,19 @@ class ClasseService:
 
     @staticmethod
     def delete_classe(id_classe: int) -> tuple[bool, str]:
-        """Supprime une classe d'eleves."""
+        """Supprime une classe d'eleves, si elle n'a jamais recu d'inscription."""
+        from models.inscription import TInscription
         session = get_session()
         try:
             classe = session.get(TClasse, id_classe)
             if classe:
+                # Bloquer si des inscriptions existent pour cette classe (toutes annees confondues) :
+                # TInscription.IDClasse est en ON DELETE CASCADE, une suppression ici effacerait
+                # silencieusement les inscriptions et tout ce qui en depend (versements, frais annexes).
+                has_inscriptions = session.query(TInscription).filter_by(IDClasse=id_classe).first() is not None
+                if has_inscriptions:
+                    return False, "Impossible de supprimer cette classe car elle possede deja une inscription."
+
                 session.delete(classe)
                 session.commit()
                 return True, "Classe supprimee avec succes !"

@@ -19,19 +19,38 @@ TABLE` ad hoc par des révisions Alembic est un chantier séparé.
 
 ## Mise en route sur une base existante (dev, test, ou une install déjà en prod)
 
-Toute base qui tourne déjà avec `create_tables()` est considérée à jour par
-rapport à la révision baseline (`f0e0bbadf6a8`). Il ne faut **jamais** lancer
-`alembic upgrade head` sur une telle base sans l'avoir d'abord marquée :
+**Ne jamais faire `alembic stamp head` sans avoir vérifié quelle révision
+correspond réellement à l'état de la base.** `head` désigne la dernière
+révision de l'historique, pas forcément celle que la base a effectivement
+subie — si une révision plus récente que l'état réel de la base est marquée
+comme appliquée par erreur, Alembic considère à tort qu'elle n'a rien à
+rejouer, alors que le changement qu'elle décrit n'a jamais eu lieu.
+
+Concrètement aujourd'hui (2026-07) :
+
+- **`f0e0bbadf6a8` (baseline)** : correspond au schéma tel que produit par
+  `create_tables()`, **avec** les tables `Prestataire`, `PrestationAnnexe`,
+  `VentilationPrestation` encore présentes.
+- **`057c2c9d281a`** : supprime ces 3 tables. Tant que cette révision n'a
+  pas été volontairement appliquée (`alembic upgrade 057c2c9d281a`, après
+  sauvegarde) sur une base donnée, cette base est seulement à la révision
+  **baseline**, pas à `head`.
+
+Avant de stamper quoi que ce soit, vérifiez l'état réel :
 
 ```bash
-# Indique a Alembic "cette base est deja a la revision baseline",
-# sans executer aucun SQL.
-alembic stamp head
+# Les 3 tables existent-elles encore sur cette base ?
+psql -d <nom_base> -c "\dt Prestataire PrestationAnnexe VentilationPrestation"
 ```
 
+- Si elles existent encore → `alembic stamp f0e0bbadf6a8` (baseline).
+- Si elles ont déjà été supprimées manuellement ou via cette révision
+  → `alembic stamp 057c2c9d281a` (ou `head` si aucune révision plus
+  récente n'a été ajoutée depuis).
+
 Sur une base neuve (jamais initialisée), l'application continue de créer le
-schéma via `create_tables()` au premier lancement ; faites ensuite le même
-`alembic stamp head` pour la garder synchronisée avec l'historique Alembic.
+schéma via `create_tables()` au premier lancement (donc toujours avec les 3
+tables présentes) ; stamper sur la baseline `f0e0bbadf6a8`, pas `head`.
 
 ## Ajouter un changement de schéma
 
