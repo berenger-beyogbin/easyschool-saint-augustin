@@ -31,6 +31,17 @@ def _setup_inscription(db_session):
 
 def _setup_versement(db_session):
     annee, niveau, classe, famille, eleve, inscription = _setup_inscription(db_session)
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 2001,
+            "Login": "caisse_test",
+            "Nom": "Caisse",
+            "ProfilCode": "CAISSE",
+            "ProfilLibelle": "Caisse",
+            "IsAdmin": False,
+        },
+        permissions={"SCOLARITE_VERSEMENTS"},
+    )
     ok, msg, versement_id = VersementService.create_versement(
         annee.IDTAnneeScolaire,
         eleve.IDEleve,

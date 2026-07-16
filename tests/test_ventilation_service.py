@@ -1,5 +1,6 @@
 from datetime import date
 
+from app.session import AppSession
 from services.ventilation_service import VentilationService
 from services.versement_service import VersementService
 from tests.factories import (
@@ -8,7 +9,22 @@ from tests.factories import (
 )
 
 
+def _set_versements_user():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 3002,
+            "Login": "ventilation_test",
+            "Nom": "Ventilation",
+            "ProfilCode": "CAISSE",
+            "ProfilLibelle": "Caisse",
+            "IsAdmin": False,
+        },
+        permissions={"SCOLARITE_VERSEMENTS"},
+    )
+
+
 def _setup_eleve(db_session, scol_due=100000, scolarite=True):
+    _set_versements_user()
     annee = make_annee(db_session)
     niveau, classe = make_niveau_classe(db_session, annee)
     famille = make_famille(db_session, ens_cat_primaire=False)

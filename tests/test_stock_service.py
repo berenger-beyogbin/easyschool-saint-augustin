@@ -1,12 +1,28 @@
 from decimal import Decimal
 
+from app.session import AppSession
 from models.article import Article
 from models.stock_cour import StockCour
 from services.stock_service import StockService
 from tests.factories import make_annee
 
 
+def _set_kiosque_user():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 3001,
+            "Login": "kiosque_test",
+            "Nom": "Kiosque",
+            "ProfilCode": "KIOSQUE",
+            "ProfilLibelle": "Kiosque",
+            "IsAdmin": False,
+        },
+        permissions={"KIOSQUE_STOCKS", "KIOSQUE_VENTES"},
+    )
+
+
 def _make_article_with_stock(db_session, qte=0, libelle="Cahier test", pu=500):
+    _set_kiosque_user()
     article = Article(
         Libelle=libelle,
         PU=Decimal(str(pu)),

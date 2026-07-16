@@ -1,5 +1,6 @@
 from datetime import date
 
+from app.session import AppSession
 from services.versement_service import VersementService
 from tests.factories import (
     make_annee, make_niveau_classe, make_famille, make_eleve,
@@ -7,7 +8,22 @@ from tests.factories import (
 )
 
 
+def _set_versements_user():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 3000,
+            "Login": "caisse_test",
+            "Nom": "Caisse",
+            "ProfilCode": "CAISSE",
+            "ProfilLibelle": "Caisse",
+            "IsAdmin": False,
+        },
+        permissions={"SCOLARITE_VERSEMENTS"},
+    )
+
+
 def _setup_base(db_session, ens_cat_primaire=True, ebrie_abobote=False, nouveau=False, **ins_opts):
+    _set_versements_user()
     annee = make_annee(db_session)
     niveau, classe = make_niveau_classe(db_session, annee)
     famille = make_famille(db_session, ebrie_abobote=ebrie_abobote, ens_cat_primaire=ens_cat_primaire)

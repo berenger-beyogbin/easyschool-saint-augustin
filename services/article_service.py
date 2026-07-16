@@ -5,8 +5,13 @@ from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
 from app.database import get_session
+from app.session import AppSession
 
 class ArticleService:
+    @staticmethod
+    def _require_articles_permission() -> Tuple[bool, str]:
+        return AppSession.require_permission("KIOSQUE_ARTICLES")
+
     @staticmethod
     def get_all_articles() -> List[Article]:
         """Recupere tous les articles (simples et kits) tries par Libelle."""
@@ -80,6 +85,9 @@ class ArticleService:
             return False, "Le prix unitaire ne peut pas etre negatif."
         if seuil < 0:
             return False, "Le seuil d'alerte de stock ne peut pas etre negatif."
+        allowed, msg = ArticleService._require_articles_permission()
+        if not allowed:
+            return False, msg
 
         lib_clean = libelle.strip()
         session = get_session()
@@ -119,6 +127,9 @@ class ArticleService:
             return False, "Le prix unitaire du kit ne peut pas etre negatif."
         if seuil < 0:
             return False, "Le seuil d'alerte de stock ne peut pas etre negatif."
+        allowed, msg = ArticleService._require_articles_permission()
+        if not allowed:
+            return False, msg
 
         lib_clean = libelle.strip()
         session = get_session()
@@ -160,6 +171,9 @@ class ArticleService:
             return False, "Le prix unitaire ne peut pas etre negatif."
         if seuil < 0:
             return False, "Le seuil de stock ne peut pas etre negatif."
+        allowed, msg = ArticleService._require_articles_permission()
+        if not allowed:
+            return False, msg
 
         lib_clean = libelle.strip()
         session = get_session()
@@ -198,6 +212,10 @@ class ArticleService:
     @staticmethod
     def delete_article(id_art: int) -> Tuple[bool, str]:
         """Supprime un article s'il n'a pas de mouvements ni de stock courant positif."""
+        allowed, msg = ArticleService._require_articles_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             art = session.get(Article, id_art)

@@ -8,8 +8,13 @@ from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
 from models.annee_scolaire import TAnneeScolaire
 from app.database import get_session
+from app.session import AppSession
 
 class StockService:
+    @staticmethod
+    def _require_permission(code: str) -> Tuple[bool, str]:
+        return AppSession.require_permission(code)
+
     @staticmethod
     def _validate_open_school_year(session, id_annee: int) -> Tuple[bool, str]:
         """Bloque tout mouvement de stock si l'année est absente ou clôturée."""
@@ -52,6 +57,9 @@ class StockService:
         """Augmente le stock courant d'un article et enregistre l'entree."""
         if qte <= 0:
             return False, "La quantite de reapprovisionnement doit etre strictement positive."
+        allowed, msg = StockService._require_permission("KIOSQUE_STOCKS")
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:
@@ -95,6 +103,9 @@ class StockService:
             return False, "La quantite vendue doit etre strictement positive."
         if prix_vente < 0:
             return False, "Le prix de vente ne doit pas etre negatif."
+        allowed, msg = StockService._require_permission("KIOSQUE_VENTES")
+        if not allowed:
+            return False, msg
             
         session = get_session()
         try:

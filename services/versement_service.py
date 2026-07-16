@@ -13,8 +13,13 @@ from models.montant_cantine import MontantCantine
 from models.montant_autres_frais import MontantAutresFrais
 from models.versement_scol import VersementScol
 from app.database import get_session
+from app.session import AppSession
 
 class VersementService:
+    @staticmethod
+    def _require_versements_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_VERSEMENTS")
+
     @staticmethod
     def get_eleves_inscrits(id_annee: int) -> List[TInscription]:
         """Recupere les inscriptions actives pour une annee scolaire."""
@@ -248,6 +253,9 @@ class VersementService:
             return False, "Les montants verses ne peuvent pas être negatifs.", None
         if m_scol + m_trans + m_cant + m_autres == 0:
             return False, "Le total du versement doit être superieur a 0 FCFA.", None
+        allowed, msg = VersementService._require_versements_permission()
+        if not allowed:
+            return False, msg, None
 
         session = get_session()
         try:
@@ -308,6 +316,10 @@ class VersementService:
     @staticmethod
     def delete_versement(id_versement: int) -> tuple[bool, str]:
         """Supprime un versement existent."""
+        allowed, msg = VersementService._require_versements_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             v = session.get(VersementScol, id_versement)
