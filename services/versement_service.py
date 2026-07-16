@@ -276,6 +276,16 @@ class VersementService:
             if annee.Cloturer:
                 return False, "Impossible de versement : L'annee scolaire active est cloturee.", None
 
+            # Verrouille l'inscription de cet eleve pour cette annee : serialise les
+            # versements concurrents sur le meme eleve (deux caisses simultanees), pour
+            # qu'aucune des deux ne lise un "reste a payer" perime avant l'autre.
+            ins_lock = session.query(TInscription).filter(
+                TInscription.IDTAnneeScolaire == id_annee,
+                TInscription.IDEleve == id_eleve,
+            ).with_for_update().first()
+            if not ins_lock:
+                return False, "Inscription introuvable pour cet eleve sur cette annee.", None
+
             # Valider les plafonds de paiement par rapport aux restes a payer (sauf si restitution est coché)
             if not restitution:
                 fin = VersementService.get_infos_financieres_eleve(id_annee, id_eleve)

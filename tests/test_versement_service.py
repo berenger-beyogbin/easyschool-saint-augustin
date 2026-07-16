@@ -1,3 +1,4 @@
+import threading
 from datetime import date
 
 from services.versement_service import VersementService
@@ -217,3 +218,37 @@ def test_delete_versement_blocked_when_annee_cloturee(db_session):
     ok, msg = VersementService.delete_versement(new_id)
     assert ok is False
     assert "cloturee" in msg.lower()
+
+
+def test_create_versement_concurrent_never_exceeds_reste_a_payer(db_session):
+    """Deux encaissements concurrents de 60000 F chacun sur une scolarite due
+    a 100000 F ne doivent jamais tous les deux reussir (recette #5)."""
+    annee, niveau, classe, famille, eleve, ins = _setup_base(db_session)
+    id_annee = annee.IDTAnneeScolaire
+    id_eleve = eleve.IDEleve
+    id_famille = famille.IdTFamille
+
+    results = []
+    lock = threading.Lock()
+
+    def payer():
+        ok, msg, new_id = VersementService.create_versement(
+            id_annee, id_eleve, id_famille,
+            date.today(), m_scol=60000, m_trans=0, m_cant=0, m_autres=0,
+        )
+        with lock:
+            results.append(ok)
+
+    t1 = threading.Thread(target=payer)
+    t2 = threading.Thread(target=payer)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert results.count(True) == 1
+    assert results.count(False) == 1
+
+    fin = VersementService.get_infos_financieres_eleve(id_annee, id_eleve)
+    assert fin["scol_paye"] == 60000.0
+    assert fin["scol_reste"] == 40000.0
