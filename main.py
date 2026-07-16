@@ -1,7 +1,7 @@
 import sys
 import os
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtGui import QPalette, QColor
+from PySide6.QtGui import QPalette, QColor, QIcon
 
 # Configurer les chemins d'importation pour s'assurer qu'on charge
 # les modules du dossier courant sans conflit
@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from app.database import init_db, test_connection, create_tables
 from app.session import AppSession
-from app.styles import MESSAGEBOX_STYLE
+from app.styles import MESSAGEBOX_STYLE, install_messagebox_autostyle
 from views.main_window import MainWindow
 from views.login_dialog import LoginDialog
 
@@ -40,11 +40,20 @@ def main():
     # 1. Demarrage de l'interface graphique PySide6 (Application Qt) en premier
     app = QApplication(sys.argv)
 
+    # Icone de l'application (barre de titre des fenetres + barre des taches)
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+
     # Style Fusion + palette claire forcée (neutralise le mode sombre Windows)
     app.setStyle("Fusion")
     _apply_light_palette(app)
     # Style global pour les popups QMessageBox / QDialog (texte et boutons lisibles)
     app.setStyleSheet(MESSAGEBOX_STYLE)
+    # Garantit que CHAQUE QMessageBox (warning/information/critical/question)
+    # reçoit explicitement ce style sur l'instance, même quand la vue parente
+    # a son propre setStyleSheet qui masquerait sinon le style applicatif.
+    install_messagebox_autostyle()
     
     # 2. Tentative de connexion PostgreSQL et creation des tables
     try:

@@ -67,9 +67,16 @@ desktop.ini
 
 # === PYINSTALLER ===
 *.spec
+!packaging/easy_school.spec
 
 # === ASSETS GÉNÉRÉS ===
 assets/photos_eleves/
 assets/logos/
 !assets/logos/.gitkeep
 !assets/photos_eleves/.gitkeep
+
+# === INSTALLATEUR WINDOWS (packaging/) ===
+# Installeur PostgreSQL embarqué (~350 Mo) : jamais commité, a recuperer/copier
+# manuellement dans packaging/vendor/ avant de compiler l'installateur.
+packaging/vendor/
+packaging/Output/
