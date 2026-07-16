@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Numeric, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, Numeric, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -10,6 +10,8 @@ class MontantScol(Base):
 
     __table_args__ = (
         UniqueConstraint("IDTAnneeScolaire", "IDNiveau", name="uq_montant_scol_annee_niveau"),
+        CheckConstraint("\"MontantNonAffecte\" >= 0", name="ck_montant_scol_non_affecte_positif"),
+        CheckConstraint("\"MontantAffecte\" >= 0", name="ck_montant_scol_affecte_positif"),
     )
 
     IDMontantScol = Column(Integer, primary_key=True, autoincrement=True)

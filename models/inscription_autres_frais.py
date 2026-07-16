@@ -1,5 +1,5 @@
 from datetime import date
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, Date, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, Date, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -11,6 +11,7 @@ class InscriptionAutresFrais(Base):
 
     __table_args__ = (
         UniqueConstraint("IDTInscription", "IDAutres_Frais", name="uq_inscription_autres_frais_unique"),
+        CheckConstraint("\"MontantApplique\" >= 0", name="ck_inscription_autres_frais_montant_positif"),
     )
 
     IDInscriptionAutresFrais = Column(Integer, primary_key=True, autoincrement=True)

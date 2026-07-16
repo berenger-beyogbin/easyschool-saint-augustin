@@ -158,3 +158,46 @@ def create_tables():
             print("Mise a jour de table 'MontantScol' (tarifs Non affecte/Affecte) terminee avec succes.")
     except Exception as e:
         print(f"Avertissement migration 'MontantScol' (tarifs affectation) : {e}")
+
+    # Contraintes d'integrite financiere : ajoutees ici pour les bases deja
+    # initialisees avant leur introduction dans les modeles (create_all ne les
+    # ajoute que sur les tables neuves). Ajout idempotent via verification de
+    # pg_constraint pour ne pas echouer si deja presentes.
+    integrity_constraints = [
+        ('uq_versement_autres_frais_inscription',
+         'ALTER TABLE "VersementAutresFrais" ADD CONSTRAINT uq_versement_autres_frais_inscription '
+         'UNIQUE ("IDInscriptionAutresFrais")'),
+        ('ck_versement_scol_trans_positif',
+         'ALTER TABLE "VersementScol" ADD CONSTRAINT ck_versement_scol_trans_positif '
+         'CHECK ("MontantVersTrans" >= 0)'),
+        ('ck_versement_scol_sco_positif',
+         'ALTER TABLE "VersementScol" ADD CONSTRAINT ck_versement_scol_sco_positif '
+         'CHECK ("MontantVersSco" >= 0)'),
+        ('ck_versement_scol_cantine_positif',
+         'ALTER TABLE "VersementScol" ADD CONSTRAINT ck_versement_scol_cantine_positif '
+         'CHECK ("MontantCantine" >= 0)'),
+        ('ck_versement_scol_autres_positif',
+         'ALTER TABLE "VersementScol" ADD CONSTRAINT ck_versement_scol_autres_positif '
+         'CHECK ("MontantVersAutres" >= 0)'),
+        ('ck_inscription_autres_frais_montant_positif',
+         'ALTER TABLE "InscriptionAutresFrais" ADD CONSTRAINT ck_inscription_autres_frais_montant_positif '
+         'CHECK ("MontantApplique" >= 0)'),
+        ('ck_montant_scol_non_affecte_positif',
+         'ALTER TABLE "MontantScol" ADD CONSTRAINT ck_montant_scol_non_affecte_positif '
+         'CHECK ("MontantNonAffecte" >= 0)'),
+        ('ck_montant_scol_affecte_positif',
+         'ALTER TABLE "MontantScol" ADD CONSTRAINT ck_montant_scol_affecte_positif '
+         'CHECK ("MontantAffecte" >= 0)'),
+    ]
+    try:
+        with _engine.begin() as conn:
+            for constraint_name, ddl in integrity_constraints:
+                exists = conn.execute(
+                    text("SELECT 1 FROM pg_constraint WHERE conname = :name"),
+                    {"name": constraint_name},
+                ).first()
+                if not exists:
+                    conn.execute(text(ddl))
+            print("Contraintes d'integrite financiere verifiees/ajoutees avec succes.")
+    except Exception as e:
+        print(f"Avertissement migration contraintes d'integrite : {e}")

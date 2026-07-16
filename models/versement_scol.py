@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Numeric, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Date, Numeric, Boolean, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -8,6 +8,13 @@ class VersementScol(Base):
     Mappe de la table HFSQL 'VersementScol'.
     """
     __tablename__ = "VersementScol"
+
+    __table_args__ = (
+        CheckConstraint("\"MontantVersTrans\" >= 0", name="ck_versement_scol_trans_positif"),
+        CheckConstraint("\"MontantVersSco\" >= 0", name="ck_versement_scol_sco_positif"),
+        CheckConstraint("\"MontantCantine\" >= 0", name="ck_versement_scol_cantine_positif"),
+        CheckConstraint("\"MontantVersAutres\" >= 0", name="ck_versement_scol_autres_positif"),
+    )
 
     IDVersementScol = Column(Integer, primary_key=True, autoincrement=True)
     IDFamille = Column(Integer, ForeignKey("TFamille.IdTFamille", ondelete="CASCADE"), nullable=False)
