@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
 from app.database import get_session
+from app.session import AppSession
 from models.prestataire import Prestataire
 from models.prestation_annexe import PrestationAnnexe
 
@@ -31,6 +32,10 @@ class PrestationService:
 
     @staticmethod
     def create_prestataire(nom: str, contact: str = None, telephone: str = None, email: str = None) -> tuple[bool, str]:
+        allowed, msg = AppSession.require_permission("PRESTATIONS_MODIFIER")
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             nom = nom.strip()
@@ -48,6 +53,10 @@ class PrestationService:
 
     @staticmethod
     def update_prestataire(id_prestataire: int, data: Dict[str, Any]) -> tuple[bool, str]:
+        allowed, msg = AppSession.require_permission("PRESTATIONS_MODIFIER")
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             p = session.get(Prestataire, id_prestataire)
@@ -101,6 +110,10 @@ class PrestationService:
 
     @staticmethod
     def create_prestation(data: Dict[str, Any]) -> tuple[bool, str]:
+        allowed, msg = AppSession.require_permission("PRESTATIONS_MODIFIER")
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             code = data.get("Code", "").strip().upper()
@@ -132,6 +145,10 @@ class PrestationService:
 
     @staticmethod
     def update_prestation(id_prestation: int, data: Dict[str, Any]) -> tuple[bool, str]:
+        allowed, msg = AppSession.require_permission("PRESTATIONS_MODIFIER")
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             p = session.get(PrestationAnnexe, id_prestation)
@@ -169,6 +186,10 @@ class PrestationService:
 
     @staticmethod
     def toggle_active(id_prestation: int) -> tuple[bool, str]:
+        allowed, msg = AppSession.require_permission("PRESTATIONS_MODIFIER")
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             p = session.get(PrestationAnnexe, id_prestation)

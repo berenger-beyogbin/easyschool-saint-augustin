@@ -1,6 +1,7 @@
 from typing import List
 from models.nationalite import TNationalite
 from app.database import get_session
+from app.session import AppSession
 
 class NationaliteService:
     @staticmethod
@@ -18,6 +19,10 @@ class NationaliteService:
     @staticmethod
     def add_nationalite(libelle: str) -> tuple[bool, str]:
         """Cree une nouvelle nationalite (insensible a la casse et aux espaces)."""
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         if not libelle:
             return False, "Le libelle de la nationalite est obligatoire."
 
@@ -44,6 +49,10 @@ class NationaliteService:
     @staticmethod
     def delete_nationalite(id_nat: int) -> tuple[bool, str]:
         """Supprime une nationalite."""
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             nat = session.get(TNationalite, id_nat)

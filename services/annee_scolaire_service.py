@@ -18,6 +18,11 @@ class AnneeScolaireService:
     @staticmethod
     def add_annee(libelle: str) -> tuple[bool, str]:
         """Cree une nouvelle annee scolaire. Format attendu : YYYY-YYYY (ex: 2026-2027) et Y2 = Y1 + 1."""
+        from app.session import AppSession
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         import re
         match = re.match(r"^(\d{4})-(\d{4})$", libelle)
         if not match:
@@ -49,6 +54,10 @@ class AnneeScolaireService:
     def cloturer_annee(id_annee: int) -> bool:
         """Cloture une annee scolaire. Une annee cloturee ne peut plus etre modifiee."""
         from app.session import AppSession
+        allowed, _ = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False
+
         session = get_session()
         try:
             annee = session.get(TAnneeScolaire, id_annee)

@@ -68,6 +68,25 @@ class AppSession:
         return code in cls._current_user_permissions
 
     @classmethod
+    def require_permission(cls, code: str) -> tuple[bool, str]:
+        """Valide une permission avant une action métier sensible."""
+        if cls.has_permission(code):
+            return True, ""
+        return False, f"Accès refusé : droit requis '{code}'."
+
+    @classmethod
+    def clear_current_user(cls):
+        """Réinitialise l'utilisateur courant (utile après déconnexion ou en tests)."""
+        cls._current_user_id = None
+        cls._current_user_login = None
+        cls._current_user_nom = None
+        cls._current_user_profil_code = None
+        cls._current_user_profil_libelle = None
+        cls._current_user_is_admin = False
+        cls._current_user_permissions = set()
+        cls._current_user_imprimante = None
+
+    @classmethod
     def get_logged_in_username(cls) -> str:
         """Retourne le nom de l'utilisateur connecté (compatibilité auditabilité)."""
         return cls._current_user_nom or cls._current_user_login or "Système"

@@ -50,6 +50,13 @@ class StatistiquesView(QWidget):
         self.tabs.addTab(self.view_prestataires, "Prestataires")
         self.tabs.addTab(self.view_alphabetique, "Liste Alphabétique")
 
+        from app.session import AppSession
+        self.tabs.setTabVisible(
+            7,
+            AppSession.has_permission("PRESTATIONS_VIEW")
+            or AppSession.has_permission("PRESTATIONS_MODIFIER")
+        )
+
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
 

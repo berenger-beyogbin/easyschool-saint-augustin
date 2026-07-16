@@ -54,6 +54,10 @@ class ClasseService:
     @staticmethod
     def add_classe(lib_classe: str, sigle: str, id_cycle: int, id_niveau: int, capacite: int) -> tuple[bool, str]:
         """Cree une nouvelle classe d'eleves."""
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         if not lib_classe or not id_niveau:
             return False, "Le libelle de la classe et le niveau sont obligatoires."
 
@@ -96,6 +100,10 @@ class ClasseService:
     @staticmethod
     def delete_classe(id_classe: int) -> tuple[bool, str]:
         """Supprime une classe d'eleves."""
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         from models.inscription import TInscription
 
         session = get_session()

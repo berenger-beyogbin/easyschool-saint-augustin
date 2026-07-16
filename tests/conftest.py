@@ -35,6 +35,12 @@ def _test_database():
 def _clean_tables():
     """Vide les tables entre chaque test pour eviter les effets de bord."""
     yield
+    from app.session import AppSession
+    AppSession.clear_current_user()
+    AppSession._active_annee_id = None
+    AppSession._active_annee_libelle = None
+    AppSession._active_etab_id = None
+
     session = get_session()
     try:
         for table in reversed(Base.metadata.sorted_tables):

@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from app.session import AppSession
 from models.classe import TClasse
 from models.inscription import TInscription
 from models.versement_scol import VersementScol
@@ -45,9 +46,24 @@ def _setup_versement(db_session):
     return annee, niveau, classe, famille, eleve, inscription, versement_id
 
 
+def _set_param_modifier_user():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 2000,
+            "Login": "param_admin",
+            "Nom": "Param",
+            "ProfilCode": "PARAM",
+            "ProfilLibelle": "Parametres",
+            "IsAdmin": False,
+        },
+        permissions={"PARAMETRES_MODIFIER"},
+    )
+
+
 def test_delete_classe_with_inscriptions_is_refused_and_preserves_history(db_session):
     """Une classe contenant des inscriptions ne doit jamais être supprimée en cascade."""
     annee, niveau, classe, famille, eleve, inscription = _setup_inscription(db_session)
+    _set_param_modifier_user()
 
     ok, msg = ClasseService.delete_classe(classe.IDTClasse)
 

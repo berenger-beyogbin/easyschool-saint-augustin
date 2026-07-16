@@ -52,6 +52,11 @@ class NiveauService:
     @staticmethod
     def add_niveau(libelle: str, id_cycle: int) -> tuple[bool, str]:
         """Cree un nouveau niveau scolaire associe a un cycle."""
+        from app.session import AppSession
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         if not libelle or not id_cycle:
             return False, "Le libelle du niveau et le cycle sont obligatoires."
             
@@ -90,6 +95,11 @@ class NiveauService:
     @staticmethod
     def delete_niveau(id_niveau: int) -> tuple[bool, str]:
         """Supprime un niveau."""
+        from app.session import AppSession
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         from models.classe import TClasse
         session = get_session()
         try:

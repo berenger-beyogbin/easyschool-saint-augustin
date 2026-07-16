@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from models.etablissement import EtablissementEcole
 from app.database import get_session
+from app.session import AppSession
 
 class EtablissementService:
     @staticmethod
@@ -41,6 +42,10 @@ class EtablissementService:
     @staticmethod
     def save_etablissement(data: dict) -> bool:
         """Met a jour ou cree l'etablissement."""
+        allowed, _ = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False
+
         session = get_session()
         try:
             ecole = session.query(EtablissementEcole).first()

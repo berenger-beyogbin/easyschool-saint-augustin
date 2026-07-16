@@ -24,6 +24,10 @@ class CycleService:
     @staticmethod
     def add_cycle(libelle: str) -> tuple[bool, str]:
         """Cree un nouveau cycle scolaire."""
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         if not libelle:
             return False, "Le libelle du cycle est obligatoire."
 
@@ -59,6 +63,10 @@ class CycleService:
     @staticmethod
     def delete_cycle(id_cycle: int) -> tuple[bool, str]:
         """Supprime un cycle scolaire."""
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         from models.niveau import TNiveau
         from models.classe import TClasse
         session = get_session()

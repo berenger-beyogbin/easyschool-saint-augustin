@@ -35,6 +35,8 @@ class PrestationConfigView(QWidget):
         super().__init__()
         self.main_window = main_window
         self.selected_prestation_id = None
+        from app.session import AppSession
+        self.can_modify = AppSession.has_permission("PRESTATIONS_MODIFIER")
         self.setStyleSheet(f"background-color: {COLORS['bg']};")
         self.init_ui()
 
@@ -94,6 +96,7 @@ class PrestationConfigView(QWidget):
         self.btn_nouveau.setStyleSheet(BUTTON_PRIMARY)
         self.btn_nouveau.setFixedHeight(34)
         self.btn_nouveau.setCursor(Qt.PointingHandCursor)
+        self.btn_nouveau.setEnabled(self.can_modify)
         self.btn_nouveau.clicked.connect(self._on_nouveau)
         header.addWidget(self.btn_nouveau)
         layout.addLayout(header)
@@ -220,6 +223,7 @@ class PrestationConfigView(QWidget):
         self.btn_save.setStyleSheet(BUTTON_SUCCESS)
         self.btn_save.setFixedHeight(36)
         self.btn_save.setCursor(Qt.PointingHandCursor)
+        self.btn_save.setEnabled(self.can_modify)
         self.btn_save.clicked.connect(self._on_save)
 
         self.btn_cancel = QPushButton("Annuler")
@@ -248,15 +252,20 @@ class PrestationConfigView(QWidget):
         self.txt_new_prestataire.setStyleSheet(INPUT_STYLE)
         self.txt_new_prestataire.setFixedHeight(32)
         self.txt_new_prestataire.setPlaceholderText("Nom du prestataire…")
+        self.txt_new_prestataire.setEnabled(self.can_modify)
         prest_row.addWidget(self.txt_new_prestataire, 1)
 
-        btn_add_prest = QPushButton("Ajouter")
-        btn_add_prest.setStyleSheet(BUTTON_PRIMARY)
-        btn_add_prest.setFixedHeight(32)
-        btn_add_prest.setCursor(Qt.PointingHandCursor)
-        btn_add_prest.clicked.connect(self._on_add_prestataire)
-        prest_row.addWidget(btn_add_prest)
+        self.btn_add_prest = QPushButton("Ajouter")
+        self.btn_add_prest.setStyleSheet(BUTTON_PRIMARY)
+        self.btn_add_prest.setFixedHeight(32)
+        self.btn_add_prest.setCursor(Qt.PointingHandCursor)
+        self.btn_add_prest.setEnabled(self.can_modify)
+        self.btn_add_prest.clicked.connect(self._on_add_prestataire)
+        prest_row.addWidget(self.btn_add_prest)
         layout.addLayout(prest_row)
+
+        for field in (self.txt_code, self.txt_libelle, self.txt_montant, self.cmb_prestataire):
+            field.setEnabled(self.can_modify)
 
         return card
 
@@ -314,7 +323,7 @@ class PrestationConfigView(QWidget):
         if not id_item:
             return
         self.selected_prestation_id = int(id_item.text())
-        self.btn_toggle.setEnabled(True)
+        self.btn_toggle.setEnabled(self.can_modify)
         self._populate_form(self.selected_prestation_id)
 
     def _populate_form(self, id_prestation: int):
@@ -345,6 +354,10 @@ class PrestationConfigView(QWidget):
         self.txt_code.setFocus()
 
     def _on_save(self):
+        if not self.can_modify:
+            show_error(self, "Accès refusé", "Vous n'avez pas le droit PRESTATIONS_MODIFIER.")
+            return
+
         data = {
             "Code": self.txt_code.text().strip().upper(),
             "Libelle": self.txt_libelle.text().strip(),
@@ -371,6 +384,9 @@ class PrestationConfigView(QWidget):
             show_error(self, "Erreur", msg)
 
     def _on_toggle(self):
+        if not self.can_modify:
+            show_error(self, "Accès refusé", "Vous n'avez pas le droit PRESTATIONS_MODIFIER.")
+            return
         if not self.selected_prestation_id:
             return
         ok, msg = PrestationService.toggle_active(self.selected_prestation_id)
@@ -380,6 +396,9 @@ class PrestationConfigView(QWidget):
             show_error(self, "Erreur", msg)
 
     def _on_add_prestataire(self):
+        if not self.can_modify:
+            show_error(self, "Accès refusé", "Vous n'avez pas le droit PRESTATIONS_MODIFIER.")
+            return
         nom = self.txt_new_prestataire.text().strip()
         if not nom:
             show_error(self, "Erreur", "Saisissez un nom de prestataire.")

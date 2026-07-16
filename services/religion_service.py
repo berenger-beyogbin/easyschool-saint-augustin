@@ -1,6 +1,7 @@
 from typing import List
 from models.religion import TReligion
 from app.database import get_session
+from app.session import AppSession
 
 class ReligionService:
     @staticmethod
@@ -18,6 +19,10 @@ class ReligionService:
     @staticmethod
     def add_religion(libelle: str) -> tuple[bool, str]:
         """Cree une nouvelle religion (insensible a la casse et aux espaces)."""
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         if not libelle:
             return False, "Le libelle de la religion est obligatoire."
 
@@ -44,6 +49,10 @@ class ReligionService:
     @staticmethod
     def delete_religion(id_rel: int) -> tuple[bool, str]:
         """Supprime une religion."""
+        allowed, msg = AppSession.require_permission("PARAMETRES_MODIFIER")
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             rel = session.get(TReligion, id_rel)
