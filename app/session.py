@@ -1,4 +1,3 @@
-import os
 from models.etablissement import EtablissementEcole
 from models.annee_scolaire import TAnneeScolaire
 from app.database import get_session

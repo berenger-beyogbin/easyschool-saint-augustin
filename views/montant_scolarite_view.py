@@ -7,8 +7,8 @@ from services.niveau_service import NiveauService
 from services.montant_scolarite_service import MontantScolariteService
 from app.session import AppSession
 from app.styles import (
-    COLORS, INPUT_STYLE, TABLE_STYLE, SECTION_TITLE_STYLE,
-    BUTTON_PRIMARY, BUTTON_SECONDARY, GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE,
+    COLORS, INPUT_STYLE, SECTION_TITLE_STYLE,
+    BUTTON_PRIMARY, GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE,
     apply_table_style
 )
 

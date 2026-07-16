@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFrame
+    QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QFrame
 )
 from PySide6.QtCore import Qt
 from app.styles import COLORS

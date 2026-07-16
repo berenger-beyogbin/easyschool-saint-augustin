@@ -1,4 +1,3 @@
-from sqlalchemy.orm import Session
 from models.etablissement import EtablissementEcole
 from app.database import get_session
 

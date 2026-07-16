@@ -45,7 +45,16 @@ Statut de chaque item : `[ ]` a faire, `[~]` en cours, `[x]` fait.
   Le job `ruff check .` de la CI échouera tant que C5 n'est pas fait (137 erreurs connues) — enchaîné juste après dans cette même session.
 - [ ] **C3** — Logging structuré : remplacer les ~173 `except Exception` / ~99 `print()` / 2 `except:` nus par un logging avec identifiant d'incident et message utilisateur neutre.
 - [ ] **C4** — Sauvegardes automatiques (quotidiennes, chiffrées, rotation) + restauration testée mensuellement.
-- [ ] **C5** — Nettoyage des 137 erreurs Ruff (89 imports inutilisés, 17 comparaisons booléennes non idiomatiques, 8 noms non définis, 6 noms ambigus, 5 instructions multi-lignes, 2 `except:` nus, 2 variables inutilisées — décompte confirmé via `ruff check . --statistics`).
+- [x] **C5** — `ruff check .` passe intégralement (0 erreur). Détail :
+  - F401 (imports inutilisés, ~117 au moment du nettoyage) : auto-fix (`ruff --fix`).
+  - F541 (f-strings sans placeholder) : auto-fix.
+  - F821 (4, `app/styles.py`) : réels — annotations de retour en chaîne (`-> "QLabel"`) référençant des classes jamais importées au niveau module (import local dans le corps de fonction). Corrigé avec un bloc `TYPE_CHECKING`, sans changer le comportement runtime.
+  - E711/E712 (23) : **tous des faux positifs** — comparaisons `Colonne == True/False/None` dans des `.filter()` SQLAlchemy, où `==`/`!=` est la syntaxe correcte (construit `IS NULL`/`WHERE col = true`) ; la correction suggérée par Ruff (`is`/`not`) casserait silencieusement les requêtes. Réglé par une exclusion documentée dans `pyproject.toml`, pas par une correction ligne à ligne.
+  - E741 (6, variable `l` ambiguë) : renommée en `ligne` dans `inscription_autres_frais_service.py` et `versement_service.py`.
+  - E702 (5, `main_window.py`) : instructions séparées sur des lignes distinctes.
+  - E402 (2) : import déplacé en haut de fichier (`eleve_form_view.py`), import dupliqué en fin de fichier supprimé (`article_list_view.py`, `QDialog` était déjà importé correctement, l'import du bas était mort).
+  - E722 (1, `approvisionnement_view.py`) : `except:` → `except Exception:`.
+  Vérifié : 134 fichiers compilent, 52/52 tests passent après chaque étape.
 - [ ] **C6** — Signature de code et versionnement de l'exécutable PyInstaller.
 
 ## Phase D — Refactorisation et évolutivité

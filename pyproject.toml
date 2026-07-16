@@ -11,7 +11,20 @@ exclude = ["venv", "build", "dist", "backup_installed_exe_*"]
 # Selection volontairement restreinte au demarrage : erreurs reelles (F) et
 # style pycodestyle (E) hors longueur de ligne (deja geree par line-length).
 select = ["E", "F"]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    # E711/E712 : dans ce projet, tous les cas detectes sont des comparaisons
+    # SQLAlchemy (Colonne == True/False/None) a l'interieur de .filter(...),
+    # pas des booleens Python ordinaires. SQLAlchemy surcharge == pour
+    # construire l'expression SQL (WHERE col = true / IS NULL) ; la
+    # correction suggeree par ruff (`not Colonne`, `Colonne is None`) casse
+    # silencieusement la requete (ne produit plus une expression SQL du
+    # tout). Verifie manuellement (chantier C5, audit 2026-07) : les 23
+    # occurrences existantes sont toutes dans services/*.py a l'interieur
+    # d'un .filter()/.query() SQLAlchemy.
+    "E711",
+    "E712",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

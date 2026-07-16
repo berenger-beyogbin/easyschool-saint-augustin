@@ -1,17 +1,15 @@
 import datetime
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Tuple
 from decimal import Decimal
 from sqlalchemy import func, case
 from sqlalchemy.orm import joinedload
 from app.database import get_session
 from app.session import AppSession
 from models.compte import Compte
-from models.type_sortie import TypeSortie
 from models.sortie_fin import SortieFin
 from models.annee_scolaire import TAnneeScolaire
 from models.versement_scol import VersementScol
 from models.stock_sortie import StockSortie
-from services.compte_service import SYSCOA_INCOME_ACCOUNTS
 
 # Correspondance NumCompte SYSCOA → clé rubrique dans get_totaux_entrees_rubriques
 _SYSCOA_RUBRIQUE = {

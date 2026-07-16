@@ -1,7 +1,6 @@
 from typing import List, Optional, Tuple
 from app.database import get_session
 from models.type_sortie import TypeSortie
-from models.sortie_fin import SortieFin
 
 class TypeSortieService:
     @staticmethod

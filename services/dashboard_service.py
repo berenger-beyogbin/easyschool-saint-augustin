@@ -5,7 +5,6 @@ from sqlalchemy.orm import joinedload
 from app.database import get_session
 from app.session import AppSession
 from models.inscription import TInscription
-from models.eleve import Eleve
 from models.famille import TFamille
 from models.classe import TClasse
 from models.versement_scol import VersementScol

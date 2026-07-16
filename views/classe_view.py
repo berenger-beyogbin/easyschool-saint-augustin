@@ -3,13 +3,10 @@ from PySide6.QtWidgets import (
     QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QHeaderView, QSpinBox, QFrame
 )
-from PySide6.QtCore import Qt
 from services.classe_service import ClasseService
 from services.niveau_service import NiveauService
 from app.styles import (
-    COLORS, INPUT_STYLE, COMBO_STYLE, TABLE_STYLE,
-    BUTTON_PRIMARY, BUTTON_SUCCESS, BUTTON_SECONDARY, BUTTON_DANGER,
-    PAGE_TITLE_STYLE, apply_table_style,
+    COLORS, INPUT_STYLE, COMBO_STYLE, BUTTON_PRIMARY, BUTTON_SECONDARY, PAGE_TITLE_STYLE, apply_table_style,
     configure_table_action_button, make_table_action_container
 )
 

@@ -132,7 +132,7 @@ class FamilleService:
                 TFamille.IdTFamille != id_famille
             ).first()
             if doublon:
-                return False, f"Une autre famille possède déjà ce couple Responsable / Téléphone."
+                return False, "Une autre famille possède déjà ce couple Responsable / Téléphone."
 
             # Mise à jour des valeurs
             famille.NomResponsable = nom_resp

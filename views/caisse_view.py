@@ -11,8 +11,7 @@ from app.session import AppSession
 from app.config import Config
 from utils.receipt_printer import ReceiptPrinter
 from app.styles import (
-    COLORS, INPUT_STYLE, DATE_STYLE, BUTTON_SUCCESS,
-    BUTTON_SECONDARY, TABLE_STYLE, apply_card_shadow, format_fcfa
+    COLORS, INPUT_STYLE, DATE_STYLE, BUTTON_SECONDARY, TABLE_STYLE, apply_card_shadow, format_fcfa
 )
 from views.ui_components import FinancialSection, FinancialRow, make_separator
 

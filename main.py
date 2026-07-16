@@ -66,7 +66,6 @@ def main():
         # 3. Seeding du référentiel utilisateurs (idempotent)
         from services.permission_service import PermissionService
         from services.profil_service import ProfilService
-        from services.utilisateur_service import UtilisateurService
         from services.compte_service import CompteService
         PermissionService.seed_permissions()
         ProfilService.seed_default_profiles()

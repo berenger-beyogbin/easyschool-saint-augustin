@@ -8,16 +8,13 @@ from PySide6.QtCore import Qt
 
 from app.styles import (
     COLORS,
-    SECTION_TITLE_STYLE, CARD_STYLE, SECTION_CARD_STYLE,
+    CARD_STYLE, SECTION_CARD_STYLE,
     SECTION_HEADER_STYLE, FORM_SECTION_STYLE, MODULE_HEADER_STYLE,
-    BUTTON_PRIMARY, BUTTON_SUCCESS, BUTTON_SECONDARY, BUTTON_DANGER,
     BADGE_SUCCESS, BADGE_WARNING, BADGE_DANGER, BADGE_INFO,
     SECTION_LABEL_STYLE, INFO_LABEL_STYLE, MUTED_LABEL_STYLE,
-    VALUE_LABEL_STYLE, LABEL_STYLE, MESSAGEBOX_STYLE, INPUT_STYLE,
+    LABEL_STYLE, MESSAGEBOX_STYLE, INPUT_STYLE,
     apply_card_shadow, configure_button,
-    configure_table_action_button, make_table_action_container,
-    configure_compact_input, configure_search_input,
-    make_field_label, format_fcfa,
+    configure_search_input,
 )
 
 

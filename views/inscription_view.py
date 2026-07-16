@@ -356,8 +356,8 @@ class InscriptionView(QWidget):
         self.btn_lier_eleve = QPushButton("+ Lier un élève existant sans famille")
         self.btn_lier_eleve.setEnabled(False)
         self.btn_lier_eleve.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_lier_eleve.setStyleSheet(f"""
-            QPushButton {{
+        self.btn_lier_eleve.setStyleSheet("""
+            QPushButton {
                 background-color: transparent;
                 color: #2563EB;
                 border: 1px dashed #93C5FD;
@@ -365,9 +365,9 @@ class InscriptionView(QWidget):
                 font-size: 12px;
                 font-weight: 600;
                 padding: 6px 12px;
-            }}
-            QPushButton:hover {{ background-color: #EFF6FF; border-color: #2563EB; }}
-            QPushButton:disabled {{ color: #CBD5E1; border-color: #E2E8F0; }}
+            }
+            QPushButton:hover { background-color: #EFF6FF; border-color: #2563EB; }
+            QPushButton:disabled { color: #CBD5E1; border-color: #E2E8F0; }
         """)
         self.btn_lier_eleve.clicked.connect(self.on_lier_eleve)
         c2.addWidget(self.btn_lier_eleve)

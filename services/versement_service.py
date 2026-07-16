@@ -4,8 +4,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from models.inscription import TInscription
 from models.eleve import Eleve
-from models.famille import TFamille
-from models.classe import TClasse
 from models.annee_scolaire import TAnneeScolaire
 from models.montant_scol import MontantScol
 from models.montant_transport import MontantTransport
@@ -170,7 +168,7 @@ class VersementService:
             ).all()
             if lignes_autres:
                 # Frais annexes coches individuellement a l'inscription : montants figes
-                res["autres_due"] = sum(float(l.MontantApplique) for l in lignes_autres)
+                res["autres_due"] = sum(float(ligne.MontantApplique) for ligne in lignes_autres)
             elif ins.AutresFrais:
                 # Fallback legacy (anciennes inscriptions sans lignes InscriptionAutresFrais) :
                 # somme de tous les autres frais configures pour ce niveau
@@ -307,7 +305,7 @@ class VersementService:
                 lignes_autres_frais = session.query(InscriptionAutresFrais).filter(
                     InscriptionAutresFrais.IDInscriptionAutresFrais.in_(ids_autres_frais)
                 ).all()
-                ids_trouves = {l.IDInscriptionAutresFrais for l in lignes_autres_frais}
+                ids_trouves = {ligne.IDInscriptionAutresFrais for ligne in lignes_autres_frais}
                 ids_invalides = set(ids_autres_frais) - ids_trouves
                 if ids_invalides:
                     return False, f"Frais annexe(s) introuvable(s) : {sorted(ids_invalides)}.", None
@@ -318,7 +316,7 @@ class VersementService:
                 if deja_regles:
                     return False, "Un ou plusieurs frais annexes selectionnes ont deja ete regles par un autre versement.", None
 
-                total_frais = sum(float(l.MontantApplique) for l in lignes_autres_frais)
+                total_frais = sum(float(ligne.MontantApplique) for ligne in lignes_autres_frais)
                 if abs(total_frais - m_autres) > 0.01:
                     return False, "Le montant des autres frais ne correspond pas aux frais annexes selectionnes.", None
 

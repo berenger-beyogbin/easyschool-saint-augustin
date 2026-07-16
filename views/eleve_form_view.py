@@ -12,11 +12,11 @@ from services.famille_service import FamilleService
 from datetime import date
 import os
 import pathlib
-_ASSETS = str(pathlib.Path(__file__).parent.parent / "assets").replace("\\", "/")
 from app.styles import (
-    COLORS, GROUPBOX_ACCENT_STYLE, INPUT_STYLE, COMBO_STYLE, DATE_STYLE,
-    BUTTON_PRIMARY, BUTTON_SECONDARY, apply_modal_style
+    COLORS, apply_modal_style
 )
+
+_ASSETS = str(pathlib.Path(__file__).parent.parent / "assets").replace("\\", "/")
 
 # ---------------------------------------------------------------------------
 # Styles locaux — design premium pour EleveFormView

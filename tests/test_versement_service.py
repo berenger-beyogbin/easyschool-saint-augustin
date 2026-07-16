@@ -5,8 +5,7 @@ from services.versement_service import VersementService
 from services.inscription_autres_frais_service import InscriptionAutresFraisService
 from tests.factories import (
     make_annee, make_niveau_classe, make_famille, make_eleve,
-    make_inscription, make_montant_scol, make_montant_transport, make_montant_cantine,
-    make_inscription_autres_frais,
+    make_inscription, make_montant_scol, make_inscription_autres_frais,
 )
 
 

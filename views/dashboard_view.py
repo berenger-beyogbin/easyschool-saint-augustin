@@ -3,17 +3,17 @@ from datetime import date
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QScrollArea,
     QPushButton, QTableWidget, QTableWidgetItem,
-    QAbstractItemView, QHeaderView, QSizePolicy,
+    QAbstractItemView, QHeaderView,
 )
 from PySide6.QtCore import Qt
 
 from app.config import Config
 from app.session import AppSession
 from app.styles import (
-    COLORS, BUTTON_PRIMARY, BUTTON_SECONDARY, apply_table_style, apply_card_shadow
+    COLORS, BUTTON_PRIMARY, apply_card_shadow
 )
 from services.dashboard_service import DashboardService
-from views.ui_components import KpiCard, FinancialSection, make_separator
+from views.ui_components import KpiCard, make_separator
 
 
 class DashboardView(QWidget):

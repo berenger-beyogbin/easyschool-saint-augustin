@@ -29,17 +29,17 @@ class InscriptionAutresFraisService:
 
             return [
                 {
-                    "IDInscriptionAutresFrais": l.IDInscriptionAutresFrais,
-                    "IDTInscription": l.IDTInscription,
-                    "IDAutres_Frais": l.IDAutres_Frais,
-                    "CodeFraisSnapshot": l.CodeFraisSnapshot,
-                    "LibelleSnapshot": l.LibelleSnapshot,
-                    "MontantApplique": l.MontantApplique,
-                    "Obligatoire": l.Obligatoire,
-                    "DateCreation": l.DateCreation,
-                    "Login": l.Login,
+                    "IDInscriptionAutresFrais": ligne.IDInscriptionAutresFrais,
+                    "IDTInscription": ligne.IDTInscription,
+                    "IDAutres_Frais": ligne.IDAutres_Frais,
+                    "CodeFraisSnapshot": ligne.CodeFraisSnapshot,
+                    "LibelleSnapshot": ligne.LibelleSnapshot,
+                    "MontantApplique": ligne.MontantApplique,
+                    "Obligatoire": ligne.Obligatoire,
+                    "DateCreation": ligne.DateCreation,
+                    "Login": ligne.Login,
                 }
-                for l in lignes
+                for ligne in lignes
             ]
         except Exception as e:
             print(f"Erreur get_frais_coches InscriptionAutresFrais : {e}")
@@ -66,17 +66,17 @@ class InscriptionAutresFraisService:
 
             return [
                 {
-                    "IDInscriptionAutresFrais": l.IDInscriptionAutresFrais,
-                    "IDTInscription": l.IDTInscription,
-                    "IDAutres_Frais": l.IDAutres_Frais,
-                    "CodeFraisSnapshot": l.CodeFraisSnapshot,
-                    "LibelleSnapshot": l.LibelleSnapshot,
-                    "MontantApplique": l.MontantApplique,
-                    "Obligatoire": l.Obligatoire,
-                    "DateCreation": l.DateCreation,
-                    "Login": l.Login,
+                    "IDInscriptionAutresFrais": ligne.IDInscriptionAutresFrais,
+                    "IDTInscription": ligne.IDTInscription,
+                    "IDAutres_Frais": ligne.IDAutres_Frais,
+                    "CodeFraisSnapshot": ligne.CodeFraisSnapshot,
+                    "LibelleSnapshot": ligne.LibelleSnapshot,
+                    "MontantApplique": ligne.MontantApplique,
+                    "Obligatoire": ligne.Obligatoire,
+                    "DateCreation": ligne.DateCreation,
+                    "Login": ligne.Login,
                 }
-                for l in lignes
+                for ligne in lignes
             ]
         except Exception as e:
             print(f"Erreur get_frais_impayes InscriptionAutresFrais : {e}")
@@ -170,7 +170,7 @@ class InscriptionAutresFraisService:
             lignes_existantes = session.query(InscriptionAutresFrais).filter(
                 InscriptionAutresFrais.IDTInscription == id_inscription
             ).all()
-            existantes_par_frais = {l.IDAutres_Frais: l for l in lignes_existantes}
+            existantes_par_frais = {ligne.IDAutres_Frais: ligne for ligne in lignes_existantes}
 
             login_effectif = login or AppSession.get_logged_in_username()
 

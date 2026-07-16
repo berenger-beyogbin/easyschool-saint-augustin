@@ -55,37 +55,39 @@ def create_tables():
     global _engine
     if _engine is None:
         init_db()
-    # Importation de tous les modeles pour s'assurer que SQLAlchemy les connaisse avant la creation
-    import models.etablissement
-    import models.annee_scolaire
-    import models.cycle
-    import models.niveau
-    import models.classe
-    import models.nationalite
-    import models.religion
-    import models.famille
-    import models.eleve
-    import models.inscription
-    import models.autres_frais
-    import models.montant_autres_frais
-    import models.inscription_autres_frais
-    import models.montant_scol
-    import models.montant_cantine
-    import models.montant_transport
-    import models.versement_scol
-    import models.versement_autres_frais
-    import models.article
-    import models.stock_cour
-    import models.stock_entree
-    import models.stock_sortie
-    import models.compte
-    import models.type_sortie
-    import models.sortie_fin
-    import models.profil
-    import models.permission
-    import models.profil_permission
-    import models.utilisateur
-    import models.audit_log
+    # Importation de tous les modeles pour s'assurer que SQLAlchemy les connaisse avant la creation.
+    # noqa: F401 sur chaque ligne - import volontairement "inutilise" : necessaire pour son effet
+    # de bord (enregistrement du modele aupres de Base.metadata), pas pour un usage direct ici.
+    import models.etablissement  # noqa: F401
+    import models.annee_scolaire  # noqa: F401
+    import models.cycle  # noqa: F401
+    import models.niveau  # noqa: F401
+    import models.classe  # noqa: F401
+    import models.nationalite  # noqa: F401
+    import models.religion  # noqa: F401
+    import models.famille  # noqa: F401
+    import models.eleve  # noqa: F401
+    import models.inscription  # noqa: F401
+    import models.autres_frais  # noqa: F401
+    import models.montant_autres_frais  # noqa: F401
+    import models.inscription_autres_frais  # noqa: F401
+    import models.montant_scol  # noqa: F401
+    import models.montant_cantine  # noqa: F401
+    import models.montant_transport  # noqa: F401
+    import models.versement_scol  # noqa: F401
+    import models.versement_autres_frais  # noqa: F401
+    import models.article  # noqa: F401
+    import models.stock_cour  # noqa: F401
+    import models.stock_entree  # noqa: F401
+    import models.stock_sortie  # noqa: F401
+    import models.compte  # noqa: F401
+    import models.type_sortie  # noqa: F401
+    import models.sortie_fin  # noqa: F401
+    import models.profil  # noqa: F401
+    import models.permission  # noqa: F401
+    import models.profil_permission  # noqa: F401
+    import models.utilisateur  # noqa: F401
+    import models.audit_log  # noqa: F401
 
     Base.metadata.create_all(bind=_engine)
     print("Tables creees avec succes dans PostgreSQL !")

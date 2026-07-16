@@ -1,7 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from app.styles import COLORS, TAB_STYLE
 from app.config import Config
-from views.ui_components import make_module_header
 
 from views.stat_inscrits_view import StatInscritsView
 from views.stat_nouveaux_view import StatNouveauxView

@@ -1,6 +1,6 @@
 import datetime
 from typing import List, Optional, Any
-from sqlalchemy import func, case
+from sqlalchemy import func
 from app.database import get_session
 from app.session import AppSession
 

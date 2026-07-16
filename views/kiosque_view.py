@@ -1,7 +1,6 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QFrame
+    QWidget, QVBoxLayout, QTabWidget
 )
-from PySide6.QtCore import Qt
 from views.vente_view import VenteView
 from views.approvisionnement_view import ApprovisionnementView
 from views.article_list_view import ArticleListView

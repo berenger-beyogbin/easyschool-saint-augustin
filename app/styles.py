@@ -2,6 +2,10 @@
 # Toutes les constantes et helpers visuels centralisés ici.
 
 import pathlib
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from PySide6.QtWidgets import QLabel, QWidget
+
 _ASSETS = str(pathlib.Path(__file__).parent.parent / "assets").replace("\\", "/")
 
 # ---------------------------------------------------------------------------
@@ -618,8 +622,8 @@ QPushButton:hover {{ background-color: #EA580C; }}
 QPushButton:disabled {{ background-color: #E5E7EB; color: #9CA3AF; }}
 """
 
-BUTTON_PRINT = f"""
-QPushButton {{
+BUTTON_PRINT = """
+QPushButton {
     background-color: #0F766E;
     color: #FFFFFF;
     padding: 5px 16px;
@@ -629,9 +633,9 @@ QPushButton {{
     border: none;
     min-height: 32px;
     max-height: 36px;
-}}
-QPushButton:hover {{ background-color: #0D9488; }}
-QPushButton:disabled {{ background-color: #E5E7EB; color: #9CA3AF; }}
+}
+QPushButton:hover { background-color: #0D9488; }
+QPushButton:disabled { background-color: #E5E7EB; color: #9CA3AF; }
 """
 
 BUTTON_TABLE_ACTION = f"""
@@ -813,7 +817,7 @@ BADGE_SUCCESS = (
     "background-color: #DCFCE7; border-radius: 10px; padding: 2px 9px;"
 )
 BADGE_WARNING = (
-    f"color: #D97706; font-weight: bold; font-size: 12px;"
+    "color: #D97706; font-weight: bold; font-size: 12px;"
     "background-color: #FEF3C7; border-radius: 10px; padding: 2px 9px;"
 )
 BADGE_DANGER = (
@@ -916,7 +920,7 @@ def apply_table_style(table, alternate="blue"):
     else:
         table.setStyleSheet(TABLE_STYLE)
     table.setAlternatingRowColors(True)
-    from PySide6.QtWidgets import QAbstractItemView, QHeaderView
+    from PySide6.QtWidgets import QAbstractItemView
     table.setEditTriggers(QAbstractItemView.NoEditTriggers)
     table.verticalHeader().setVisible(False)
     table.horizontalHeader().setHighlightSections(False)
@@ -1272,7 +1276,6 @@ def make_totaux_panel_widget(cards_config: list):
 def make_table_action_container(button) -> "QWidget":
     """Enveloppe un bouton dans un conteneur centré pour setCellWidget."""
     from PySide6.QtWidgets import QWidget, QHBoxLayout
-    from PySide6.QtCore import Qt
     container = QWidget()
     container.setStyleSheet("background-color: transparent;")
     layout = QHBoxLayout(container)
