@@ -1,8 +1,13 @@
 from typing import List
 from models.autres_frais import AutresFrais
 from app.database import get_session
+from app.session import AppSession
 
 class AutresFraisService:
+    @staticmethod
+    def _require_versements_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_VERSEMENTS")
+
     @staticmethod
     def get_all_autres_frais() -> List[AutresFrais]:
         """Recupere tous les types d'autres frais."""
@@ -32,6 +37,9 @@ class AutresFraisService:
         """Cree un nouveau type d'autre frais."""
         if not code or not libelle:
             return False, "Le code et le libelle sont obligatoires."
+        allowed, msg = AutresFraisService._require_versements_permission()
+        if not allowed:
+            return False, msg
         
         code_clean = code.strip().upper()
         lib_clean = libelle.strip()
@@ -58,6 +66,9 @@ class AutresFraisService:
         """Met a jour un type d'autre frais existent."""
         if not code or not libelle:
             return False, "Le code et le libelle sont obligatoires."
+        allowed, msg = AutresFraisService._require_versements_permission()
+        if not allowed:
+            return False, msg
         
         code_clean = code.strip().upper()
         lib_clean = libelle.strip()
@@ -88,6 +99,10 @@ class AutresFraisService:
     @staticmethod
     def delete_autres_frais(id_frais: int) -> tuple[bool, str]:
         """Supprime un type d'autre frais s'il n'est pas utilise."""
+        allowed, msg = AutresFraisService._require_versements_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             frais = session.get(AutresFrais, id_frais)

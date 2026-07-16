@@ -1,9 +1,14 @@
 from typing import List
 from models.montant_autres_frais import MontantAutresFrais
 from app.database import get_session
+from app.session import AppSession
 from sqlalchemy.orm import joinedload
 
 class MontantAutresFraisService:
+    @staticmethod
+    def _require_versements_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_VERSEMENTS")
+
     @staticmethod
     def get_montants_by_annee(id_annee: int) -> List[MontantAutresFrais]:
         """Recupere tous les tarifs d'autres frais pour une annee scolaire active."""
@@ -56,6 +61,9 @@ class MontantAutresFraisService:
         """Cree ou met a jour le montant d'un autre frais."""
         if not id_annee or not id_niveau or not id_autres_frais:
             return False, "Annee scolaire, niveau et type de frais sont requis."
+        allowed, msg = MontantAutresFraisService._require_versements_permission()
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:
@@ -93,6 +101,10 @@ class MontantAutresFraisService:
     @staticmethod
     def delete_montant_autres_frais(id_montant: int) -> tuple[bool, str]:
         """Supprime ou retire un montant d'autre frais."""
+        allowed, msg = MontantAutresFraisService._require_versements_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             m = session.get(MontantAutresFrais, id_montant)

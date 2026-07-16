@@ -8,6 +8,11 @@ from models.eleve import Eleve
 from models.etablissement import EtablissementEcole
 from models.famille import TFamille
 from models.inscription import TInscription
+from models.autres_frais import AutresFrais
+from models.montant_autres_frais import MontantAutresFrais
+from models.montant_cantine import MontantCantine
+from models.montant_scol import MontantScol
+from models.montant_transport import MontantTransport
 from models.permission import Permission
 from models.profil import Profil
 from models.profil_permission import ProfilPermission
@@ -22,6 +27,11 @@ from services.classe_service import ClasseService
 from services.eleve_service import EleveService
 from services.famille_service import FamilleService
 from services.inscription_service import InscriptionService
+from services.autres_frais_service import AutresFraisService
+from services.montant_autres_frais_service import MontantAutresFraisService
+from services.montant_cantine_service import MontantCantineService
+from services.montant_scolarite_service import MontantScolariteService
+from services.montant_transport_service import MontantTransportService
 from services.profil_service import ProfilService
 from services.prestation_service import PrestationService
 from services.stock_service import StockService
@@ -220,6 +230,12 @@ def _setup_stock_context(db_session, qte=5):
     return annee, article, stock
 
 
+def _setup_tarif_context(db_session):
+    annee = make_annee(db_session)
+    niveau, classe = make_niveau_classe(db_session, annee)
+    return annee, niveau
+
+
 def _setup_inscription_context(db_session):
     annee = make_annee(db_session)
     niveau, classe = make_niveau_classe(db_session, annee)
@@ -331,6 +347,86 @@ def test_versements_write_service_requires_versements_permission(db_session):
     assert "SCOLARITE_VERSEMENTS" in msg
     assert new_id is None
     assert db_session.query(VersementScol).count() == 0
+
+
+def test_scolarite_tariff_write_requires_versements_permission(db_session):
+    annee, niveau = _setup_tarif_context(db_session)
+    _set_user_without_versements_permission()
+
+    ok, msg = MontantScolariteService.save_montant_scolarite(
+        annee.IDTAnneeScolaire,
+        niveau.IDT_Niveau,
+        montant=100000,
+        montant_pri=90000,
+        montant_sec=110000,
+    )
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_VERSEMENTS" in msg
+    assert db_session.query(MontantScol).count() == 0
+
+
+def test_transport_tariff_write_requires_versements_permission(db_session):
+    annee, niveau = _setup_tarif_context(db_session)
+    _set_user_without_versements_permission()
+
+    ok, msg = MontantTransportService.apply_common_amount_to_all_levels(
+        annee.IDTAnneeScolaire,
+        montant=15000,
+    )
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_VERSEMENTS" in msg
+    assert db_session.query(MontantTransport).count() == 0
+
+
+def test_cantine_tariff_write_requires_versements_permission(db_session):
+    annee, niveau = _setup_tarif_context(db_session)
+    _set_user_without_versements_permission()
+
+    ok, msg = MontantCantineService.save_montant_cantine(
+        annee.IDTAnneeScolaire,
+        niveau.IDT_Niveau,
+        montant=20000,
+    )
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_VERSEMENTS" in msg
+    assert db_session.query(MontantCantine).count() == 0
+
+
+def test_other_fee_type_write_requires_versements_permission(db_session):
+    _set_user_without_versements_permission()
+
+    ok, msg = AutresFraisService.create_autres_frais("TENUE", "Tenue scolaire")
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_VERSEMENTS" in msg
+    assert db_session.query(AutresFrais).filter_by(CodeFrais="TENUE").first() is None
+
+
+def test_other_fee_amount_write_requires_versements_permission(db_session):
+    annee, niveau = _setup_tarif_context(db_session)
+    frais = AutresFrais(CodeFrais="ASSUR", LibelleFrais="Assurance")
+    db_session.add(frais)
+    db_session.commit()
+    _set_user_without_versements_permission()
+
+    ok, msg = MontantAutresFraisService.save_montant_autres_frais(
+        annee.IDTAnneeScolaire,
+        niveau.IDT_Niveau,
+        frais.IDAutres_Frais,
+        montant=5000,
+    )
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_VERSEMENTS" in msg
+    assert db_session.query(MontantAutresFrais).count() == 0
 
 
 def test_stock_entry_service_requires_stock_permission(db_session):

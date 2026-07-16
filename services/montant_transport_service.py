@@ -2,9 +2,14 @@ from typing import List
 from models.montant_transport import MontantTransport
 from models.niveau import TNiveau
 from app.database import get_session
+from app.session import AppSession
 from sqlalchemy.orm import joinedload
 
 class MontantTransportService:
+    @staticmethod
+    def _require_versements_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_VERSEMENTS")
+
     @staticmethod
     def get_montants_by_annee(id_annee: int) -> List[MontantTransport]:
         """Recupere tous les paramétrages de transport pour une annee scolaire."""
@@ -38,6 +43,9 @@ class MontantTransportService:
         """Cree ou met a jour le montant de transport d'un niveau."""
         if not id_annee or not id_niveau:
             return False, "Annee scolaire et niveau sont requis."
+        allowed, msg = MontantTransportService._require_versements_permission()
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:
@@ -67,6 +75,9 @@ class MontantTransportService:
         """Applique une valeur commune de transport pour tous les niveaux de l'année scolaire active."""
         if not id_annee:
             return False, "Aucune annee scolaire active."
+        allowed, msg = MontantTransportService._require_versements_permission()
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:

@@ -2,9 +2,14 @@ from typing import List
 from models.montant_scol import MontantScol
 from models.niveau import TNiveau
 from app.database import get_session
+from app.session import AppSession
 from sqlalchemy.orm import joinedload
 
 class MontantScolariteService:
+    @staticmethod
+    def _require_versements_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_VERSEMENTS")
+
     @staticmethod
     def get_montants_by_annee(id_annee: int) -> List[MontantScol]:
         """Recupere tous les paramétrages de scolarite pour une annee scolaire."""
@@ -38,6 +43,9 @@ class MontantScolariteService:
         """Cree ou met a jour les montants scolaires d'un niveau."""
         if not id_annee or not id_niveau:
             return False, "Annee scolaire et niveau sont requis."
+        allowed, msg = MontantScolariteService._require_versements_permission()
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:
@@ -71,6 +79,9 @@ class MontantScolariteService:
         """Applique une valeur commune de scolarité pour tous les niveaux de l'année scolaire active."""
         if not id_annee:
             return False, "Aucune annee scolaire active."
+        allowed, msg = MontantScolariteService._require_versements_permission()
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:

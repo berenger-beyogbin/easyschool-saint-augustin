@@ -2,9 +2,14 @@ from typing import List
 from models.montant_cantine import MontantCantine
 from models.niveau import TNiveau
 from app.database import get_session
+from app.session import AppSession
 from sqlalchemy.orm import joinedload
 
 class MontantCantineService:
+    @staticmethod
+    def _require_versements_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_VERSEMENTS")
+
     @staticmethod
     def get_montants_by_annee(id_annee: int) -> List[MontantCantine]:
         """Recupere tous les paramétrages de cantine pour une annee scolaire."""
@@ -38,6 +43,9 @@ class MontantCantineService:
         """Cree ou met a jour le montant de cantine d'un niveau."""
         if not id_annee or not id_niveau:
             return False, "Annee scolaire et niveau sont requis."
+        allowed, msg = MontantCantineService._require_versements_permission()
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:
@@ -67,6 +75,9 @@ class MontantCantineService:
         """Applique une valeur commune de cantine pour tous les niveaux de l'année scolaire active."""
         if not id_annee:
             return False, "Aucune annee scolaire active."
+        allowed, msg = MontantCantineService._require_versements_permission()
+        if not allowed:
+            return False, msg
 
         session = get_session()
         try:
