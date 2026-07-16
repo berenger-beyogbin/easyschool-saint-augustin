@@ -8,7 +8,7 @@ Ouvrez un terminal (PowerShell ou Invite de commandes) et exécutez les instruct
 
 ```bash
 # 1. Se déplacer dans le dossier du projet Python
-cd easy_school_python
+cd "easy_school_python cjga"
 
 # 2. Créer l'environnement virtuel Python
 python -m venv venv

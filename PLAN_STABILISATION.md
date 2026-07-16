@@ -73,7 +73,8 @@ Statut de chaque item : `[ ]` a faire, `[~]` en cours, `[x]` fait.
 - [ ] **D4** — Scinder les gros fichiers : `utils/list_printer.py` (1490 lignes), `app/styles.py` (1284), `views/caisse_view.py` (995), `views/inscription_view.py` (972), `views/main_window.py` (776), `views/utilisateurs_view.py` (747).
 - [ ] **D5** — Pagination et traitements asynchrones (éviter le gel de l'UI sur requêtes/impressions lourdes).
 - [ ] **D6** — Nettoyer ou isoler les modules désactivés (cantine, transport, bibliothèque).
-- [ ] **D7** — Documentation à jour (README obsolète, dépôt distant encore nommé `easyschool-saint-augustin`).
+- [x] **D7** (partiel) — [README.md](README.md) refait (était en UTF-16, contenu réduit à "# easyschool-saint-augustin" répété deux fois ; remplacé par une vraie présentation du projet CJGA + liens vers toute la doc). Commande `cd` corrigée dans [README_PYTHON.md](README_PYTHON.md) (nom de dossier réel).
+  **Dépôt distant toujours nommé `easyschool-saint-augustin`** — pas renommé : c'est une ressource GitHub partagée (URL de clone, éventuels liens externes), décision qui te revient. Dis-moi si tu veux que je le fasse (`gh repo rename`) et sous quel nom.
 
 ---
 
