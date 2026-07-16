@@ -13,6 +13,10 @@ class InscriptionService:
     """
 
     @staticmethod
+    def _require_inscriptions_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_INSCRIPTIONS")
+
+    @staticmethod
     def get_inscriptions_by_annee(id_annee: int) -> list[TInscription]:
         """Récupère toutes les inscriptions d'une année donnée."""
         session = get_session()
@@ -76,6 +80,9 @@ class InscriptionService:
         """
         Inscrit un élève dans une classe pour l'année scolaire active.
         """
+        allowed, msg = InscriptionService._require_inscriptions_permission()
+        if not allowed:
+            return False, msg
         # Obtenir l'année active
         id_annee = AppSession.get_active_annee_id()
         if not id_annee:
@@ -193,6 +200,10 @@ class InscriptionService:
     @staticmethod
     def update_inscription(id_inscription: int, data: dict) -> tuple[bool, str]:
         """Modifie une inscription existante (niveau, classe et options)."""
+        allowed, msg = InscriptionService._require_inscriptions_permission()
+        if not allowed:
+            return False, msg
+
         id_annee = AppSession.get_active_annee_id()
         if not id_annee:
             return False, "Aucune session d'année scolaire active."

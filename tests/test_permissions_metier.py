@@ -4,7 +4,10 @@ from decimal import Decimal
 
 from models.article import Article
 from models.classe import TClasse
+from models.eleve import Eleve
 from models.etablissement import EtablissementEcole
+from models.famille import TFamille
+from models.inscription import TInscription
 from models.permission import Permission
 from models.profil import Profil
 from models.profil_permission import ProfilPermission
@@ -16,6 +19,9 @@ from models.utilisateur import Utilisateur
 from models.versement_scol import VersementScol
 from services.article_service import ArticleService
 from services.classe_service import ClasseService
+from services.eleve_service import EleveService
+from services.famille_service import FamilleService
+from services.inscription_service import InscriptionService
 from services.profil_service import ProfilService
 from services.prestation_service import PrestationService
 from services.stock_service import StockService
@@ -119,6 +125,34 @@ def _set_user_without_kiosque_write_permission():
     )
 
 
+def _set_user_without_eleves_permission():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 1007,
+            "Login": "scolarite_lecture",
+            "Nom": "Scolarite",
+            "ProfilCode": "SCOL_READ",
+            "ProfilLibelle": "Scolarite lecture",
+            "IsAdmin": False,
+        },
+        permissions={"SCOLARITE_VIEW"},
+    )
+
+
+def _set_user_without_inscriptions_permission():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 1008,
+            "Login": "eleves_admin",
+            "Nom": "Eleves",
+            "ProfilCode": "ELEVES_WRITE",
+            "ProfilLibelle": "Eleves ecriture",
+            "IsAdmin": False,
+        },
+        permissions={"SCOLARITE_VIEW", "SCOLARITE_ELEVES"},
+    )
+
+
 def _set_user_without_users_modifier_permission():
     AppSession.set_current_user(
         {
@@ -184,6 +218,16 @@ def _setup_stock_context(db_session, qte=5):
     db_session.add(stock)
     db_session.commit()
     return annee, article, stock
+
+
+def _setup_inscription_context(db_session):
+    annee = make_annee(db_session)
+    niveau, classe = make_niveau_classe(db_session, annee)
+    famille = make_famille(db_session)
+    eleve = make_eleve(db_session, famille, matricule="INS-PERM-001")
+    AppSession._active_annee_id = annee.IDTAnneeScolaire
+    AppSession._active_annee_libelle = annee.Libelle
+    return annee, niveau, classe, famille, eleve
 
 
 def _make_direct_profil(db_session, code="TEST_PROFILE"):
@@ -335,6 +379,68 @@ def test_article_write_service_requires_articles_permission(db_session):
     assert ok is False
     assert "KIOSQUE_ARTICLES" in msg
     assert db_session.query(Article).filter_by(Libelle="Cahier interdit").first() is None
+
+
+def test_family_write_service_requires_eleves_permission(db_session):
+    _set_user_without_eleves_permission()
+
+    ok, msg = FamilleService.create_famille({
+        "NomResponsable": "Famille interdite",
+        "CellulaireResponsable": "0700000001",
+    })
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_ELEVES" in msg
+    assert db_session.query(TFamille).filter_by(NomResponsable="Famille interdite").first() is None
+
+
+def test_student_write_service_requires_eleves_permission(db_session):
+    _set_user_without_eleves_permission()
+
+    ok, msg = EleveService.create_eleve({
+        "Matricule": "EL-FORBID",
+        "Nom": "Interdit",
+        "Prenoms": "Eleve",
+        "DateNaissance": date(2015, 1, 1),
+        "Sexe": 1,
+    })
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_ELEVES" in msg
+    assert db_session.query(Eleve).filter_by(Matricule="EL-FORBID").first() is None
+
+
+def test_student_family_link_requires_eleves_permission(db_session):
+    famille = make_famille(db_session, nom="Responsable link")
+    eleve = make_eleve(db_session, famille, matricule="EL-LINK")
+    autre_famille = make_famille(db_session, nom="Autre responsable", tel="0700000002")
+    _set_user_without_eleves_permission()
+
+    ok, msg = EleveService.link_famille(eleve.IDEleve, autre_famille.IdTFamille)
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_ELEVES" in msg
+    assert db_session.get(Eleve, eleve.IDEleve).IDFamille == famille.IdTFamille
+
+
+def test_inscription_write_service_requires_inscriptions_permission(db_session):
+    annee, niveau, classe, famille, eleve = _setup_inscription_context(db_session)
+    _set_user_without_inscriptions_permission()
+
+    ok, msg = InscriptionService.create_inscription({
+        "IDEleve": eleve.IDEleve,
+        "IDFamille": famille.IdTFamille,
+        "IDNiveau": niveau.IDT_Niveau,
+        "IDClasse": classe.IDTClasse,
+    })
+
+    db_session.expire_all()
+    assert ok is False
+    assert "SCOLARITE_INSCRIPTIONS" in msg
+    assert db_session.query(TInscription).count() == 0
 
 
 def test_user_write_service_requires_users_modifier_permission(db_session):

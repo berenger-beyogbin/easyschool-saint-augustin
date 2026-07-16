@@ -1,4 +1,5 @@
 from app.database import get_session
+from app.session import AppSession
 from models.famille import TFamille
 from models.eleve import Eleve
 import re
@@ -7,6 +8,10 @@ class FamilleService:
     """
     Service gérant les opérations sur les familles et parents d'élèves.
     """
+
+    @staticmethod
+    def _require_eleves_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_ELEVES")
 
     @staticmethod
     def get_all_familles() -> list[TFamille]:
@@ -46,6 +51,10 @@ class FamilleService:
     @staticmethod
     def create_famille(data: dict) -> tuple[bool, str]:
         """Crée une nouvelle famille de parents."""
+        allowed, msg = FamilleService._require_eleves_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             # Validations obligatoires
@@ -108,6 +117,10 @@ class FamilleService:
     @staticmethod
     def update_famille(id_famille: int, data: dict) -> tuple[bool, str]:
         """Modifie une famille existante."""
+        allowed, msg = FamilleService._require_eleves_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             famille = session.get(TFamille, id_famille)
@@ -172,6 +185,10 @@ class FamilleService:
     @staticmethod
     def delete_famille(id_famille: int) -> tuple[bool, str]:
         """Supprime une famille si elle n'est liée à aucun élève."""
+        allowed, msg = FamilleService._require_eleves_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             famille = session.get(TFamille, id_famille)

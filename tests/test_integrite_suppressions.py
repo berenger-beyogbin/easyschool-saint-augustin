@@ -71,6 +71,20 @@ def _set_param_modifier_user():
     )
 
 
+def _set_eleves_modifier_user():
+    AppSession.set_current_user(
+        {
+            "IDUtilisateur": 2002,
+            "Login": "eleves_admin",
+            "Nom": "Eleves",
+            "ProfilCode": "ELEVES",
+            "ProfilLibelle": "Eleves",
+            "IsAdmin": False,
+        },
+        permissions={"SCOLARITE_ELEVES"},
+    )
+
+
 def test_delete_classe_with_inscriptions_is_refused_and_preserves_history(db_session):
     """Une classe contenant des inscriptions ne doit jamais être supprimée en cascade."""
     annee, niveau, classe, famille, eleve, inscription = _setup_inscription(db_session)
@@ -93,6 +107,7 @@ def test_delete_classe_with_inscriptions_is_refused_and_preserves_history(db_ses
 def test_eleve_service_refuses_delete_when_history_exists(db_session):
     """Le service élève protège déjà l'historique : on le verrouille par test."""
     annee, niveau, classe, famille, eleve, inscription, versement_id = _setup_versement(db_session)
+    _set_eleves_modifier_user()
 
     ok, msg = EleveService.delete_eleve(eleve.IDEleve)
 

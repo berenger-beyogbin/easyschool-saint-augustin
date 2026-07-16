@@ -14,6 +14,10 @@ class EleveService:
     """
 
     @staticmethod
+    def _require_eleves_permission() -> tuple[bool, str]:
+        return AppSession.require_permission("SCOLARITE_ELEVES")
+
+    @staticmethod
     def get_all_eleves() -> list[Eleve]:
         """Récupère tous les élèves triés par nom puis prénom."""
         session = get_session()
@@ -66,6 +70,10 @@ class EleveService:
     @staticmethod
     def link_famille(id_eleve: int, id_famille: int) -> tuple[bool, str]:
         """Associe un élève existant à une famille."""
+        allowed, msg = EleveService._require_eleves_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             eleve = session.get(Eleve, id_eleve)
@@ -169,6 +177,10 @@ class EleveService:
     @staticmethod
     def create_eleve(data: dict) -> tuple[bool, str]:
         """Crée un nouvel élève."""
+        allowed, msg = EleveService._require_eleves_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             # Validations requises
@@ -240,6 +252,10 @@ class EleveService:
     @staticmethod
     def update_eleve(id_eleve: int, data: dict) -> tuple[bool, str]:
         """Modifie un élève existant."""
+        allowed, msg = EleveService._require_eleves_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             eleve = session.get(Eleve, id_eleve)
@@ -314,6 +330,10 @@ class EleveService:
     @staticmethod
     def delete_eleve(id_eleve: int) -> tuple[bool, str]:
         """Supprime un élève uniquement s'il n'a ni inscription ni versement associé."""
+        allowed, msg = EleveService._require_eleves_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             eleve = session.get(Eleve, id_eleve)
