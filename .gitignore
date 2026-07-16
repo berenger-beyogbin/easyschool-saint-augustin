@@ -65,6 +65,12 @@ htmlcov/
 Thumbs.db
 desktop.ini
 
+# === PROCESS / RUN ARTIFACTS ===
+*.pid
+
+# === BACKUPS LOCAUX D'EXECUTABLE INSTALLE (lourd, jamais commité) ===
+backup_installed_exe_*/
+
 # === PYINSTALLER ===
 *.spec
 !packaging/easy_school.spec
