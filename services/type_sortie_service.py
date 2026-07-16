@@ -1,9 +1,14 @@
 from typing import List, Optional, Tuple
 from app.database import get_session
+from app.session import AppSession
 from models.type_sortie import TypeSortie
 from models.sortie_fin import SortieFin
 
 class TypeSortieService:
+    @staticmethod
+    def _require_saisie_permission() -> Tuple[bool, str]:
+        return AppSession.require_permission("COMPTABILITE_SAISIE")
+
     @staticmethod
     def get_all_type_sorties() -> List[TypeSortie]:
         """Recupere tous les types de sorties."""
@@ -49,6 +54,9 @@ class TypeSortieService:
             return False, "Le compte associe est obligatoire."
         if sens not in ["Debit", "Credit"]:
             return False, "Le sens doit etre 'Debit' ou 'Credit'."
+        allowed, msg = TypeSortieService._require_saisie_permission()
+        if not allowed:
+            return False, msg
 
         lib_clean = libelle_sortie.strip()
 
@@ -81,6 +89,9 @@ class TypeSortieService:
             return False, "Le compte associe est obligatoire."
         if sens not in ["Debit", "Credit"]:
             return False, "Le sens doit etre 'Debit' ou 'Credit'."
+        allowed, msg = TypeSortieService._require_saisie_permission()
+        if not allowed:
+            return False, msg
 
         lib_clean = libelle_sortie.strip()
 
@@ -113,6 +124,10 @@ class TypeSortieService:
     @staticmethod
     def delete_type_sortie(id_type_sortie: int) -> Tuple[bool, str]:
         """Supprime un type de sortie."""
+        allowed, msg = TypeSortieService._require_saisie_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             type_sortie = session.query(TypeSortie).filter_by(IDTypeSortie=id_type_sortie).first()

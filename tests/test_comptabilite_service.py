@@ -3,7 +3,10 @@ from datetime import date
 from app.session import AppSession
 from models.compte import Compte
 from models.sortie_fin import SortieFin
+from models.type_sortie import TypeSortie
 from services.comptabilite_service import ComptabiliteService
+from services.compte_service import CompteService
+from services.type_sortie_service import TypeSortieService
 from tests.factories import make_annee
 
 
@@ -48,6 +51,33 @@ def test_create_mouvement_requires_comptabilite_saisie_permission(db_session):
     assert ok is False
     assert "COMPTABILITE_SAISIE" in msg
     assert db_session.query(SortieFin).count() == 0
+
+
+def test_create_compte_requires_comptabilite_saisie_permission(db_session):
+    _set_user({"COMPTABILITE_VIEW"})
+
+    ok, msg = CompteService.create_compte("6060", "Achats interdits")
+
+    db_session.expire_all()
+    assert ok is False
+    assert "COMPTABILITE_SAISIE" in msg
+    assert db_session.query(Compte).filter_by(NumCompte="6060").first() is None
+
+
+def test_create_type_sortie_requires_comptabilite_saisie_permission(db_session):
+    annee, compte = _setup_compta_context(db_session)
+    _set_user({"COMPTABILITE_VIEW"})
+
+    ok, msg = TypeSortieService.create_type_sortie(
+        "Fournitures interdites",
+        compte.IDCompte,
+        "Debit",
+    )
+
+    db_session.expire_all()
+    assert ok is False
+    assert "COMPTABILITE_SAISIE" in msg
+    assert db_session.query(TypeSortie).count() == 0
 
 
 def test_create_mouvement_allowed_with_comptabilite_saisie_permission(db_session):

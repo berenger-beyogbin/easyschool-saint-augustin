@@ -1,6 +1,7 @@
 from typing import List, Optional, Tuple
 from sqlalchemy import or_
 from app.database import get_session
+from app.session import AppSession
 from models.compte import Compte
 from models.type_sortie import TypeSortie
 from models.sortie_fin import SortieFin
@@ -14,6 +15,10 @@ SYSCOA_INCOME_ACCOUNTS = {
 }
 
 class CompteService:
+    @staticmethod
+    def _require_saisie_permission() -> Tuple[bool, str]:
+        return AppSession.require_permission("COMPTABILITE_SAISIE")
+
     @staticmethod
     def get_all_comptes() -> List[Compte]:
         """Recupere tous les comptes ordonnes par numero."""
@@ -65,6 +70,9 @@ class CompteService:
             return False, "Le numero de compte est obligatoire."
         if not lib_compte or not lib_compte.strip():
             return False, "Le libelle du compte est obligatoire."
+        allowed, msg = CompteService._require_saisie_permission()
+        if not allowed:
+            return False, msg
 
         num_clean = num_compte.strip()
         lib_clean = lib_compte.strip()
@@ -93,6 +101,9 @@ class CompteService:
             return False, "Le numero de compte est obligatoire."
         if not lib_compte or not lib_compte.strip():
             return False, "Le libelle du compte est obligatoire."
+        allowed, msg = CompteService._require_saisie_permission()
+        if not allowed:
+            return False, msg
 
         num_clean = num_compte.strip()
         lib_clean = lib_compte.strip()
@@ -137,6 +148,10 @@ class CompteService:
     @staticmethod
     def delete_compte(id_compte: int) -> Tuple[bool, str]:
         """Supprime un compte s'il n'est pas utilise."""
+        allowed, msg = CompteService._require_saisie_permission()
+        if not allowed:
+            return False, msg
+
         session = get_session()
         try:
             compte = session.query(Compte).filter_by(IDCompte=id_compte).first()
