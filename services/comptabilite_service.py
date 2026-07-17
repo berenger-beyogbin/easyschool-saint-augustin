@@ -1,17 +1,18 @@
 import datetime
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Tuple
 from decimal import Decimal
 from sqlalchemy import func, case
 from sqlalchemy.orm import joinedload
 from app.database import get_session
 from app.session import AppSession
 from models.compte import Compte
-from models.type_sortie import TypeSortie
 from models.sortie_fin import SortieFin
 from models.annee_scolaire import TAnneeScolaire
 from models.versement_scol import VersementScol
 from models.stock_sortie import StockSortie
-from services.compte_service import SYSCOA_INCOME_ACCOUNTS
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Correspondance NumCompte SYSCOA → clé rubrique dans get_totaux_entrees_rubriques
 _SYSCOA_RUBRIQUE = {
@@ -19,6 +20,7 @@ _SYSCOA_RUBRIQUE = {
     "7042": "transport",
     "7043": "cantine",
     "7044": "vente",
+    "7045": "autres",
 }
 
 class ComptabiliteService:
@@ -92,6 +94,17 @@ class ComptabiliteService:
             if not compte:
                 return False, "Le compte spécifié n'existe pas."
 
+            # Comptes de produits SYSCOA (7041-7045) : alimentes automatiquement par
+            # get_totaux_entrees_rubriques depuis les versements/ventes. Un credit manuel
+            # sur ces comptes s'ajouterait a ce calcul automatique et compterait la
+            # recette deux fois dans la balance.
+            if debit_credit == "Credit" and compte.NumCompte in _SYSCOA_RUBRIQUE:
+                return False, (
+                    f"Le compte {compte.NumCompte} ({compte.LibCompte}) est alimente "
+                    "automatiquement par les versements et ventes : un credit manuel "
+                    "compterait cette recette deux fois dans la balance."
+                )
+
             # Génération automatique du CodeSortie
             code = ComptabiliteService.generate_code_sortie(session, active_annee_id)
 
@@ -144,6 +157,15 @@ class ComptabiliteService:
             if annee and annee.Cloturer:
                 return False, "Modification impossible: l'année pour ce mouvement est clôturée."
 
+            # Comptes de produits SYSCOA (7041-7045) : voir create_mouvement, meme raison.
+            compte = session.query(Compte).filter_by(IDCompte=id_compte).first()
+            if compte and debit_credit == "Credit" and compte.NumCompte in _SYSCOA_RUBRIQUE:
+                return False, (
+                    f"Le compte {compte.NumCompte} ({compte.LibCompte}) est alimente "
+                    "automatiquement par les versements et ventes : un credit manuel "
+                    "compterait cette recette deux fois dans la balance."
+                )
+
             mouvement.Benef = benef.strip()
             mouvement.Detail = detail.strip() if detail else None
             mouvement.Montant = Decimal(str(montant))
@@ -161,22 +183,42 @@ class ComptabiliteService:
             session.close()
 
     @staticmethod
-    def delete_mouvement(id_sortie_fin: int) -> Tuple[bool, str]:
-        """Supprime un mouvement financier."""
+    def annuler_mouvement(
+        id_sortie_fin: int, motif: str, login: Optional[str] = None, id_utilisateur: Optional[int] = None
+    ) -> Tuple[bool, str]:
+        """Annule un mouvement financier (piste d'audit conservee) au lieu de le supprimer
+        physiquement. Un mouvement annule reste visible dans les listes mais est exclu
+        des agregations de la balance."""
+        if not motif or not motif.strip():
+            return False, "Le motif d'annulation est obligatoire."
+
         session = get_session()
         try:
             mouvement = session.query(SortieFin).filter_by(IDSortieFin=id_sortie_fin).first()
             if not mouvement:
                 return False, "Mouvement inexistant."
+            if mouvement.Annule:
+                return False, "Ce mouvement est deja annule."
 
             # Vérifier si l'année est clôturée
             annee = session.query(TAnneeScolaire).filter_by(IDTAnneeScolaire=mouvement.IDAnSco).first()
             if annee and annee.Cloturer:
-                return False, "Suppression impossible: l'année pour ce mouvement est clôturée."
+                return False, "Annulation impossible: l'année pour ce mouvement est clôturée."
 
-            session.delete(mouvement)
+            ancien_montant = str(mouvement.Montant)
+            mouvement.Annule = True
+            mouvement.AnnulePar = login or "admin"
+            mouvement.DateAnnulation = datetime.datetime.now()
+            mouvement.MotifAnnulation = motif.strip()
             session.commit()
-            return True, "Mouvement supprimé avec succès !"
+
+            from services.audit_log_service import AuditLogService
+            AuditLogService.log(
+                action="ANNULER_MOUVEMENT", table_cible="SortieFin", id_cible=id_sortie_fin,
+                id_utilisateur=id_utilisateur, ancienne_valeur=f"Montant={ancien_montant}",
+                nouvelle_valeur="Annule=True", motif=motif.strip(),
+            )
+            return True, "Mouvement annulé avec succès !"
         except Exception as e:
             session.rollback()
             return False, f"Erreur base de données : {str(e)}"
@@ -196,8 +238,8 @@ class ComptabiliteService:
             return session.query(SortieFin).options(joinedload(SortieFin.compte))\
                 .filter_by(IDAnSco=id_annee)\
                 .order_by(SortieFin.DateSortie.desc(), SortieFin.IDSortieFin.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_all_mouvements : {e}")
+        except Exception:
+            logger.exception("Erreur get_all_mouvements")
             return []
         finally:
             session.close()
@@ -213,8 +255,8 @@ class ComptabiliteService:
                     SortieFin.DateSortie >= date_debut,
                     SortieFin.DateSortie <= date_fin
                 ).order_by(SortieFin.DateSortie.desc(), SortieFin.IDSortieFin.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_mouvements_by_period : {e}")
+        except Exception:
+            logger.exception("Erreur get_mouvements_by_period")
             return []
         finally:
             session.close()
@@ -240,8 +282,8 @@ class ComptabiliteService:
                 q = q.filter(SortieFin.DateSortie <= date_fin)
                 
             return q.order_by(SortieFin.DateSortie.desc(), SortieFin.IDSortieFin.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_etat_sorties : {e}")
+        except Exception:
+            logger.exception("Erreur get_etat_sorties")
             return []
         finally:
             session.close()
@@ -261,7 +303,7 @@ class ComptabiliteService:
                 SortieFin.IDCompte.label("IDCompte"),
                 func.coalesce(func.sum(case((SortieFin.DebitCredit == 'Debit', SortieFin.Montant), else_=0)), 0).label("debit"),
                 func.coalesce(func.sum(case((SortieFin.DebitCredit == 'Credit', SortieFin.Montant), else_=0)), 0).label("credit")
-            ).filter(SortieFin.IDAnSco == id_annee)
+            ).filter(SortieFin.IDAnSco == id_annee, SortieFin.Annule == False)
 
             if date_debut:
                 sf_sub_q = sf_sub_q.filter(SortieFin.DateSortie >= date_debut)
@@ -300,8 +342,8 @@ class ComptabiliteService:
                     item["Solde"] = item["Credit"] - item["Debit"]
 
             return balance_list
-        except Exception as e:
-            print(f"Erreur get_balance_comptes : {e}")
+        except Exception:
+            logger.exception("Erreur get_balance_comptes")
             return []
         finally:
             session.close()
@@ -315,18 +357,21 @@ class ComptabiliteService:
                 func.coalesce(func.sum(VersementScol.MontantVersSco), 0),
                 func.coalesce(func.sum(VersementScol.MontantVersTrans), 0),
                 func.coalesce(func.sum(VersementScol.MontantCantine), 0),
+                func.coalesce(func.sum(VersementScol.MontantVersAutres), 0),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False
             )
             if date_debut:
                 q_vers = q_vers.filter(VersementScol.DateVers >= date_debut)
             if date_fin:
                 q_vers = q_vers.filter(VersementScol.DateVers <= date_fin)
             row = q_vers.first()
-            scol  = float(row[0]) if row else 0.0
-            trans = float(row[1]) if row else 0.0
-            cant  = float(row[2]) if row else 0.0
+            scol   = float(row[0]) if row else 0.0
+            trans  = float(row[1]) if row else 0.0
+            cant   = float(row[2]) if row else 0.0
+            autres = float(row[3]) if row else 0.0
 
             q_vente = session.query(
                 func.coalesce(func.sum(StockSortie.QuantiteSort * StockSortie.Prix_vente), 0)
@@ -338,9 +383,9 @@ class ComptabiliteService:
             vente_row = q_vente.first()
             vente = float(vente_row[0]) if vente_row else 0.0
 
-            return {"scolarite": scol, "transport": trans, "cantine": cant, "vente": vente}
-        except Exception as e:
-            print(f"Erreur get_totaux_entrees_rubriques : {e}")
-            return {"scolarite": 0.0, "transport": 0.0, "cantine": 0.0, "vente": 0.0}
+            return {"scolarite": scol, "transport": trans, "cantine": cant, "vente": vente, "autres": autres}
+        except Exception:
+            logger.exception("Erreur get_totaux_entrees_rubriques")
+            return {"scolarite": 0.0, "transport": 0.0, "cantine": 0.0, "vente": 0.0, "autres": 0.0}
         finally:
             session.close()

@@ -313,22 +313,12 @@ QCheckBox::indicator:checked:hover {{
 }}
 """
         self.chk_ebrie   = QCheckBox("Ebrié d'Abobo-té")
-        self.chk_cat_pri = QCheckBox("Ens. cat. primaire")
-        self.chk_cat_sec = QCheckBox("Ens. cat. secondaire")
-        for chk in (self.chk_ebrie, self.chk_cat_pri, self.chk_cat_sec):
-            chk.setStyleSheet(chk_style)
-
-        # Un seul choix autorisé à la fois
-        self.chk_ebrie.toggled.connect(lambda c: self._exclusive_cat(c, self.chk_ebrie))
-        self.chk_cat_pri.toggled.connect(lambda c: self._exclusive_cat(c, self.chk_cat_pri))
-        self.chk_cat_sec.toggled.connect(lambda c: self._exclusive_cat(c, self.chk_cat_sec))
+        self.chk_ebrie.setStyleSheet(chk_style)
 
         chk_row = QHBoxLayout()
         chk_row.setSpacing(16)
         chk_row.addStretch()
         chk_row.addWidget(self.chk_ebrie)
-        chk_row.addWidget(self.chk_cat_pri)
-        chk_row.addWidget(self.chk_cat_sec)
         chk_row.addStretch()
         lyt_resp.addLayout(chk_row)
 
@@ -451,8 +441,6 @@ QCheckBox::indicator:checked:hover {{
         self.txt_adr_resp.setText(fam.AdresseResponsable or "")
         self.txt_hab_resp.setText(fam.HabitationParent or "")
         self.chk_ebrie.setChecked(fam.EbrieAbobote)
-        self.chk_cat_pri.setChecked(fam.EnsCatPrimaire)
-        self.chk_cat_sec.setChecked(fam.EnsCatSecondaire)
         self.chk_urg_meme.setChecked(fam.UrgenceMoimeme)
         self.txt_nom_urg.setText(fam.NomUrgence or "")
         self.txt_cont_urg.setText(fam.ContactUrgence or "")
@@ -492,8 +480,6 @@ QCheckBox::indicator:checked:hover {{
             "NomMere":               self.txt_nom_mere.text().strip(),
             "ProfessionMere":        self.txt_prof_mere.text().strip(),
             "TelMere":               self.txt_tel_mere.text().strip(),
-            "EnsCatPrimaire":        self.chk_cat_pri.isChecked(),
-            "EnsCatSecondaire":      self.chk_cat_sec.isChecked(),
         }
         if self.id_famille:
             success, message = FamilleService.update_famille(self.id_famille, data)
@@ -506,11 +492,3 @@ QCheckBox::indicator:checked:hover {{
         else:
             QMessageBox.critical(self, "Erreur", message)
 
-    def _exclusive_cat(self, checked: bool, sender):
-        """Décoche les autres options de catégorie quand une est cochée."""
-        if checked:
-            for chk in (self.chk_ebrie, self.chk_cat_pri, self.chk_cat_sec):
-                if chk is not sender:
-                    chk.blockSignals(True)
-                    chk.setChecked(False)
-                    chk.blockSignals(False)

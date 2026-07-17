@@ -10,8 +10,10 @@ class StockSortie(Base):
     __tablename__ = "StockSortie"
 
     IDStockSort = Column(Integer, primary_key=True, autoincrement=True)
-    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="CASCADE"), nullable=False)
-    IDTArticle = Column(Integer, ForeignKey("TArticle.IDTArticle", ondelete="CASCADE"), nullable=False)
+    # ON DELETE RESTRICT : une vente/sortie de stock est une piece financiere
+    # et un historique, elle ne doit pas disparaitre avec l'annee ou l'article.
+    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="RESTRICT"), nullable=False)
+    IDTArticle = Column(Integer, ForeignKey("TArticle.IDTArticle", ondelete="RESTRICT"), nullable=False)
     DateSort = Column(Date, nullable=False)
     QuantiteSort = Column(Integer, nullable=False)
     Prix_vente = Column(Numeric(12, 2), nullable=False)

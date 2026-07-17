@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from app.styles import COLORS
+from app.version import __version__
 
 
 class LoginDialog(QDialog):
@@ -40,7 +41,7 @@ class LoginDialog(QDialog):
         lbl_app.setStyleSheet(
             "color: #FFFFFF; font-size: 22px; font-weight: bold; background-color: transparent;"
         )
-        lbl_ver = QLabel("2.0")
+        lbl_ver = QLabel(".".join(__version__.split(".")[:2]))
         lbl_ver.setFixedHeight(22)
         lbl_ver.setStyleSheet(
             f"color: #FFFFFF; background-color: {COLORS['primary']};"

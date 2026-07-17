@@ -29,31 +29,41 @@ def _verify_password(password: str, stored: str) -> bool:
 class UtilisateurService:
 
     @staticmethod
-    def seed_default_admin():
-        """Crée le compte administrateur par défaut si aucun utilisateur n'existe."""
+    def has_any_user() -> bool:
+        """Indique si au moins un utilisateur existe deja en base."""
         session = get_session()
         try:
-            if session.query(Utilisateur).count() > 0:
-                return
-            admin_profil = session.query(Profil).filter_by(Code="ADMIN").first()
-            if not admin_profil:
-                return
-            admin = Utilisateur(
-                Login="admin",
-                MotDePasseHash=_hash_password("admin123"),
-                Nom="Administrateur",
-                Prenoms="Système",
-                IDProfil=admin_profil.IDProfil,
-                IsActive=True,
-            )
-            session.add(admin)
-            session.commit()
-            print("Compte admin créé — login: admin / mot de passe: admin123")
-        except Exception as e:
-            session.rollback()
-            print(f"Erreur seeding admin : {e}")
+            return session.query(Utilisateur).count() > 0
         finally:
             session.close()
+
+    @staticmethod
+    def get_admin_profil_id() -> int | None:
+        """Recupere l'ID du profil ADMIN (seede par ProfilService.seed_default_profiles)."""
+        session = get_session()
+        try:
+            admin_profil = session.query(Profil).filter_by(Code="ADMIN").first()
+            return admin_profil.IDProfil if admin_profil else None
+        finally:
+            session.close()
+
+    @staticmethod
+    def create_first_admin(data: dict) -> tuple[bool, str]:
+        """Cree le tout premier compte (profil ADMIN), avec le mot de passe choisi par l'utilisateur.
+
+        Remplace l'ancien seeding automatique admin/admin123 : refuse de creer
+        un compte si des utilisateurs existent deja, pour ne jamais servir de
+        porte derobee une fois l'application deployee.
+        """
+        if UtilisateurService.has_any_user():
+            return False, "Un compte existe deja : impossible de recreer le premier administrateur."
+        id_profil = UtilisateurService.get_admin_profil_id()
+        if not id_profil:
+            return False, "Profil ADMIN introuvable (seeding des profils non effectue)."
+        data = dict(data)
+        data["IDProfil"] = id_profil
+        data["IsActive"] = True
+        return UtilisateurService.create(data)
 
     @staticmethod
     def authenticate(login: str, password: str) -> tuple[bool, str, dict | None]:

@@ -2,11 +2,10 @@ import math
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QListWidget, QListWidgetItem, QStackedWidget, QTabWidget, QComboBox,
-    QMessageBox, QFrame, QScrollArea, QPushButton, QSizePolicy,
-    QStyledItemDelegate, QStyle
+    QFrame, QPushButton, QStyledItemDelegate, QStyle
 )
 from PySide6.QtCore import Qt, QSize, QRect, QRectF, QPointF
-from PySide6.QtGui import QIcon, QFont, QColor, QPainter, QBrush, QPainterPath, QPen
+from PySide6.QtGui import QFont, QColor, QPainter, QBrush, QPainterPath, QPen
 
 # Import des fiches du module Parametres
 from .etablissement_view import EtablissementView
@@ -22,11 +21,12 @@ from .comptabilite_view import ComptabiliteView
 from .statistiques_view import StatistiquesView
 from .dashboard_view import DashboardView
 from .utilisateurs_view import UtilisateursView
-from .prestation_config_view import PrestationConfigView
 
 from app.styles import (
     COLORS, SIDEBAR_MENU_STYLE, TAB_STYLE, COMBO_STYLE, BUTTON_SECONDARY
 )
+from app.config import Config
+from app.version import __version__
 
 
 class AvatarLabel(QLabel):
@@ -219,12 +219,16 @@ class SidebarItemDelegate(QStyledItemDelegate):
 
         elif row == 1:  # Scolarité — livre ouvert
             p = QPainterPath()
-            p.moveTo(cx - 1.0, cy - r + 1); p.lineTo(cx - r + 1, cy - r + 3)
-            p.lineTo(cx - r + 1, cy + r - 1); p.lineTo(cx - 1.0, cy + r - 1)
+            p.moveTo(cx - 1.0, cy - r + 1)
+            p.lineTo(cx - r + 1, cy - r + 3)
+            p.lineTo(cx - r + 1, cy + r - 1)
+            p.lineTo(cx - 1.0, cy + r - 1)
             painter.drawPath(p)
             p2 = QPainterPath()
-            p2.moveTo(cx + 1.0, cy - r + 1); p2.lineTo(cx + r - 1, cy - r + 3)
-            p2.lineTo(cx + r - 1, cy + r - 1); p2.lineTo(cx + 1.0, cy + r - 1)
+            p2.moveTo(cx + 1.0, cy - r + 1)
+            p2.lineTo(cx + r - 1, cy - r + 3)
+            p2.lineTo(cx + r - 1, cy + r - 1)
+            p2.lineTo(cx + 1.0, cy + r - 1)
             painter.drawPath(p2)
             painter.drawLine(QPointF(cx - 1.0, cy - r + 1), QPointF(cx + 1.0, cy - r + 1))
             painter.drawLine(QPointF(cx - 1.0, cy + r - 1), QPointF(cx + 1.0, cy + r - 1))
@@ -241,7 +245,8 @@ class SidebarItemDelegate(QStyledItemDelegate):
             yb = cy + r - 1
             for i, bh in enumerate([r - 1, r + 3, r + 1]):
                 painter.drawRoundedRect(QRectF(x0 + i * (bw + gap), yb - bh, bw, bh), 1, 1)
-            painter.setPen(pen); painter.setBrush(Qt.NoBrush)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
 
         elif row == 4:  # Statistiques — courbe ascendante + axes
             painter.drawLine(QPointF(cx - r + 1, cy + r - 1), QPointF(cx + r - 1, cy + r - 1))
@@ -354,7 +359,7 @@ class MainWindow(QMainWindow):
         )
         logo_title_row.addWidget(lbl_logo_top)
 
-        lbl_logo_sub = QLabel("2.0")
+        lbl_logo_sub = QLabel(".".join(__version__.split(".")[:2]))
         lbl_logo_sub.setStyleSheet(
             f"color: #FFFFFF; background-color: {COLORS['primary']}; font-size: 11px;"
             "font-weight: bold; border-radius: 5px; padding: 1px 6px;"
@@ -624,13 +629,9 @@ class MainWindow(QMainWindow):
         tab_autres.addTab(ReligionView(), "Religions")
         tab_autres.currentChanged.connect(self.refresh_active_view)
 
-        # Onglet 5 : Prestations annexes
-        self.prestation_config_view = PrestationConfigView(self)
-
         self.tab_parametres_onglets.addTab(tab_generaux, "Généraux")
         self.tab_parametres_onglets.addTab(tab_classes, "Classes")
         self.tab_parametres_onglets.addTab(tab_autres, "Autres réglages")
-        self.tab_parametres_onglets.addTab(self.prestation_config_view, "Prestations")
         self.tab_parametres_onglets.currentChanged.connect(self.refresh_active_view)
 
         layout_param_base.addWidget(self.tab_parametres_onglets)
@@ -647,7 +648,7 @@ class MainWindow(QMainWindow):
         titles = {
             0: "TABLEAU DE BORD",
             1: "SCOLARITÉ / INSCRIPTIONS",
-            2: "KIOSQUE & BIBLIOTHÈQUE",
+            2: "KIOSQUE & BIBLIOTHÈQUE" if Config.ENABLE_BIBLIOTHEQUE else "KIOSQUE",
             3: "COMPTABILITÉ FINANCIÈRE",
             4: "STATISTIQUES ET RAPPORTS",
             5: "SMS  ·  BIENTÔT",

@@ -6,8 +6,7 @@ from PySide6.QtWidgets import (
 from services.niveau_service import NiveauService
 from app.styles import (
     COLORS, INPUT_STYLE, COMBO_STYLE, PAGE_TITLE_STYLE,
-    BUTTON_PRIMARY, BUTTON_SECONDARY, BUTTON_DANGER,
-    apply_table_style, configure_table_action_button, make_table_action_container
+    BUTTON_PRIMARY, BUTTON_SECONDARY, apply_table_style, configure_table_action_button, make_table_action_container
 )
 
 

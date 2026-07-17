@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox
+    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QDialog
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -204,6 +204,3 @@ class ArticleListView(QWidget):
     def on_fermer(self):
         if self.main_window and hasattr(self.main_window, "close_active_tab"):
             self.main_window.close_active_tab()
-
-# Import QDialog de compatibilité
-from PySide6.QtWidgets import QDialog

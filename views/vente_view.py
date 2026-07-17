@@ -1,4 +1,3 @@
-import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
@@ -310,45 +309,23 @@ class VenteView(QWidget):
             QMessageBox.critical(self, "Erreur Session", "Aucune année scolaire active n'est configurée.")
             return
 
-        # Audit stock avant écriture
-        errs = []
-        for id_art, info in self.panier.items():
-            sc = StockService.get_stock_by_article(id_art)
-            stock_dispo = sc.QuantiteCour if sc else 0
-            if info["qte"] > stock_dispo:
-                errs.append(f"- {info['nom']} : demandé {info['qte']}, dispo {stock_dispo}")
-
-        if errs:
-            msg_err = "Certains articles ne possèdent plus le stock suffisant :\n" + "\n".join(errs)
-            QMessageBox.critical(self, "Vente Avortée", msg_err)
-            return
-
         login_util = AppSession.get_logged_in_username() or "admin"
-        ventes_reussies = 0
 
-        for id_art, info in self.panier.items():
-            success, msg = StockService.remove_stock(
-                id_art, info["qte"], active_annee_id, info["pu"], login_util
-            )
-            if success:
-                ventes_reussies += 1
-            else:
-                QMessageBox.critical(self, "Erreur lors du traitement", f"Erreur durant l'enregistrement de '{info['nom']}' : {msg}")
-                break
+        # Vente atomique : une seule transaction verrouille les stocks concernes,
+        # verifie toutes les quantites puis debite tout, ou n'ecrit rien du tout.
+        success, msg = StockService.process_sale(self.panier, active_annee_id, login_util)
 
-        if ventes_reussies == len(self.panier):
-            QMessageBox.information(
-                self, "Vente Validée",
-                f"Vente finalisée avec succès ! {ventes_reussies} article(s)/KIT(s) débité(s) des stocks."
-            )
+        if success:
+            QMessageBox.information(self, "Vente Validée", msg)
             self.on_vider_panier()
 
             if hasattr(self.main_window, "load_data"):
                 try:
                     self.main_window.load_data()
-                except:
+                except Exception:
                     pass
         else:
+            QMessageBox.critical(self, "Vente Avortée", msg)
             self.update_table_panier()
 
     def on_fermer(self):

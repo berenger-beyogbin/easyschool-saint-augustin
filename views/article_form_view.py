@@ -2,7 +2,6 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QMessageBox, QWidget
 )
-from PySide6.QtCore import Qt
 from services.article_service import ArticleService
 from app.styles import (
     COLORS, INPUT_STYLE,

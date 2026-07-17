@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from app.styles import COLORS, TAB_STYLE
-from views.ui_components import make_module_header
+from app.config import Config
 
 from views.stat_inscrits_view import StatInscritsView
 from views.stat_nouveaux_view import StatNouveauxView
@@ -9,7 +9,6 @@ from views.stat_cantine_view import StatCantineView
 from views.stat_transport_view import StatTransportView
 from views.stat_vente_view import StatVenteView
 from views.stat_stock_view import StatStockView
-from views.stat_prestataire_view import StatPrestatairesView
 from views.liste_alphabetique_view import ListeAlphabetiqueView
 
 
@@ -33,21 +32,23 @@ class StatistiquesView(QWidget):
         self.view_inscrits     = StatInscritsView(self.main_window)
         self.view_nouveaux     = StatNouveauxView(self.main_window)
         self.view_scolarite    = StatScolariteView(self.main_window)
-        self.view_cantine      = StatCantineView(self.main_window)
-        self.view_transport    = StatTransportView(self.main_window)
         self.view_vente        = StatVenteView(self.main_window)
         self.view_stock        = StatStockView(self.main_window)
-        self.view_prestataires = StatPrestatairesView(self.main_window)
         self.view_alphabetique = ListeAlphabetiqueView(self.main_window)
+        # Vues instanciees seulement si leur module est actif (sinon on
+        # construirait une UI pour rien : cf. audit P2-06).
+        self.view_cantine = StatCantineView(self.main_window) if Config.ENABLE_CANTINE else None
+        self.view_transport = StatTransportView(self.main_window) if Config.ENABLE_TRANSPORT else None
 
         self.tabs.addTab(self.view_inscrits,     "Inscrits")
         self.tabs.addTab(self.view_nouveaux,     "Nouveaux")
         self.tabs.addTab(self.view_scolarite,    "Scolarité")
-        self.tabs.addTab(self.view_cantine,      "Cantine")
-        self.tabs.addTab(self.view_transport,    "Transport")
+        if Config.ENABLE_CANTINE:
+            self.tabs.addTab(self.view_cantine,   "Cantine")
+        if Config.ENABLE_TRANSPORT:
+            self.tabs.addTab(self.view_transport, "Transport")
         self.tabs.addTab(self.view_vente,        "Vente")
         self.tabs.addTab(self.view_stock,        "Stock")
-        self.tabs.addTab(self.view_prestataires, "Prestataires")
         self.tabs.addTab(self.view_alphabetique, "Liste Alphabétique")
 
         self.tabs.currentChanged.connect(self.on_tab_changed)

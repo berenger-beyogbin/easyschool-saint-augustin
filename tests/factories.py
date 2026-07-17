@@ -11,7 +11,10 @@ from models.inscription import TInscription
 from models.montant_scol import MontantScol
 from models.montant_transport import MontantTransport
 from models.montant_cantine import MontantCantine
-from models.prestation_annexe import PrestationAnnexe
+from models.autres_frais import AutresFrais
+from models.inscription_autres_frais import InscriptionAutresFrais
+from models.article import Article
+from models.stock_cour import StockCour
 
 
 def make_annee(session, libelle="2026-2027", cloturer=False):
@@ -36,14 +39,12 @@ def make_niveau_classe(session, annee, libelle_niveau="CM2"):
     return niveau, classe
 
 
-def make_famille(session, nom="Kouassi", tel="0700000000", ebrie_abobote=False, ens_cat_primaire=True, ens_cat_secondaire=False):
+def make_famille(session, nom="Kouassi", tel="0700000000", ebrie_abobote=False):
     famille = TFamille(
         NomResponsable=nom,
         QualiteResponsable=2,
         CellulaireResponsable=tel,
         EbrieAbobote=ebrie_abobote,
-        EnsCatPrimaire=ens_cat_primaire,
-        EnsCatSecondaire=ens_cat_secondaire,
     )
     session.add(famille)
     session.commit()
@@ -77,19 +78,19 @@ def make_inscription(session, annee, famille, eleve, niveau, classe, **opts):
         Transport=opts.get("transport", False),
         Cantine=opts.get("cantine", False),
         AutresFrais=opts.get("autres_frais", False),
+        StatutAffectation=opts.get("statut_affectation", "AFFECTE_ETAT"),
     )
     session.add(ins)
     session.commit()
     return ins
 
 
-def make_montant_scol(session, annee, niveau, montant=100000, montant_pri=90000, montant_sec=110000):
+def make_montant_scol(session, annee, niveau, montant_affecte=100000, montant_non_affecte=100000):
     m = MontantScol(
         IDTAnneeScolaire=annee.IDTAnneeScolaire,
         IDNiveau=niveau.IDT_Niveau,
-        Montant=montant,
-        MontantEnsPri=montant_pri,
-        MontantEnsSecondaire=montant_sec,
+        MontantAffecte=montant_affecte,
+        MontantNonAffecte=montant_non_affecte,
     )
     session.add(m)
     session.commit()
@@ -110,8 +111,29 @@ def make_montant_cantine(session, annee, niveau, montant=20000):
     return m
 
 
-def make_prestation(session, code, montant_annuel, is_active=True):
-    p = PrestationAnnexe(Code=code, Libelle=code, MontantAnnuel=montant_annuel, IsActive=is_active)
-    session.add(p)
+def make_article_avec_stock(session, libelle="Cahier", pu=500, quantite=10, kit=False):
+    art = Article(Libelle=libelle, PU=pu, KIT=kit, QTESeuil=0)
+    session.add(art)
     session.commit()
-    return p
+
+    sc = StockCour(IDTArticle=art.IDTArticle, QuantiteCour=quantite)
+    session.add(sc)
+    session.commit()
+    return art, sc
+
+
+def make_inscription_autres_frais(session, inscription, code="TENUE", libelle="Tenue", montant=6000):
+    autre_frais = AutresFrais(CodeFrais=code, LibelleFrais=libelle)
+    session.add(autre_frais)
+    session.commit()
+
+    ligne = InscriptionAutresFrais(
+        IDTInscription=inscription.IDTInscription,
+        IDAutres_Frais=autre_frais.IDAutres_Frais,
+        MontantApplique=montant,
+        CodeFraisSnapshot=code,
+        LibelleSnapshot=libelle,
+    )
+    session.add(ligne)
+    session.commit()
+    return ligne

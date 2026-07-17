@@ -1,7 +1,9 @@
-import os
+import logging
 from models.etablissement import EtablissementEcole
 from models.annee_scolaire import TAnneeScolaire
 from app.database import get_session
+
+logger = logging.getLogger(__name__)
 
 class AppSession:
     _active_annee_id = None
@@ -179,9 +181,9 @@ class AppSession:
             if cls._active_annee_id is None or cls._active_etab_id is None:
                 raise Exception("Session impossible à initialiser : année scolaire active ou établissement actif introuvable.")
 
-        except Exception as e:
-            print(f"Erreur d'initialisation de la session : {e}")
+        except Exception:
+            logger.exception("Erreur d'initialisation de la session")
             # On leve expressément l'exception pour bloquer le demarrage de MainWindow
-            raise e
+            raise
         finally:
             session.close()

@@ -6,8 +6,7 @@ from PySide6.QtCore import Qt
 from services.compte_service import CompteService
 from app.styles import (
     COLORS, INPUT_STYLE,
-    BUTTON_PRIMARY, BUTTON_SECONDARY, BUTTON_DANGER,
-    GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE, apply_table_style,
+    BUTTON_PRIMARY, BUTTON_SECONDARY, GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE, apply_table_style,
     configure_table_action_button, make_table_action_container
 )
 

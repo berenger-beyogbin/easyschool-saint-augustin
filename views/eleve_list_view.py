@@ -1,12 +1,12 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QDialog
+    QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView
 )
 from PySide6.QtCore import Qt
 from services.eleve_service import EleveService
 from views.eleve_form_view import EleveFormView
 from app.styles import (
-    COLORS, INPUT_STYLE, TABLE_STYLE, PAGE_TITLE_STYLE,
+    COLORS, INPUT_STYLE, PAGE_TITLE_STYLE,
     BUTTON_PRIMARY, BUTTON_SUCCESS, BUTTON_SECONDARY, BUTTON_DANGER,
     apply_table_style
 )

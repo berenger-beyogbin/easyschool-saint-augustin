@@ -5,6 +5,9 @@ from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class ArticleService:
     @staticmethod
@@ -13,8 +16,8 @@ class ArticleService:
         session = get_session()
         try:
             return session.query(Article).order_by(Article.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_all_articles : {e}")
+        except Exception:
+            logger.exception("Erreur get_all_articles")
             return []
         finally:
             session.close()
@@ -25,8 +28,8 @@ class ArticleService:
         session = get_session()
         try:
             return session.query(Article).filter(Article.KIT == False).order_by(Article.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_articles_simples : {e}")
+        except Exception:
+            logger.exception("Erreur get_articles_simples")
             return []
         finally:
             session.close()
@@ -37,8 +40,8 @@ class ArticleService:
         session = get_session()
         try:
             return session.query(Article).filter(Article.KIT == True).order_by(Article.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_kits : {e}")
+        except Exception:
+            logger.exception("Erreur get_kits")
             return []
         finally:
             session.close()
@@ -49,8 +52,8 @@ class ArticleService:
         session = get_session()
         try:
             return session.get(Article, id_art)
-        except Exception as e:
-            print(f"Erreur get_article_by_id : {e}")
+        except Exception:
+            logger.exception("Erreur get_article_by_id")
             return None
         finally:
             session.close()
@@ -65,8 +68,8 @@ class ArticleService:
             return session.query(Article).filter(
                 Article.Libelle.ilike(f"%{query}%")
             ).order_by(Article.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur search_articles : {e}")
+        except Exception:
+            logger.exception("Erreur search_articles")
             return []
         finally:
             session.close()

@@ -9,7 +9,7 @@ from services.autres_frais_service import AutresFraisService
 from services.montant_autres_frais_service import MontantAutresFraisService
 from app.session import AppSession
 from app.styles import (
-    COLORS, INPUT_STYLE, COMBO_STYLE, SECTION_TITLE_STYLE,
+    INPUT_STYLE, COMBO_STYLE, SECTION_TITLE_STYLE,
     BUTTON_PRIMARY, BUTTON_DANGER,
     GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE, apply_table_style
 )

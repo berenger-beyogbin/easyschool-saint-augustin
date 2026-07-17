@@ -7,6 +7,8 @@ from models.annee_scolaire import TAnneeScolaire
 from app.session import AppSession
 from datetime import date
 
+STATUTS_AFFECTATION_VALIDES = ("AFFECTE_ETAT", "NON_AFFECTE_ETAT")
+
 class InscriptionService:
     """
     Service d'inscription des élèves dans l'année scolaire active.
@@ -103,6 +105,10 @@ class InscriptionService:
             if not id_classe:
                 return False, "Veuillez sélectionner une classe."
 
+            statut_affectation = data.get("StatutAffectation") or "AFFECTE_ETAT"
+            if statut_affectation not in STATUTS_AFFECTATION_VALIDES:
+                return False, "Statut d'affectation invalide."
+
             # 2. Vérifier si l'élève est déjà inscrit pour cette année scolaire
             doublon = session.query(TInscription).filter_by(
                 IDEleve=id_eleve,
@@ -138,6 +144,7 @@ class InscriptionService:
                 Transport=data.get("Transport", False),
                 Cantine=data.get("Cantine", False),
                 AutresFrais=data.get("AutresFrais", False),
+                StatutAffectation=statut_affectation,
                 Login=AppSession.get_logged_in_username(),
                 DateInscription=date.today()
             )
@@ -214,6 +221,10 @@ class InscriptionService:
             if not id_classe:
                 return False, "Veuillez sélectionner une classe."
 
+            statut_affectation = data.get("StatutAffectation", inscription.StatutAffectation)
+            if statut_affectation not in STATUTS_AFFECTATION_VALIDES:
+                return False, "Statut d'affectation invalide."
+
             # Vérifier la capacité uniquement si la classe change
             if id_classe != inscription.IDClasse:
                 classe = session.get(TClasse, id_classe)
@@ -237,6 +248,7 @@ class InscriptionService:
             inscription.Transport = data.get("Transport", inscription.Transport)
             inscription.Cantine = data.get("Cantine", inscription.Cantine)
             inscription.AutresFrais = data.get("AutresFrais", inscription.AutresFrais)
+            inscription.StatutAffectation = statut_affectation
 
             session.commit()
             return True, "L'inscription a été modifiée avec succès !"

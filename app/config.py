@@ -5,11 +5,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
     DB_PORT = os.getenv("DB_PORT", "5432")
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
-    DB_NAME = os.getenv("DB_NAME", "easy_school_db")
+    # Base dediee a l'adaptation CJGA (College Catholique Joseph Garnier Attingue),
+    # separee de la base historique du primaire pour eviter tout melange de donnees.
+    DB_NAME = os.getenv("DB_NAME", "easy_school_cjga_db")
+
+    # Flags de désactivation fonctionnelle pour la version college CJGA.
+    # Masquage UI uniquement : aucune table/colonne n'est supprimee, les
+    # anciennes structures (VersementScol.MontantCantine, etc.) restent intactes.
+    ENABLE_TRANSPORT = False
+    ENABLE_CANTINE = False
+    ENABLE_BIBLIOTHEQUE = False
 
     @classmethod
     def get_db_url(cls):

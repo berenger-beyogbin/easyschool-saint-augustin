@@ -65,11 +65,29 @@ htmlcov/
 Thumbs.db
 desktop.ini
 
+# === PROCESS / RUN ARTIFACTS ===
+*.pid
+
+# === BACKUPS LOCAUX D'EXECUTABLE INSTALLE (lourd, jamais commité) ===
+backup_installed_exe_*/
+
+# === SAUVEGARDES DE BASE DE DONNEES (scripts/backup_db.ps1) ===
+/backups/
+
 # === PYINSTALLER ===
+# EasySchool.spec est intentionnellement suivi (configuration de packaging
+# reproductible, audit C6) : exclusion generique + exception explicite.
 *.spec
+!/EasySchool.spec
 
 # === ASSETS GÉNÉRÉS ===
 assets/photos_eleves/
 assets/logos/
 !assets/logos/.gitkeep
 !assets/photos_eleves/.gitkeep
+
+# === INSTALLATEUR WINDOWS (packaging/) ===
+# Installeur PostgreSQL embarqué (~350 Mo) : jamais commité, a recuperer/copier
+# manuellement dans packaging/vendor/ avant de compiler l'installateur.
+packaging/vendor/
+packaging/Output/

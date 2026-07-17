@@ -2,6 +2,9 @@ from typing import List
 from models.montant_autres_frais import MontantAutresFrais
 from app.database import get_session
 from sqlalchemy.orm import joinedload
+import logging
+logger = logging.getLogger(__name__)
+
 
 class MontantAutresFraisService:
     @staticmethod
@@ -13,8 +16,8 @@ class MontantAutresFraisService:
                 joinedload(MontantAutresFrais.niveau),
                 joinedload(MontantAutresFrais.autre_frais)
             ).filter(MontantAutresFrais.IDAnneeScolaire == id_annee).all()
-        except Exception as e:
-            print(f"Erreur get_montants_by_annee MontantAutresFrais : {e}")
+        except Exception:
+            logger.exception("Erreur get_montants_by_annee MontantAutresFrais")
             return []
         finally:
             session.close()
@@ -29,8 +32,8 @@ class MontantAutresFraisService:
             ).filter(
                 (MontantAutresFrais.IDAnneeScolaire == id_annee) & (MontantAutresFrais.IDT_Niveau == id_niveau)
             ).all()
-        except Exception as e:
-            print(f"Erreur get_montants_by_niveau MontantAutresFrais : {e}")
+        except Exception:
+            logger.exception("Erreur get_montants_by_niveau MontantAutresFrais")
             return []
         finally:
             session.close()
@@ -45,8 +48,8 @@ class MontantAutresFraisService:
                 (MontantAutresFrais.IDT_Niveau == id_niveau) &
                 (MontantAutresFrais.IDAutres_Frais == id_autres_frais)
             ).first()
-        except Exception as e:
-            print(f"Erreur get_montant_by_niveau_and_type MontantAutresFrais : {e}")
+        except Exception:
+            logger.exception("Erreur get_montant_by_niveau_and_type MontantAutresFrais")
             return None
         finally:
             session.close()

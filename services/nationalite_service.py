@@ -1,6 +1,9 @@
 from typing import List
 from models.nationalite import TNationalite
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class NationaliteService:
     @staticmethod
@@ -9,8 +12,8 @@ class NationaliteService:
         session = get_session()
         try:
             return session.query(TNationalite).order_by(TNationalite.Nationalite.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_all TNationalite : {e}")
+        except Exception:
+            logger.exception("Erreur get_all TNationalite")
             return []
         finally:
             session.close()
