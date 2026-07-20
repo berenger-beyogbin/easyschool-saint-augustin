@@ -30,7 +30,7 @@ class TFamille(Base):
     
     # Personne a contacter en cas d'urgence
     NomUrgence = Column(String(50), nullable=True)
-    ContactUrgence = Column(String(20), nullable=True)
+    ContactUrgence = Column(String(50), nullable=True)
     HabitationUrgence = Column(String(50), nullable=True)
     UrgenceMoimeme = Column(Boolean, default=False)
     

@@ -169,3 +169,12 @@ END $$;
             print("Contraintes critiques d'historique verifiees en ON DELETE RESTRICT.")
     except Exception as e:
         print(f"Avertissement migration contraintes historiques : {e}")
+
+    # Idempotent upgrade: ContactUrgence pouvait contenir plusieurs numeros
+    # separes par "/" et depassait la limite historique de varchar(20).
+    try:
+        with _engine.begin() as conn:
+            conn.execute(text('ALTER TABLE IF EXISTS "TFamille" ALTER COLUMN "ContactUrgence" TYPE VARCHAR(50);'))
+            print("Colonne 'TFamille.ContactUrgence' elargie a VARCHAR(50).")
+    except Exception as e:
+        print(f"Avertissement migration 'TFamille.ContactUrgence': {e}")
