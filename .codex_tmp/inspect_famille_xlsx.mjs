@@ -1,6 +1,6 @@
 import { FileBlob, SpreadsheetFile } from "@oai/artifact-tool";
 
-const source = "C:/Users/BBY/Documents/Export FAMILLE EPC.xlsx";
+const source = "C:/Users/BBY/Documents/Export eleve EPC.xlsx";
 const input = await FileBlob.load(source);
 const workbook = await SpreadsheetFile.importXlsx(input);
 

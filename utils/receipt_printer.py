@@ -1,11 +1,8 @@
 from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
-from PySide6.QtGui import QPainter, QFont, QPen, QColor, QPageSize, QPageLayout
+from PySide6.QtGui import QPainter, QFont, QPen, QColor, QPageSize, QPageLayout, QPixmap
 from PySide6.QtCore import Qt, QRectF
 
-# ── En-tête école : codé en dur ───────────────────────────────────────────────
-_HDR_TYPE = "ECOLE PRIMAIRE CATHOLIQUE"
-_HDR_NOM  = "SAINT AUGUSTIN"
-_HDR_ADDR = "Route d'Alépé carrefour Monastère. CEL : 07 08 56 42 02 / 05 04 08 13 55"
+from utils.print_helpers import format_fcfa, get_etablissement_print_info
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 C_BLACK  = QColor(0,   0,   0)
@@ -17,10 +14,7 @@ C_MUTED  = QColor(130, 130, 130)
 
 
 def _fmt(v) -> str:
-    try:
-        return f"{int(float(v)):,} F".replace(",", " ")
-    except Exception:
-        return "0 F"
+    return format_fcfa(v)
 
 
 def _font(size_pt: float, bold: bool = False) -> QFont:
@@ -34,6 +28,10 @@ class ReceiptPrinter:
 
     @staticmethod
     def print_receipt(parent, data: dict):
+        etablissement = get_etablissement_print_info(parent)
+        if etablissement is None:
+            return
+
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
 
         from app.session import AppSession
@@ -48,13 +46,15 @@ class ReceiptPrinter:
         preview = QPrintPreviewDialog(printer, parent)
         preview.setWindowTitle("Aperçu — Reçu de paiement")
         preview.resize(980, 700)
-        preview.paintRequested.connect(lambda p: ReceiptPrinter._render(p, data))
+        preview.paintRequested.connect(
+            lambda p: ReceiptPrinter._render(p, data, etablissement)
+        )
         preview.exec()
 
     # ─────────────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _render(printer: QPrinter, data: dict):
+    def _render(printer: QPrinter, data: dict, etablissement):
         painter = QPainter(printer)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -90,25 +90,42 @@ class ReceiptPrinter:
         # ── EN-TÊTE ───────────────────────────────────────────────────────────
         painter.setPen(QPen(C_BLACK))
 
+        logo_pix = QPixmap(etablissement.logo_path or "")
+        if not logo_pix.isNull():
+            logo_h = mm(21)
+            logo_scaled = logo_pix.scaledToHeight(
+                int(logo_h), Qt.TransformationMode.SmoothTransformation
+            )
+            logo_y = int(Y + mm(2.5))
+            painter.drawPixmap(int(X + mm(2)), logo_y, logo_scaled)
+            painter.drawPixmap(
+                int(X + CW - logo_scaled.width() - mm(2)), logo_y, logo_scaled
+            )
+
         painter.setFont(_font(9, bold=True))
         painter.drawText(
             QRectF(X, Y + mm(2.5), CW, mm(7)),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            _HDR_TYPE,
+            etablissement.type_etablissement,
         )
 
         painter.setFont(_font(20, bold=True))
         painter.drawText(
             QRectF(X, Y + mm(8), CW, mm(12)),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            _HDR_NOM,
+            etablissement.nom,
         )
 
         painter.setFont(_font(8, bold=True))
         painter.drawText(
             QRectF(X, Y + mm(19), CW, mm(6)),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            _HDR_ADDR,
+            "   —   ".join(
+                value for value in (
+                    etablissement.adresse,
+                    f"CEL : {etablissement.telephone}" if etablissement.telephone else "",
+                ) if value
+            ),
         )
 
         # Ligne fine sous l'en-tête

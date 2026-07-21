@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QAbstractItemView
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFont
 from services.statistiques_service import StatistiquesService
 from utils.list_printer import StockStatPrinter
 from app.styles import (

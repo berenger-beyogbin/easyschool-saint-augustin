@@ -12,6 +12,7 @@ from app.styles import (
     COLORS, DATE_STYLE, BUTTON_PRIMARY, BUTTON_SECONDARY,
     GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE, apply_table_style
 )
+from utils.list_printer import BalanceComptesPrinter
 
 class BalanceComptesView(QWidget):
     """
@@ -103,7 +104,7 @@ class BalanceComptesView(QWidget):
 
         self.btn_imprimer = QPushButton("Imprimer")
         self.btn_imprimer.setStyleSheet(BUTTON_SECONDARY)
-        self.btn_imprimer.clicked.connect(self.print_placeholder)
+        self.btn_imprimer.clicked.connect(self.imprimer_clic)
         row_totals.addWidget(self.btn_imprimer)
 
         table_layout.addLayout(row_totals)
@@ -165,9 +166,26 @@ class BalanceComptesView(QWidget):
         self.lbl_total_debit.setText(f"Total Débit : {self.format_fcfa(sum_debit)}")
         self.lbl_total_credit.setText(f"Total Crédit : {self.format_fcfa(sum_credit)}")
 
-    def print_placeholder(self):
-        """Action du bouton Imprimer."""
-        QMessageBox.information(self, "Impression", "Impression à venir")
+    def imprimer_clic(self):
+        active_annee_id = AppSession.get_active_annee_id()
+        if not active_annee_id:
+            QMessageBox.warning(self, "Impression", "Aucune année scolaire active.")
+            return
+
+        date_deb = self.txt_date_debut.date().toPython()
+        date_fn = self.txt_date_fin.date().toPython()
+
+        rows = ComptabiliteService.get_balance_comptes(
+            id_annee=active_annee_id,
+            date_debut=date_deb,
+            date_fin=date_fn
+        )
+        if not rows:
+            QMessageBox.information(self, "Impression", "Aucune donnée à imprimer.")
+            return
+
+        filtre = f"Du {date_deb.strftime('%d/%m/%Y')} au {date_fn.strftime('%d/%m/%Y')}"
+        BalanceComptesPrinter.print_report(self, rows, filtre)
 
     def format_fcfa(self, montant) -> str:
         try:

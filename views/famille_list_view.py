@@ -29,9 +29,9 @@ class FamilleListView(QWidget):
 
         # 1. En-tête de filtre / Titre
         header_layout = QHBoxLayout()
-        titre = QLabel("Liste des Familles")
-        titre.setStyleSheet(PAGE_TITLE_STYLE)
-        header_layout.addWidget(titre)
+        self.titre = QLabel("Liste des Familles")
+        self.titre.setStyleSheet(PAGE_TITLE_STYLE)
+        header_layout.addWidget(self.titre)
         header_layout.addStretch()
 
         # Barre de recherche
@@ -99,6 +99,8 @@ class FamilleListView(QWidget):
         self.table.setRowCount(0)
         query = self.txt_recherche.text().strip()
         familles = FamilleService.search_familles(query)
+        total = len(familles) if not query else len(FamilleService.get_all_familles())
+        self.titre.setText(f"Liste des Familles ({total})")
 
         for i, fam in enumerate(familles):
             self.table.insertRow(i)
