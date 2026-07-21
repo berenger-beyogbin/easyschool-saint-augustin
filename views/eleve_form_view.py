@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QMessageBox, QGroupBox, QGridLayout,
-    QScrollArea, QWidget, QDateEdit, QFileDialog, QFrame
+    QScrollArea, QWidget, QDateEdit, QFileDialog, QFrame, QApplication
 )
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QPixmap
@@ -28,9 +28,9 @@ QGroupBox {{
     color: {COLORS['primary']};
     border: 1px solid {COLORS['border']};
     border-radius: 10px;
-    margin-top: 20px;
+    margin-top: 14px;
     background-color: {COLORS['card']};
-    padding-top: 8px;
+    padding-top: 6px;
 }}
 QGroupBox::title {{
     subcontrol-origin: margin;
@@ -51,8 +51,8 @@ QLineEdit {{
     background-color: {COLORS['card']};
     color: {COLORS['text']};
     padding: 0 12px;
-    min-height: 44px;
-    max-height: 48px;
+    min-height: 36px;
+    max-height: 38px;
     font-size: 13px;
 }}
 QLineEdit:focus {{
@@ -72,8 +72,8 @@ QComboBox {{
     background-color: {COLORS['card']};
     color: {COLORS['text']};
     padding: 0 12px;
-    min-height: 44px;
-    max-height: 48px;
+    min-height: 36px;
+    max-height: 38px;
     font-size: 13px;
 }}
 QComboBox:focus {{
@@ -106,8 +106,8 @@ QDateEdit {{
     background-color: {COLORS['card']};
     color: {COLORS['text']};
     padding: 0 12px;
-    min-height: 44px;
-    max-height: 48px;
+    min-height: 36px;
+    max-height: 38px;
     font-size: 13px;
 }}
 QDateEdit:focus {{
@@ -138,8 +138,8 @@ QLineEdit {{
     border: 1px solid {COLORS['border']};
     border-radius: 8px;
     padding: 0 12px;
-    min-height: 44px;
-    max-height: 48px;
+    min-height: 36px;
+    max-height: 38px;
     font-size: 13px;
 }}
 """
@@ -197,7 +197,7 @@ class EleveFormView(QDialog):
         super().__init__(parent)
         self.id_eleve = id_eleve
         self.setWindowTitle("Fiche Élève")
-        self.resize(800, 720)
+        self._appliquer_taille_ecran()
         self.photo_path = None
         apply_modal_style(self)
         self.init_ui()
@@ -206,6 +206,18 @@ class EleveFormView(QDialog):
             self.load_eleve()
         else:
             self.proposer_matricule()
+
+    def _appliquer_taille_ecran(self):
+        """Dimensionne la fenêtre pour tenir sans ascenseur sur la plupart des écrans."""
+        screen = QApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen else None
+        if avail:
+            largeur = min(880, avail.width() - 60)
+            hauteur = min(860, avail.height() - 60)
+        else:
+            largeur, hauteur = 880, 860
+        self.resize(largeur, hauteur)
+        self.setMinimumSize(min(780, largeur), min(620, hauteur))
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -221,8 +233,8 @@ class EleveFormView(QDialog):
             }}
         """)
         h_layout = QVBoxLayout(header)
-        h_layout.setContentsMargins(24, 16, 24, 16)
-        h_layout.setSpacing(4)
+        h_layout.setContentsMargins(24, 10, 24, 10)
+        h_layout.setSpacing(2)
 
         lbl_titre = QLabel("ENREGISTREMENT ÉLÈVE")
         lbl_titre.setStyleSheet(
@@ -244,6 +256,7 @@ class EleveFormView(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
             f"QScrollArea {{ border: none; background-color: {COLORS['bg']}; }}"
         )
@@ -251,16 +264,16 @@ class EleveFormView(QDialog):
         container = QWidget()
         container.setStyleSheet(f"background-color: {COLORS['bg']};")
         grid_layout = QVBoxLayout(container)
-        grid_layout.setContentsMargins(20, 18, 20, 20)
-        grid_layout.setSpacing(16)
+        grid_layout.setContentsMargins(18, 12, 18, 14)
+        grid_layout.setSpacing(12)
 
         # ── SECTION 1 : Identification ───────────────────────────────────────
         box_id = QGroupBox("ÉLÈVE — IDENTIFICATION")
         box_id.setStyleSheet(_SECTION_CARD)
         id_layout = QGridLayout(box_id)
-        id_layout.setContentsMargins(16, 18, 16, 16)
+        id_layout.setContentsMargins(16, 14, 16, 12)
         id_layout.setHorizontalSpacing(14)
-        id_layout.setVerticalSpacing(10)
+        id_layout.setVerticalSpacing(8)
         id_layout.setColumnStretch(1, 1)
         id_layout.setColumnStretch(3, 1)
         id_layout.setColumnMinimumWidth(0, 120)
@@ -344,9 +357,9 @@ class EleveFormView(QDialog):
         box_extr = QGroupBox("INFOS COMPLÉMENTAIRES / EXTRAIT")
         box_extr.setStyleSheet(_SECTION_CARD)
         extr_layout = QGridLayout(box_extr)
-        extr_layout.setContentsMargins(16, 18, 16, 16)
+        extr_layout.setContentsMargins(16, 14, 16, 12)
         extr_layout.setHorizontalSpacing(14)
-        extr_layout.setVerticalSpacing(10)
+        extr_layout.setVerticalSpacing(8)
         extr_layout.setColumnStretch(1, 1)
         extr_layout.setColumnMinimumWidth(0, 120)
 
@@ -377,11 +390,11 @@ class EleveFormView(QDialog):
         box_photo.setStyleSheet(_SECTION_CARD)
         photo_layout = QVBoxLayout(box_photo)
         photo_layout.setAlignment(Qt.AlignCenter)
-        photo_layout.setSpacing(12)
-        photo_layout.setContentsMargins(14, 18, 14, 16)
+        photo_layout.setSpacing(10)
+        photo_layout.setContentsMargins(14, 14, 14, 12)
 
         self.lbl_image_frame = QLabel()
-        self.lbl_image_frame.setFixedSize(120, 148)
+        self.lbl_image_frame.setFixedSize(110, 122)
         self.lbl_image_frame.setStyleSheet(
             f"border: 2px dashed {COLORS['input_border']};"
             f"background-color: {COLORS['bg']};"
@@ -407,9 +420,9 @@ class EleveFormView(QDialog):
         box_urg = QGroupBox("PERSONNE À CONTACTER EN CAS D'URGENCE")
         box_urg.setStyleSheet(_SECTION_CARD)
         urg_layout = QGridLayout(box_urg)
-        urg_layout.setContentsMargins(16, 18, 16, 16)
+        urg_layout.setContentsMargins(16, 14, 16, 12)
         urg_layout.setHorizontalSpacing(14)
-        urg_layout.setVerticalSpacing(10)
+        urg_layout.setVerticalSpacing(8)
         urg_layout.setColumnStretch(1, 1)
         urg_layout.setColumnStretch(3, 1)
         urg_layout.setColumnMinimumWidth(0, 120)
@@ -445,7 +458,7 @@ class EleveFormView(QDialog):
             }}
         """)
         footer_layout = QHBoxLayout(footer)
-        footer_layout.setContentsMargins(20, 14, 20, 14)
+        footer_layout.setContentsMargins(20, 10, 20, 10)
         footer_layout.setSpacing(10)
         footer_layout.addStretch()
 
@@ -488,6 +501,11 @@ class EleveFormView(QDialog):
         if items:
             c.addItems(items)
         c.setStyleSheet(_COMBO)
+        # Empêche un libellé long (ex : nom de famille + téléphone) d'élargir
+        # le formulaire au-delà de sa largeur — la place allouée par la
+        # grille prime sur le contenu, et le texte est tronqué avec "…".
+        c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        c.setMinimumContentsLength(1)
         return c
 
     # ── Logique ──────────────────────────────────────────────────────────────

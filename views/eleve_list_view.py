@@ -29,9 +29,9 @@ class EleveListView(QWidget):
 
         # 1. En-tête : Titre et champ de recherche
         header = QHBoxLayout()
-        titre = QLabel("Liste des Élèves")
-        titre.setStyleSheet(PAGE_TITLE_STYLE)
-        header.addWidget(titre)
+        self.titre = QLabel("Liste des Élèves")
+        self.titre.setStyleSheet(PAGE_TITLE_STYLE)
+        header.addWidget(self.titre)
         header.addStretch()
 
         lbl_rech = QLabel("Filtrer :")
@@ -101,7 +101,8 @@ class EleveListView(QWidget):
         query = self.txt_recherche.text().strip().lower()
         
         eleves = EleveService.get_all_eleves()
-        
+        self.titre.setText(f"Liste des Élèves ({len(eleves)})")
+
         row_idx = 0
         for i, el in enumerate(eleves):
             # Application du filtrage de recherche

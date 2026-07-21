@@ -1,16 +1,17 @@
 import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
-    QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, QDateEdit
+    QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, QDateEdit, QMessageBox
 )
 from PySide6.QtCore import Qt, QDate
 from services.compte_service import CompteService
 from services.comptabilite_service import ComptabiliteService
 from app.session import AppSession
 from app.styles import (
-    COLORS, DATE_STYLE, COMBO_STYLE, BUTTON_PRIMARY,
+    COLORS, DATE_STYLE, COMBO_STYLE, BUTTON_PRIMARY, BUTTON_SUCCESS,
     GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE, apply_table_style
 )
+from utils.list_printer import EtatSortiesPrinter
 
 class EtatSortiesView(QWidget):
     """
@@ -72,6 +73,12 @@ class EtatSortiesView(QWidget):
         self.btn_afficher.setStyleSheet(BUTTON_PRIMARY)
         self.btn_afficher.clicked.connect(self.load_data)
         filter_layout.addWidget(self.btn_afficher)
+
+        # Bouton Imprimer
+        self.btn_imprimer = QPushButton("Imprimer")
+        self.btn_imprimer.setStyleSheet(BUTTON_SUCCESS)
+        self.btn_imprimer.clicked.connect(self.imprimer_clic)
+        filter_layout.addWidget(self.btn_imprimer)
 
         layout.addWidget(group_filter)
 
@@ -163,3 +170,39 @@ class EtatSortiesView(QWidget):
             return f"{val:,}".replace(",", " ") + " FCFA"
         except Exception:
             return f"{montant} FCFA"
+
+    def imprimer_clic(self):
+        active_annee_id = AppSession.get_active_annee_id()
+        if not active_annee_id:
+            QMessageBox.warning(self, "Impression", "Aucune année scolaire active.")
+            return
+
+        compte_id = self.combo_filter_compte.currentData()
+        date_deb = self.txt_date_debut.date().toPython()
+        date_fn = self.txt_date_fin.date().toPython()
+
+        rows = ComptabiliteService.get_etat_sorties(
+            id_annee=active_annee_id,
+            id_compte=compte_id,
+            date_debut=date_deb,
+            date_fin=date_fn
+        )
+        if not rows:
+            QMessageBox.information(self, "Impression", "Aucune donnée à imprimer.")
+            return
+
+        formatted = []
+        for item in rows:
+            formatted.append({
+                "Date": item.DateSortie.strftime("%d/%m/%Y") if item.DateSortie else "",
+                "Beneficiaire": item.Benef,
+                "Telephone": item.NumBenef or "N/A",
+                "Montant": float(item.Montant),
+                "Compte": f"{item.compte.NumCompte} - {item.compte.LibCompte}" if item.compte else str(item.IDCompte),
+            })
+
+        filtre = f"Du {date_deb.strftime('%d/%m/%Y')} au {date_fn.strftime('%d/%m/%Y')}"
+        if compte_id:
+            filtre += f" — {self.combo_filter_compte.currentText()}"
+
+        EtatSortiesPrinter.print_report(self, formatted, filtre)

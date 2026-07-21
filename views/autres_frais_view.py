@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QGroupBox,
-    QComboBox, QCheckBox, QScrollArea, QGridLayout
+    QComboBox, QCheckBox, QScrollArea, QGridLayout, QFrame
 )
 from PySide6.QtCore import Qt
 from services.niveau_service import NiveauService
@@ -34,6 +34,12 @@ class AutresFraisView(QWidget):
         layout_gauche = QVBoxLayout(pane_gauche)
         layout_gauche.setContentsMargins(4, 4, 4, 4)
         layout_gauche.setSpacing(15)
+
+        scroll_gauche = QScrollArea()
+        scroll_gauche.setWidgetResizable(True)
+        scroll_gauche.setFrameShape(QFrame.NoFrame)
+        scroll_gauche.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_gauche.setWidget(pane_gauche)
 
         # Groupe 1 : Créer un type de frais
         group_type = QGroupBox("1. ENREGISTRER UN TYPE DE FRAIS ANNEXE")
@@ -81,8 +87,8 @@ class AutresFraisView(QWidget):
         # Zone de cases à cocher scrollable
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFixedHeight(80)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setFixedHeight(150)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setStyleSheet("QScrollArea { border: 1px solid #ddd; border-radius: 4px; background: white; }")
 
         self._niveaux_container = QWidget()
@@ -91,7 +97,6 @@ class AutresFraisView(QWidget):
         self._niveaux_layout.setSpacing(6)
         self._niveaux_layout.setColumnStretch(0, 1)
         self._niveaux_layout.setColumnStretch(1, 1)
-        self._niveaux_layout.setColumnStretch(2, 1)
         scroll.setWidget(self._niveaux_container)
         layout_affect.addWidget(scroll)
 
@@ -103,7 +108,7 @@ class AutresFraisView(QWidget):
         layout_gauche.addWidget(group_affect)
         layout_gauche.addStretch()
 
-        layout_principal.addWidget(pane_gauche, 1)
+        layout_principal.addWidget(scroll_gauche, 1)
 
         # ---- DROITE ----
         pane_droit = QWidget()
@@ -165,7 +170,7 @@ class AutresFraisView(QWidget):
             cb = QCheckBox(n["Libelle"])
             cb.setChecked(True)
             cb.setStyleSheet(CB_STYLE)
-            row, col = divmod(i, 3)
+            row, col = divmod(i, 2)
             self._niveaux_layout.addWidget(cb, row, col)
             self._niveau_checkboxes.append((cb, n["IDT_Niveau"]))
 

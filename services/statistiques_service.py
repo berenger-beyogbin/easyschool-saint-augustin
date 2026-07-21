@@ -3,6 +3,7 @@ from typing import List, Optional, Any
 from sqlalchemy import func, case
 from app.database import get_session
 from app.session import AppSession
+from utils.print_helpers import format_fcfa
 
 class StatistiquesService:
     @staticmethod
@@ -526,8 +527,4 @@ class StatistiquesService:
     @staticmethod
     def format_fcfa(montant: Any) -> str:
         """Formate un montant numérique en FCFA (Ex: 100 000 FCFA)."""
-        try:
-            val = int(float(montant))
-            return f"{val:,}".replace(",", " ") + " FCFA"
-        except Exception:
-            return f"{montant} FCFA"
+        return format_fcfa(montant)
