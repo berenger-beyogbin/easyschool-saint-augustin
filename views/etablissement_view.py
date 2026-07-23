@@ -2,7 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QLineEdit, QPushButton, QMessageBox, QFileDialog
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRegularExpression
+from PySide6.QtGui import QRegularExpressionValidator
 from services.etablissement_service import EtablissementService
 from app.styles import COLORS, PAGE_TITLE_STYLE, INPUT_STYLE, BUTTON_PRIMARY, BUTTON_SECONDARY
 
@@ -35,8 +36,10 @@ class EtablissementView(QWidget):
         self.txt_nom = QLineEdit()
         self.txt_sigle = QLineEdit()
         self.txt_tel = QLineEdit()
+        self.txt_tel_secondaire = QLineEdit()
         self.txt_email = QLineEdit()
         self.txt_adresse = QLineEdit()
+        self.txt_adresse_postale = QLineEdit()
         self.txt_chef = QLineEdit()
         self.txt_slogan = QLineEdit()
         self.txt_localite = QLineEdit()
@@ -50,17 +53,19 @@ class EtablissementView(QWidget):
         labels_champs = [
             ("Nom Etab. * :", self.txt_nom, 0, 0),
             ("Sigle :", self.txt_sigle, 0, 2),
-            ("Téléphone :", self.txt_tel, 1, 0),
-            ("E-Mail :", self.txt_email, 1, 2),
-            ("Adresse :", self.txt_adresse, 2, 0),
-            ("Chef d'Etab. :", self.txt_chef, 2, 2),
-            ("Slogan :", self.txt_slogan, 3, 0),
+            ("Téléphone principal * :", self.txt_tel, 1, 0),
+            ("Téléphone secondaire :", self.txt_tel_secondaire, 1, 2),
+            ("E-Mail * :", self.txt_email, 2, 0),
+            ("Adresse physique * :", self.txt_adresse, 2, 2),
+            ("Adresse postale :", self.txt_adresse_postale, 3, 0),
             ("Localité :", self.txt_localite, 3, 2),
-            ("Code Etab. :", self.txt_code, 4, 0),
-            ("Type Enseignement :", self.txt_type_ens, 4, 2),
-            ("Ministère :", self.txt_ministere, 5, 0),
-            ("DREN :", self.txt_dren, 5, 2),
-            ("IEP / IEPP :", self.txt_iepp, 6, 0)
+            ("Chef d'Etab. :", self.txt_chef, 4, 0),
+            ("Slogan :", self.txt_slogan, 4, 2),
+            ("Code Etab. :", self.txt_code, 5, 0),
+            ("Type Enseignement :", self.txt_type_ens, 5, 2),
+            ("Ministère :", self.txt_ministere, 6, 0),
+            ("DREN :", self.txt_dren, 6, 2),
+            ("IEP / IEPP :", self.txt_iepp, 7, 0)
         ]
 
         for text, widget, row, col in labels_champs:
@@ -71,6 +76,12 @@ class EtablissementView(QWidget):
             widget.setStyleSheet(INPUT_STYLE)
 
         self.layout.addLayout(form_grid)
+
+        self.txt_tel.setPlaceholderText("Ex. 07 57 47 13 43")
+        self.txt_tel_secondaire.setPlaceholderText("Ex. 05 04 08 13 55")
+        self.txt_email.setPlaceholderText("nom@domaine.ci")
+        email_rx = QRegularExpression(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+        self.txt_email.setValidator(QRegularExpressionValidator(email_rx, self))
 
         # Zone de Logo (Visualisation + Parcourir)
         logo_layout = QHBoxLayout()
@@ -94,10 +105,15 @@ class EtablissementView(QWidget):
         self.btn_valider.setStyleSheet(BUTTON_PRIMARY)
         self.btn_valider.clicked.connect(self.valider_formulaire)
 
+        self.btn_officiel = QPushButton("Préremplir depuis la fiche 2026-2027")
+        self.btn_officiel.setStyleSheet(BUTTON_SECONDARY)
+        self.btn_officiel.clicked.connect(self.pre_remplir_officiel)
+
         btn_fermer = QPushButton("Fermer")
         btn_fermer.setStyleSheet(BUTTON_SECONDARY)
         btn_fermer.clicked.connect(self.close_tab)
 
+        actions_layout.addWidget(self.btn_officiel)
         actions_layout.addWidget(self.btn_valider)
         actions_layout.addWidget(btn_fermer)
         self.layout.addLayout(actions_layout)
@@ -115,8 +131,10 @@ class EtablissementView(QWidget):
                 self.txt_nom.setText(ecole.RaisonSociale)
                 self.txt_sigle.setText(ecole.Sigle or "")
                 self.txt_tel.setText(ecole.Telephone or "")
+                self.txt_tel_secondaire.setText(ecole.TelephoneSecondaire or "")
                 self.txt_email.setText(ecole.Email or "")
                 self.txt_adresse.setText(ecole.Adresse or "")
+                self.txt_adresse_postale.setText(ecole.AdressePostale or "")
                 self.txt_chef.setText(ecole.ChefEtab or "")
                 self.txt_slogan.setText(ecole.Slogan or "")
                 self.txt_localite.setText(ecole.Localite or "")
@@ -149,6 +167,26 @@ class EtablissementView(QWidget):
             except Exception as e:
                 QMessageBox.warning(self, "Erreur de copie", f"Impossible de copier le logo : {e}")
 
+    def pre_remplir_officiel(self):
+        """Charge la brochure officielle dans le formulaire, sans enregistrer."""
+        infos = EtablissementService.get_informations_officielles()
+        self.txt_nom.setText(infos["RaisonSociale"])
+        self.txt_sigle.setText(infos["Sigle"])
+        self.txt_tel.setText(infos["Telephone"])
+        self.txt_tel_secondaire.setText(infos["TelephoneSecondaire"])
+        self.txt_email.setText(infos["Email"])
+        self.txt_adresse.setText(infos["Adresse"])
+        self.txt_adresse_postale.setText(infos["AdressePostale"])
+        self.txt_localite.setText(infos["Localite"])
+        self.txt_type_ens.setText(infos["TypeEtab"])
+        self.txt_slogan.setText(infos["Slogan"])
+        self.lbl_logo_path.setText(infos["LogoPath"])
+        QMessageBox.information(
+            self,
+            "Préremplissage terminé",
+            "Les informations officielles ont été chargées. Vérifiez-les puis cliquez sur Valider.",
+        )
+
     def valider_formulaire(self):
         """Valide et enregistre la fiche."""
         # Verification des champs obligatoires
@@ -157,13 +195,30 @@ class EtablissementView(QWidget):
             QMessageBox.warning(self, "Champ obligatoire", "Le nom de l'établissement est requis !")
             return
 
+        telephone = self.txt_tel.text().strip()
+        email = self.txt_email.text().strip()
+        adresse = self.txt_adresse.text().strip()
+        if not telephone or not email or not adresse:
+            QMessageBox.warning(
+                self,
+                "Champs obligatoires",
+                "Le téléphone principal, l'e-mail et l'adresse physique sont requis.",
+            )
+            return
+        if not self.txt_email.hasAcceptableInput():
+            QMessageBox.warning(self, "E-mail invalide", "Veuillez saisir une adresse e-mail valide.")
+            self.txt_email.setFocus()
+            return
+
         # Compilation des donnees
         data = {
             "RaisonSociale": nom,
             "Sigle": self.txt_sigle.text().strip(),
-            "Telephone": self.txt_tel.text().strip(),
-            "Email": self.txt_email.text().strip(),
-            "Adresse": self.txt_adresse.text().strip(),
+            "Telephone": telephone,
+            "TelephoneSecondaire": self.txt_tel_secondaire.text().strip(),
+            "Email": email.lower(),
+            "Adresse": adresse,
+            "AdressePostale": self.txt_adresse_postale.text().strip(),
             "ChefEtab": self.txt_chef.text().strip(),
             "Slogan": self.txt_slogan.text().strip(),
             "Localite": self.txt_localite.text().strip(),

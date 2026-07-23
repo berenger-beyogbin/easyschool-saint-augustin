@@ -39,7 +39,10 @@ class MontantScolariteView(QWidget):
         layout_commun = QVBoxLayout(group_commun)
         layout_commun.setSpacing(8)
 
-        lbl_com_info = QLabel("Valeurs par défaut à propager à tous les niveaux :")
+        lbl_com_info = QLabel(
+            "Tarif de base : 170 000 F en préscolaire et 186 000 F du CP1 au CM2. "
+            "Les nouveaux du CP1 au CM2 reçoivent automatiquement 10 000 F de frais supplémentaires."
+        )
         lbl_com_info.setWordWrap(True)
         lbl_com_info.setStyleSheet(
             f"color: {COLORS['muted']}; font-style: italic; font-size: 11px; background-color: transparent;"
@@ -52,7 +55,7 @@ class MontantScolariteView(QWidget):
 
         self.txt_com_montant = QLineEdit("0")
         self.txt_com_montant.setStyleSheet(INPUT_STYLE)
-        form_commun.addRow("Standard (F CFA) :", self.txt_com_montant)
+        form_commun.addRow("Base ancien / préscolaire (F CFA) :", self.txt_com_montant)
 
         self.txt_com_pri = QLineEdit("0")
         self.txt_com_pri.setStyleSheet(INPUT_STYLE)
@@ -90,7 +93,7 @@ class MontantScolariteView(QWidget):
 
         self.txt_ind_montant = QLineEdit("0")
         self.txt_ind_montant.setStyleSheet(INPUT_STYLE)
-        form_indiv.addRow("Standard (F CFA) :", self.txt_ind_montant)
+        form_indiv.addRow("Base ancien / préscolaire (F CFA) :", self.txt_ind_montant)
 
         self.txt_ind_pri = QLineEdit("0")
         self.txt_ind_pri.setStyleSheet(INPUT_STYLE)
@@ -126,7 +129,7 @@ class MontantScolariteView(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels([
-            "Niveau", "Scolarité standard", "Enseignant Ca. Pri.", "Enseignant Ca. Sec."
+            "Niveau", "Base ancien / préscolaire", "Enseignant Ca. Pri.", "Enseignant Ca. Sec."
         ])
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)

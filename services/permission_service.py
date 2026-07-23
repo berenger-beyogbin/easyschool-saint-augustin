@@ -13,6 +13,8 @@ PERMISSIONS_CATALOG = [
     ("KIOSQUE_VENTES",          "Gestion des ventes",                    "Kiosque",          31),
     ("KIOSQUE_ARTICLES",        "Gestion des articles",                  "Kiosque",          32),
     ("KIOSQUE_STOCKS",          "Gestion des stocks",                    "Kiosque",          33),
+    ("KIOSQUE_REMISES",         "Accorder des remises",                  "Kiosque",          34),
+    ("KIOSQUE_REMBOURSEMENTS",  "Annuler et rembourser les ventes",       "Kiosque",          35),
     ("COMPTABILITE_VIEW",       "Accès au module Comptabilité",          "Comptabilité",     40),
     ("COMPTABILITE_SAISIE",     "Saisie des opérations comptables",      "Comptabilité",     41),
     ("STATISTIQUES_VIEW",       "Accès aux statistiques",                "Statistiques",     50),

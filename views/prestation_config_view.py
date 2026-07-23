@@ -7,12 +7,14 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QComboBox, QAbstractItemView, QMessageBox, QSplitter,
-    QFormLayout, QGroupBox, QCheckBox
+    QFormLayout, QGroupBox, QCheckBox, QTabWidget, QScrollArea, QGridLayout
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from services.prestation_service import PrestationService
+from services.niveau_service import NiveauService
+from app.session import AppSession
 from app.styles import (
     COLORS, PAGE_TITLE_STYLE, SECTION_TITLE_STYLE,
     INPUT_STYLE, COMBO_STYLE, BUTTON_PRIMARY, BUTTON_SUCCESS,
@@ -35,7 +37,8 @@ class PrestationConfigView(QWidget):
         super().__init__()
         self.main_window = main_window
         self.selected_prestation_id = None
-        from app.session import AppSession
+        self._niveau_checkboxes = []
+        self.selected_tarif_ids = []
         self.can_modify = AppSession.has_permission("PRESTATIONS_MODIFIER")
         self.setStyleSheet(f"background-color: {COLORS['bg']};")
         self.init_ui()
@@ -51,10 +54,22 @@ class PrestationConfigView(QWidget):
         root.addWidget(titre)
 
         sous_titre = QLabel(
-            "Configurez les prestations incluses dans la scolarité et leurs montants annuels."
+            "Configurez les prestations incluses dans la scolarité, leurs montants annuels "
+            "et, si besoin, un tarif spécifique par niveau."
         )
         sous_titre.setStyleSheet(SECTION_TITLE_STYLE)
         root.addWidget(sous_titre)
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_catalogue_tab(), "Catalogue")
+        self.tabs.addTab(self._build_tarifs_niveau_tab(), "Tarifs par niveau")
+        root.addWidget(self.tabs, 1)
+
+    def _build_catalogue_tab(self) -> QWidget:
+        """Onglet 1 : catalogue des prestations, montant par defaut et prestataires."""
+        tab = QWidget()
+        layout = QHBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Corps principal : liste à gauche, formulaire à droite
         splitter = QSplitter(Qt.Horizontal)
@@ -64,7 +79,119 @@ class PrestationConfigView(QWidget):
         splitter.addWidget(self._build_form_panel())
         splitter.setSizes([560, 380])
 
-        root.addWidget(splitter, 1)
+        layout.addWidget(splitter)
+        return tab
+
+    def _build_tarifs_niveau_tab(self) -> QWidget:
+        """Onglet 2 : surcharge du tarif d'une prestation pour des niveaux specifiques."""
+        tab = QWidget()
+        layout = QHBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(20)
+
+        # ---- GAUCHE : affectation ----
+        pane_gauche = QFrame()
+        pane_gauche.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLORS['card']};
+                border: 1px solid {COLORS['border']};
+                border-top: 3px solid {COLORS['primary']};
+                border-radius: 10px;
+            }}
+        """)
+        apply_card_shadow(pane_gauche)
+        layout_gauche = QVBoxLayout(pane_gauche)
+        layout_gauche.setContentsMargins(16, 14, 16, 14)
+        layout_gauche.setSpacing(10)
+
+        lbl_gauche = QLabel("Attribuer un tarif aux niveaux concernés")
+        lbl_gauche.setStyleSheet(
+            f"font-size: 14px; font-weight: 700; color: {COLORS['text']};"
+            "background-color: transparent; border: none;"
+        )
+        layout_gauche.addWidget(lbl_gauche)
+        layout_gauche.addWidget(make_separator())
+
+        layout_gauche.addWidget(QLabel("Prestation :"))
+        self.cmb_tarif_prestation = QComboBox()
+        self.cmb_tarif_prestation.setStyleSheet(COMBO_STYLE)
+        layout_gauche.addWidget(self.cmb_tarif_prestation)
+
+        layout_gauche.addWidget(QLabel("Montant annuel (F CFA) :"))
+        self.txt_tarif_montant = QLineEdit("0")
+        self.txt_tarif_montant.setStyleSheet(INPUT_STYLE)
+        layout_gauche.addWidget(self.txt_tarif_montant)
+
+        layout_gauche.addWidget(QLabel("Niveaux concernés (décocher ceux non concernés) :"))
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(180)
+        scroll.setStyleSheet("QScrollArea { border: 1px solid #ddd; border-radius: 4px; background: white; }")
+
+        self._niveaux_container = QWidget()
+        self._niveaux_layout = QGridLayout(self._niveaux_container)
+        self._niveaux_layout.setContentsMargins(8, 8, 8, 8)
+        self._niveaux_layout.setSpacing(6)
+        self._niveaux_layout.setColumnStretch(0, 1)
+        self._niveaux_layout.setColumnStretch(1, 1)
+        scroll.setWidget(self._niveaux_container)
+        layout_gauche.addWidget(scroll, 1)
+
+        self.btn_tarif_save = QPushButton("Enregistrer pour les niveaux cochés")
+        self.btn_tarif_save.setStyleSheet(BUTTON_PRIMARY)
+        self.btn_tarif_save.setCursor(Qt.PointingHandCursor)
+        self.btn_tarif_save.setEnabled(self.can_modify)
+        self.btn_tarif_save.clicked.connect(self._on_save_tarif_niveau)
+        layout_gauche.addWidget(self.btn_tarif_save)
+
+        # ---- DROITE : tarifs existants ----
+        pane_droit = QFrame()
+        pane_droit.setStyleSheet(f"""
+            QFrame {{
+                background-color: {COLORS['card']};
+                border: 1px solid {COLORS['border']};
+                border-top: 3px solid {COLORS['success']};
+                border-radius: 10px;
+            }}
+        """)
+        apply_card_shadow(pane_droit)
+        layout_droit = QVBoxLayout(pane_droit)
+        layout_droit.setContentsMargins(16, 14, 16, 14)
+        layout_droit.setSpacing(10)
+
+        lbl_droit = QLabel("Tarifs par niveau programmés")
+        lbl_droit.setStyleSheet(
+            f"font-size: 14px; font-weight: 700; color: {COLORS['text']};"
+            "background-color: transparent; border: none;"
+        )
+        layout_droit.addWidget(lbl_droit)
+        layout_droit.addWidget(make_separator())
+
+        self.table_tarifs = QTableWidget()
+        self.table_tarifs.setColumnCount(4)
+        self.table_tarifs.setHorizontalHeaderLabels(["Prestation", "Niveau", "Tarif annuel", "ID"])
+        self.table_tarifs.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table_tarifs.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.table_tarifs.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_tarifs.setAlternatingRowColors(True)
+        self.table_tarifs.setStyleSheet(TABLE_STYLE)
+        self.table_tarifs.verticalHeader().setVisible(False)
+        self.table_tarifs.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_tarifs.setColumnHidden(3, True)
+        self.table_tarifs.itemSelectionChanged.connect(self._on_tarif_row_selected)
+        layout_droit.addWidget(self.table_tarifs, 1)
+
+        self.btn_tarif_delete = QPushButton("Retirer les tarifs sélectionnés")
+        self.btn_tarif_delete.setStyleSheet(BUTTON_DANGER)
+        self.btn_tarif_delete.setCursor(Qt.PointingHandCursor)
+        self.btn_tarif_delete.setEnabled(False)
+        self.btn_tarif_delete.clicked.connect(self._on_delete_tarif_niveau)
+        layout_droit.addWidget(self.btn_tarif_delete)
+
+        layout.addWidget(pane_gauche, 1)
+        layout.addWidget(pane_droit, 2)
+        return tab
 
     # ─── Panneau liste ────────────────────────────────────────────────────────
 
@@ -272,9 +399,10 @@ class PrestationConfigView(QWidget):
     # ─── Logique ──────────────────────────────────────────────────────────────
 
     def refresh_data(self):
-        """Recharge la liste des prestations et des prestataires."""
+        """Recharge la liste des prestations, des prestataires et des tarifs par niveau."""
         self._load_prestations()
         self._load_prestataires()
+        self._load_tarifs_niveau()
 
     def _load_prestations(self):
         rows = PrestationService.get_all_prestations()
@@ -410,3 +538,125 @@ class PrestationConfigView(QWidget):
             show_info(self, "Succès", msg)
         else:
             show_error(self, "Erreur", msg)
+
+    # ─── Tarifs par niveau ────────────────────────────────────────────────────
+
+    def _load_tarifs_niveau(self):
+        active_annee_id = AppSession.get_active_annee_id()
+
+        # Combo des prestations
+        self.cmb_tarif_prestation.blockSignals(True)
+        self.cmb_tarif_prestation.clear()
+        for p in PrestationService.get_all_prestations():
+            self.cmb_tarif_prestation.addItem(f"{p.Code} - {p.Libelle}", p.IDPrestation)
+        self.cmb_tarif_prestation.blockSignals(False)
+
+        # Grille des niveaux (toutes cochées par defaut)
+        while self._niveaux_layout.count():
+            item = self._niveaux_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._niveau_checkboxes.clear()
+
+        if active_annee_id:
+            niveaux = NiveauService.get_all_with_cycle()
+            for i, n in enumerate(niveaux):
+                cb = QCheckBox(n["Libelle"])
+                cb.setChecked(True)
+                row, col = divmod(i, 2)
+                self._niveaux_layout.addWidget(cb, row, col)
+                self._niveau_checkboxes.append((cb, n["IDT_Niveau"]))
+
+        # Tableau des tarifs deja programmes
+        self.table_tarifs.setRowCount(0)
+        self.selected_tarif_ids = []
+        self.btn_tarif_delete.setEnabled(False)
+        if not active_annee_id:
+            return
+
+        tarifs = PrestationService.get_tarifs_niveau_by_annee(active_annee_id)
+        self.table_tarifs.setRowCount(len(tarifs))
+        for i, t in enumerate(tarifs):
+            nom_prestation = f"{t.prestation.Code} - {t.prestation.Libelle}" if t.prestation else "Inconnu"
+            lib_niveau = t.niveau.Libelle if t.niveau else "Inconnu"
+            montant_aff = f"{int(t.MontantAnnuel):,} F".replace(",", " ")
+
+            for col, val in enumerate([nom_prestation, lib_niveau, montant_aff, str(t.IDPrestationTarif)]):
+                item = QTableWidgetItem(val)
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                self.table_tarifs.setItem(i, col, item)
+
+    def _on_tarif_row_selected(self):
+        rows = set(idx.row() for idx in self.table_tarifs.selectedIndexes())
+        self.selected_tarif_ids = []
+        for row in rows:
+            item_id = self.table_tarifs.item(row, 3)
+            if item_id:
+                self.selected_tarif_ids.append(int(item_id.text()))
+        self.btn_tarif_delete.setEnabled(self.can_modify and len(self.selected_tarif_ids) > 0)
+
+    def _on_save_tarif_niveau(self):
+        if not self.can_modify:
+            show_error(self, "Accès refusé", "Vous n'avez pas le droit PRESTATIONS_MODIFIER.")
+            return
+
+        active_annee_id = AppSession.get_active_annee_id()
+        if not active_annee_id:
+            show_error(self, "Erreur", "Aucune année scolaire active.")
+            return
+
+        if self.cmb_tarif_prestation.currentIndex() == -1:
+            show_error(self, "Sélection requise", "Veuillez sélectionner une prestation.")
+            return
+
+        niveaux_coches = [(cb, id_niv) for cb, id_niv in self._niveau_checkboxes if cb.isChecked()]
+        if not niveaux_coches:
+            show_error(self, "Aucun niveau", "Veuillez cocher au moins un niveau.")
+            return
+
+        try:
+            montant = float(self.txt_tarif_montant.text().strip() or 0)
+        except ValueError:
+            show_error(self, "Erreur de saisie", "Montant invalide.")
+            return
+
+        if montant <= 0:
+            show_error(self, "Montant invalide", "Le montant doit être supérieur à 0.")
+            return
+
+        id_prestation = self.cmb_tarif_prestation.currentData()
+        erreurs = []
+        for _, id_niveau in niveaux_coches:
+            ok, msg = PrestationService.save_tarif_niveau(active_annee_id, id_niveau, id_prestation, montant)
+            if not ok:
+                erreurs.append(msg)
+
+        if erreurs:
+            show_error(self, "Avertissement", f"{len(erreurs)} erreur(s) lors de l'enregistrement.")
+        else:
+            show_info(self, "Succès", f"Tarif enregistré pour {len(niveaux_coches)} niveau(x).")
+
+        self.txt_tarif_montant.setText("0")
+        self._load_tarifs_niveau()
+
+    def _on_delete_tarif_niveau(self):
+        if not self.can_modify:
+            show_error(self, "Accès refusé", "Vous n'avez pas le droit PRESTATIONS_MODIFIER.")
+            return
+        if not self.selected_tarif_ids:
+            return
+        if not show_confirm(
+            self, "Confirmation",
+            f"Retirer {len(self.selected_tarif_ids)} tarif(s) sélectionné(s) ?"
+        ):
+            return
+
+        erreurs = []
+        for id_tarif in self.selected_tarif_ids:
+            ok, msg = PrestationService.delete_tarif_niveau(id_tarif)
+            if not ok:
+                erreurs.append(msg)
+
+        if erreurs:
+            show_error(self, "Erreur", f"{len(erreurs)} suppression(s) échouée(s).")
+        self._load_tarifs_niveau()

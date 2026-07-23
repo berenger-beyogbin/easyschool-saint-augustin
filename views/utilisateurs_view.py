@@ -1,3 +1,4 @@
+import secrets
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
@@ -64,20 +65,23 @@ class UtilisateurFormDialog(QDialog):
         self.f_profil.setFixedHeight(36)
         self._load_profils()
 
-        self.f_pwd = QLineEdit()
-        self.f_pwd.setEchoMode(QLineEdit.Password)
-        self.f_pwd.setStyleSheet(INPUT_STYLE)
-        self.f_pwd.setFixedHeight(36)
-        pwd_hint = "" if not self.user else "Laisser vide pour conserver le mot de passe actuel"
-        if pwd_hint:
-            self.f_pwd.setPlaceholderText(pwd_hint)
+        # En modification uniquement, un administrateur peut remplacer le mot
+        # de passe. À la création, le mot de passe provisoire est généré sans
+        # afficher de champ dans le formulaire.
+        self.f_pwd = None
+        self.f_pwd_confirm = None
+        if self.user:
+            self.f_pwd = QLineEdit()
+            self.f_pwd.setEchoMode(QLineEdit.Password)
+            self.f_pwd.setStyleSheet(INPUT_STYLE)
+            self.f_pwd.setFixedHeight(36)
+            self.f_pwd.setPlaceholderText("Laisser vide pour conserver le mot de passe actuel")
 
-        self.f_pwd_confirm = QLineEdit()
-        self.f_pwd_confirm.setEchoMode(QLineEdit.Password)
-        self.f_pwd_confirm.setStyleSheet(INPUT_STYLE)
-        self.f_pwd_confirm.setFixedHeight(36)
-        if pwd_hint:
-            self.f_pwd_confirm.setPlaceholderText(pwd_hint)
+            self.f_pwd_confirm = QLineEdit()
+            self.f_pwd_confirm.setEchoMode(QLineEdit.Password)
+            self.f_pwd_confirm.setStyleSheet(INPUT_STYLE)
+            self.f_pwd_confirm.setFixedHeight(36)
+            self.f_pwd_confirm.setPlaceholderText("Laisser vide pour conserver le mot de passe actuel")
 
         self.f_actif = QCheckBox("Compte actif")
         self.f_actif.setChecked(True)
@@ -88,10 +92,22 @@ class UtilisateurFormDialog(QDialog):
         form.addRow("Prénoms", self.f_prenoms)
         form.addRow("Email", self.f_email)
         form.addRow("Profil *", self.f_profil)
-        form.addRow("Mot de passe" + (" *" if not self.user else ""), self.f_pwd)
-        form.addRow("Confirmer", self.f_pwd_confirm)
+        if self.user:
+            form.addRow("Nouveau mot de passe", self.f_pwd)
+            form.addRow("Confirmer", self.f_pwd_confirm)
         form.addRow("", self.f_actif)
         layout.addLayout(form)
+
+        if not self.user:
+            pwd_info = QLabel(
+                "Un mot de passe provisoire sécurisé sera généré automatiquement. "
+                "L'utilisateur devra le remplacer à sa première connexion."
+            )
+            pwd_info.setWordWrap(True)
+            pwd_info.setStyleSheet(
+                f"color: {COLORS['muted']}; font-size: 12px; padding: 2px 0 4px 0;"
+            )
+            layout.addWidget(pwd_info)
 
         # Pré-remplissage en mode modification
         if self.user:
@@ -125,8 +141,8 @@ class UtilisateurFormDialog(QDialog):
 
     def _on_save(self):
         from services.utilisateur_service import UtilisateurService
-        pwd = self.f_pwd.text().strip()
-        pwd2 = self.f_pwd_confirm.text().strip()
+        pwd = self.f_pwd.text().strip() if self.f_pwd is not None else self._generate_temporary_password()
+        pwd2 = self.f_pwd_confirm.text().strip() if self.f_pwd_confirm is not None else pwd
         if pwd and pwd != pwd2:
             QMessageBox.warning(self, "Erreur", "Les mots de passe ne correspondent pas.")
             return
@@ -146,10 +162,27 @@ class UtilisateurFormDialog(QDialog):
             ok, msg = UtilisateurService.create(data)
 
         if ok:
-            QMessageBox.information(self, "Succès", msg)
+            if self.user:
+                QMessageBox.information(self, "Succès", msg)
+            else:
+                QMessageBox.information(
+                    self,
+                    "Utilisateur créé",
+                    f"{msg}\n\nMot de passe provisoire : {pwd}\n\n"
+                    "Notez-le maintenant : il ne sera plus affiché.",
+                )
             self.accept()
         else:
             QMessageBox.warning(self, "Erreur", msg)
+
+    @staticmethod
+    def _generate_temporary_password() -> str:
+        """Génère un code provisoire court, lisible et sans caractères ambigus."""
+        letters = "ABCDEFGHJKLMNPQRSTUVWXYZ"  # Sans I et O
+        digits = "23456789"  # Sans 0 et 1
+        return "".join(secrets.choice(letters) for _ in range(4)) + "".join(
+            secrets.choice(digits) for _ in range(4)
+        )
 
 
 # ===========================================================================

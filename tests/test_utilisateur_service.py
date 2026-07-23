@@ -36,6 +36,9 @@ def test_create_user_success(db_session):
     })
     assert ok is True
     assert "créé" in msg
+    db_session.expire_all()
+    user = db_session.query(Utilisateur).filter_by(Login="jdupont").first()
+    assert user.MustChangePassword is True
 
 
 def test_create_user_rejects_short_password(db_session):
@@ -71,7 +74,7 @@ def test_authenticate_success(db_session):
     assert ok is True
     assert user_data["Login"] == "jdupont"
     assert user_data["IsAdmin"] is True
-    assert user_data["MustChangePassword"] is False
+    assert user_data["MustChangePassword"] is True
 
 
 def test_authenticate_wrong_password(db_session):

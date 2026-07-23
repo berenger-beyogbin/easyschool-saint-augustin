@@ -4,6 +4,7 @@ from models.article import Article
 from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
+from models.kit_composant import KitComposant
 from app.database import get_session
 from app.session import AppSession
 
@@ -11,6 +12,28 @@ class ArticleService:
     @staticmethod
     def _require_articles_permission() -> Tuple[bool, str]:
         return AppSession.require_permission("KIOSQUE_ARTICLES")
+
+    @staticmethod
+    def _validate_kit_composition(session, contenu_kit: str, qte_kit: str) -> Tuple[bool, str]:
+        try:
+            ids = [int(x) for x in (contenu_kit or "").split(";") if x.strip()]
+            qtes = [int(x) for x in (qte_kit or "").split(";") if x.strip()]
+        except ValueError:
+            return False, "La composition du kit est invalide."
+        if not ids or len(ids) != len(qtes) or len(ids) != len(set(ids)) or any(q <= 0 for q in qtes):
+            return False, "Le kit doit contenir des articles uniques avec des quantites positives."
+        composants = session.query(Article.IDTArticle).filter(
+            Article.IDTArticle.in_(ids), Article.KIT == False
+        ).count()
+        if composants != len(ids):
+            return False, "Un composant du kit est introuvable ou n'est pas un article simple."
+        return True, ""
+
+    @staticmethod
+    def _kit_pairs(contenu_kit: str, qte_kit: str) -> list[tuple[int, int]]:
+        ids = [int(x) for x in contenu_kit.split(";") if x.strip()]
+        qtes = [int(x) for x in qte_kit.split(";") if x.strip()]
+        return list(zip(ids, qtes))
 
     @staticmethod
     def get_all_articles() -> List[Article]:
@@ -77,6 +100,23 @@ class ArticleService:
             session.close()
 
     @staticmethod
+    def search_articles_with_stock(query: str = "") -> List[tuple]:
+        """Charge catalogue et stock en une seule requete."""
+        session = get_session()
+        try:
+            q = session.query(Article, StockCour.QuantiteCour).outerjoin(
+                StockCour, StockCour.IDTArticle == Article.IDTArticle
+            )
+            if query:
+                q = q.filter(Article.Libelle.ilike(f"%{query}%"))
+            return [(article, stock or 0) for article, stock in q.order_by(Article.Libelle.asc()).all()]
+        except Exception as e:
+            print(f"Erreur search_articles_with_stock : {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
     def create_article(libelle: str, pu: float, seuil: int) -> Tuple[bool, str]:
         """Cree un nouvel article simple et initialise son stock a 0."""
         if not libelle or not libelle.strip():
@@ -134,6 +174,9 @@ class ArticleService:
         lib_clean = libelle.strip()
         session = get_session()
         try:
+            ok, msg = ArticleService._validate_kit_composition(session, contenu_kit, qte_kit)
+            if not ok:
+                return False, msg
             # Verification unicite du libelle
             exist = session.query(Article).filter(Article.Libelle.ilike(lib_clean)).first()
             if exist:
@@ -149,6 +192,9 @@ class ArticleService:
             )
             session.add(nouveau)
             session.flush()
+
+            for id_article, quantite in ArticleService._kit_pairs(contenu_kit, qte_kit):
+                session.add(KitComposant(IDKit=nouveau.IDTArticle, IDArticle=id_article, Quantite=quantite))
 
             # Initialisation automatique du stock courant a 0
             stock = StockCour(IDTArticle=nouveau.IDTArticle, QuantiteCour=0)
@@ -181,6 +227,10 @@ class ArticleService:
             art = session.get(Article, id_art)
             if not art:
                 return False, "Article inexistant."
+            if is_kit:
+                ok, msg = ArticleService._validate_kit_composition(session, contenu_kit, qte_kit)
+                if not ok:
+                    return False, msg
 
             # Verification unicite libelle hors lui-meme
             exist = session.query(Article).filter(
@@ -197,9 +247,13 @@ class ArticleService:
             if is_kit:
                 art.ContenuKit = contenu_kit
                 art.QteKit = qte_kit
+                session.query(KitComposant).filter_by(IDKit=id_art).delete()
+                for id_article, quantite in ArticleService._kit_pairs(contenu_kit, qte_kit):
+                    session.add(KitComposant(IDKit=id_art, IDArticle=id_article, Quantite=quantite))
             else:
                 art.ContenuKit = None
                 art.QteKit = None
+                session.query(KitComposant).filter_by(IDKit=id_art).delete()
 
             session.commit()
             return True, "Article/Kit mis a jour avec succes !"
@@ -223,12 +277,8 @@ class ArticleService:
                 return False, "Article inexistant."
 
             # 1. Verifier si l'article est utilise dans un Kit
-            kits = session.query(Article).filter(Article.KIT == True).all()
-            for kit in kits:
-                if kit.ContenuKit:
-                    ids = [x.strip() for x in kit.ContenuKit.split(";") if x.strip()]
-                    if str(id_art) in ids:
-                        return False, "Impossible de supprimer cet article car il est utilisé dans la composition d’un kit."
+            if session.query(KitComposant).filter_by(IDArticle=id_art).first():
+                return False, "Impossible de supprimer cet article car il est utilise dans la composition d'un kit."
 
             # 2. Verifier si le stock courant est > 0
             sc = session.query(StockCour).filter_by(IDTArticle=id_art).first()

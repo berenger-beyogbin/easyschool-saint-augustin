@@ -45,7 +45,15 @@ class ApprovisionnementView(QWidget):
         layout_form.addWidget(QLabel("Sélectionner un article ou KIT :"))
         self.cmb_articles = QComboBox()
         self.cmb_articles.setStyleSheet(COMBO_STYLE)
+        self.cmb_articles.currentIndexChanged.connect(self.on_article_changed)
         layout_form.addWidget(self.cmb_articles)
+
+        self.lbl_capacite_kit = QLabel("")
+        self.lbl_capacite_kit.setWordWrap(True)
+        self.lbl_capacite_kit.setStyleSheet(
+            f"color: {COLORS['warning']}; font-weight: bold; background: transparent;"
+        )
+        layout_form.addWidget(self.lbl_capacite_kit)
 
         layout_form.addWidget(QLabel("Quantité à approvisionner :"))
         self.txt_quantite = QLineEdit()
@@ -141,6 +149,21 @@ class ApprovisionnementView(QWidget):
         for a in articles:
             suffix = " (KIT)" if a.KIT else ""
             self.cmb_articles.addItem(f"{a.Libelle}{suffix}", a.IDTArticle)
+        self.on_article_changed()
+
+    def on_article_changed(self):
+        id_art = self.cmb_articles.currentData()
+        capacite = StockService.get_capacite_assemblage(id_art) if id_art else None
+        if not capacite:
+            self.lbl_capacite_kit.clear()
+            return
+        details = ", ".join(
+            f"{d['article']} ({d['stock']} en stock / {d['par_kit']} par kit)"
+            for d in capacite["details"]
+        )
+        self.lbl_capacite_kit.setText(
+            f"Maximum assemblable : {capacite['maximum']} kit(s).\n{details}"
+        )
 
     def load_historique(self):
         """Récupère l'historique des entrées selon la plage de dates."""
@@ -186,6 +209,7 @@ class ApprovisionnementView(QWidget):
         self.txt_quantite.clear()
         self.cmb_articles.setCurrentIndex(0)
         self.txt_date_ent.setDate(QDate.currentDate())
+        self.on_article_changed()
 
     def on_valider(self):
         """Valide et enregistre le réapprovisionnement."""
@@ -217,6 +241,7 @@ class ApprovisionnementView(QWidget):
             QMessageBox.information(self, "Succès", msg)
             self.on_annuler()
             self.load_historique()
+            self.on_article_changed()
 
             if hasattr(self.main_window, "load_data"):
                 try:

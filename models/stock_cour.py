@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Column, Integer, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -8,9 +8,10 @@ class StockCour(Base):
     Mappe de la table HFSQL 'StockCour'.
     """
     __tablename__ = "StockCour"
+    __table_args__ = (CheckConstraint('"QuantiteCour" >= 0', name="ck_stock_cour_non_negatif"),)
 
     IDStockCour = Column(Integer, primary_key=True, autoincrement=True)
-    IDTArticle = Column(Integer, ForeignKey("TArticle.IDTArticle", ondelete="CASCADE"), nullable=False, unique=True)
+    IDTArticle = Column(Integer, ForeignKey("TArticle.IDTArticle", ondelete="RESTRICT"), nullable=False, unique=True)
     QuantiteCour = Column(Integer, nullable=False, default=0)
 
     # Relation

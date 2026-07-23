@@ -8,8 +8,6 @@ from models.eleve import Eleve
 from models.etablissement import EtablissementEcole
 from models.famille import TFamille
 from models.inscription import TInscription
-from models.autres_frais import AutresFrais
-from models.montant_autres_frais import MontantAutresFrais
 from models.montant_cantine import MontantCantine
 from models.montant_scol import MontantScol
 from models.montant_transport import MontantTransport
@@ -17,6 +15,7 @@ from models.permission import Permission
 from models.profil import Profil
 from models.profil_permission import ProfilPermission
 from models.prestation_annexe import PrestationAnnexe
+from models.prestation_tarif_niveau import PrestationTarifNiveau
 from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
@@ -27,8 +26,6 @@ from services.classe_service import ClasseService
 from services.eleve_service import EleveService
 from services.famille_service import FamilleService
 from services.inscription_service import InscriptionService
-from services.autres_frais_service import AutresFraisService
-from services.montant_autres_frais_service import MontantAutresFraisService
 from services.montant_cantine_service import MontantCantineService
 from services.montant_scolarite_service import MontantScolariteService
 from services.montant_transport_service import MontantTransportService
@@ -44,6 +41,7 @@ from tests.factories import (
     make_inscription,
     make_montant_scol,
     make_niveau_classe,
+    make_prestation,
 )
 
 
@@ -398,35 +396,43 @@ def test_cantine_tariff_write_requires_versements_permission(db_session):
     assert db_session.query(MontantCantine).count() == 0
 
 
-def test_other_fee_type_write_requires_versements_permission(db_session):
-    _set_user_without_versements_permission()
-
-    ok, msg = AutresFraisService.create_autres_frais("TENUE", "Tenue scolaire")
-
-    db_session.expire_all()
-    assert ok is False
-    assert "SCOLARITE_VERSEMENTS" in msg
-    assert db_session.query(AutresFrais).filter_by(CodeFrais="TENUE").first() is None
-
-
-def test_other_fee_amount_write_requires_versements_permission(db_session):
+def test_prestation_tarif_niveau_write_requires_modifier_permission(db_session):
     annee, niveau = _setup_tarif_context(db_session)
-    frais = AutresFrais(CodeFrais="ASSUR", LibelleFrais="Assurance")
-    db_session.add(frais)
-    db_session.commit()
-    _set_user_without_versements_permission()
+    prestation = make_prestation(db_session, "TENUE", 15000)
+    _set_user_without_prestation_write_permission()
 
-    ok, msg = MontantAutresFraisService.save_montant_autres_frais(
+    ok, msg = PrestationService.save_tarif_niveau(
         annee.IDTAnneeScolaire,
         niveau.IDT_Niveau,
-        frais.IDAutres_Frais,
+        prestation.IDPrestation,
         montant=5000,
     )
 
     db_session.expire_all()
     assert ok is False
-    assert "SCOLARITE_VERSEMENTS" in msg
-    assert db_session.query(MontantAutresFrais).count() == 0
+    assert "PRESTATIONS_MODIFIER" in msg
+    assert db_session.query(PrestationTarifNiveau).count() == 0
+
+
+def test_prestation_tarif_niveau_write_allows_modifier_permission(db_session):
+    annee, niveau = _setup_tarif_context(db_session)
+    prestation = make_prestation(db_session, "ASSUR", 6000)
+    _set_user_with_prestation_write_permission()
+
+    ok, msg = PrestationService.save_tarif_niveau(
+        annee.IDTAnneeScolaire,
+        niveau.IDT_Niveau,
+        prestation.IDPrestation,
+        montant=5000,
+    )
+
+    db_session.expire_all()
+    assert ok is True, msg
+    assert db_session.query(PrestationTarifNiveau).filter_by(
+        IDAnneeScolaire=annee.IDTAnneeScolaire,
+        IDT_Niveau=niveau.IDT_Niveau,
+        IDPrestation=prestation.IDPrestation,
+    ).first() is not None
 
 
 def test_stock_entry_service_requires_stock_permission(db_session):

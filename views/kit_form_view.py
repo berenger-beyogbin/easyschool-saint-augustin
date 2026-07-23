@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QMessageBox, QWidget, QListWidget, QTableWidget,
+    QPushButton, QMessageBox, QWidget, QListWidget, QTableWidget, QSpinBox,
     QTableWidgetItem, QHeaderView, QGroupBox, QListWidgetItem
 )
 from PySide6.QtCore import Qt
@@ -47,7 +47,7 @@ class KitFormView(QDialog):
 
         lbl_titre = QLabel("KIT D'ARTICLES" if not self.id_kit else "MODIFIER LE KIT")
         lbl_titre.setStyleSheet("font-size: 16px; font-weight: bold; color: white; background-color: transparent;")
-        lbl_soustitre = QLabel("Configurer le kit de vente en associant des fournitures individuelles")
+        lbl_soustitre = QLabel("Kit assemblé et stocké séparément ; la composition sert de référence")
         lbl_soustitre.setStyleSheet(
             f"font-size: 11px; color: {COLORS['surface_soft']}; background-color: transparent;"
         )
@@ -123,15 +123,18 @@ class KitFormView(QDialog):
 
         # Partie droite : Composition du kit (quantités modifiables)
         v_actuel = QVBoxLayout()
-        v_actuel.addWidget(QLabel("Table de Composition (Double Clic qté pour changer) :"))
+        v_actuel.addWidget(QLabel("Composition — modifiez directement la quantité :"))
         self.table_comp = QTableWidget()
-        self.table_comp.setColumnCount(3)
-        self.table_comp.setHorizontalHeaderLabels(["Article", "Quantité", "ID"])
+        self.table_comp.setColumnCount(5)
+        self.table_comp.setHorizontalHeaderLabels([
+            "Article", "P.U.", "Quantité", "Total ligne", "ID"
+        ])
         apply_table_style(self.table_comp)
         self.table_comp.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table_comp.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.table_comp.setColumnHidden(2, True)
-        self.table_comp.cellChanged.connect(self.on_quantite_changed)
+        self.table_comp.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table_comp.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table_comp.setColumnHidden(4, True)
         v_actuel.addWidget(self.table_comp)
         layout_comp.addLayout(v_actuel, 4)
 
@@ -189,9 +192,10 @@ class KitFormView(QDialog):
                     except ValueError:
                         pass
 
-        self.update_table_composition()
+        # Conserver un éventuel tarif personnalisé déjà enregistré.
+        self.update_table_composition(recalculate=False)
 
-    def update_table_composition(self):
+    def update_table_composition(self, recalculate=True):
         """Peuple le tableau des composants à droite."""
         self.table_comp.blockSignals(True)
         self.table_comp.setRowCount(0)
@@ -206,16 +210,37 @@ class KitFormView(QDialog):
             item_nom = QTableWidgetItem(nom_art)
             item_nom.setFlags(item_nom.flags() & ~Qt.ItemIsEditable)
 
-            item_qte = QTableWidgetItem(str(qte))
-            item_qte.setFlags(item_qte.flags() | Qt.ItemIsEditable)
-
+            pu = float(art.PU) if art else 0.0
+            item_pu = QTableWidgetItem(f"{int(pu):,} F")
+            item_pu.setFlags(item_pu.flags() & ~Qt.ItemIsEditable)
+            spin_qte = QSpinBox()
+            spin_qte.setRange(1, 9999)
+            spin_qte.setValue(qte)
+            spin_qte.setAlignment(Qt.AlignCenter)
+            spin_qte.valueChanged.connect(
+                lambda value, article_id=id_art: self.on_quantite_changed(article_id, value)
+            )
+            item_total = QTableWidgetItem(f"{int(pu * qte):,} F")
+            item_total.setFlags(item_total.flags() & ~Qt.ItemIsEditable)
             item_id = QTableWidgetItem(str(id_art))
 
             self.table_comp.setItem(idx, 0, item_nom)
-            self.table_comp.setItem(idx, 1, item_qte)
-            self.table_comp.setItem(idx, 2, item_id)
+            self.table_comp.setItem(idx, 1, item_pu)
+            self.table_comp.setCellWidget(idx, 2, spin_qte)
+            self.table_comp.setItem(idx, 3, item_total)
+            self.table_comp.setItem(idx, 4, item_id)
 
         self.table_comp.blockSignals(False)
+        if recalculate:
+            self.recalculate_tarif()
+
+    def recalculate_tarif(self):
+        total = 0.0
+        for id_art, qte in self.composition.items():
+            art = ArticleService.get_article_by_id(id_art)
+            if art:
+                total += float(art.PU or 0) * qte
+        self.txt_pu.setText(str(int(total)) if total.is_integer() else f"{total:.2f}")
 
     def on_ajouter_composant(self):
         """Deplace l'article simple vers la composition."""
@@ -240,7 +265,7 @@ class KitFormView(QDialog):
             QMessageBox.warning(self, "Selection", "Selectionnez une ligne du tableau de composition à droite.")
             return
 
-        item_id = self.table_comp.item(row, 2)
+        item_id = self.table_comp.item(row, 4)
         if item_id:
             id_art = int(item_id.text())
             if id_art in self.composition:
@@ -248,26 +273,19 @@ class KitFormView(QDialog):
 
         self.update_table_composition()
 
-    def on_quantite_changed(self, row, column):
-        """Intercepte les modifications manuelles de quantites dans le tableau."""
-        if column == 1:
-            item_qte = self.table_comp.item(row, column)
-            item_id = self.table_comp.item(row, 2)
-            if item_qte and item_id:
-                try:
-                    new_qte = int(item_qte.text() or 1)
-                    if new_qte <= 0:
-                        new_qte = 1
-                except ValueError:
-                    new_qte = 1
-
-                id_art = int(item_id.text())
-                if id_art in self.composition:
-                    self.composition[id_art] = new_qte
-
-                self.table_comp.blockSignals(True)
-                item_qte.setText(str(new_qte))
-                self.table_comp.blockSignals(False)
+    def on_quantite_changed(self, id_art, new_qte):
+        """Met à jour la composition, le total de ligne et le tarif calculé."""
+        if id_art not in self.composition:
+            return
+        self.composition[id_art] = new_qte
+        for row in range(self.table_comp.rowCount()):
+            item_id = self.table_comp.item(row, 4)
+            if item_id and int(item_id.text()) == id_art:
+                art = ArticleService.get_article_by_id(id_art)
+                pu = float(art.PU or 0) if art else 0.0
+                self.table_comp.item(row, 3).setText(f"{int(pu * new_qte):,} F")
+                break
+        self.recalculate_tarif()
 
     def on_valider(self):
         """Valide la composition, construit les strings et appelle le service."""

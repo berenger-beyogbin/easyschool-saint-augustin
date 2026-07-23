@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from views.vente_view import VenteView
 from views.approvisionnement_view import ApprovisionnementView
 from views.article_list_view import ArticleListView
+from views.ticket_journal_view import TicketJournalView
 from app.styles import COLORS, TAB_STYLE, TAB_STYLE_NESTED
 from views.ui_components import EmptyState
 
@@ -41,15 +42,18 @@ class KiosqueView(QWidget):
         self.view_vente = VenteView(self)
         self.view_approvis = ApprovisionnementView(self)
         self.view_articles = ArticleListView(self)
+        self.view_tickets = TicketJournalView(self)
 
         self.tab_sous_nav.addTab(self.view_vente, "Vendre")
         self.tab_sous_nav.addTab(self.view_approvis, "Approvisionnement")
         self.tab_sous_nav.addTab(self.view_articles, "Articles & KITS")
+        self.tab_sous_nav.addTab(self.view_tickets, "Journal des tickets")
 
         from app.session import AppSession
         self.tab_sous_nav.setTabVisible(0, AppSession.has_permission("KIOSQUE_VENTES"))
         self.tab_sous_nav.setTabVisible(1, AppSession.has_permission("KIOSQUE_STOCKS"))
         self.tab_sous_nav.setTabVisible(2, AppSession.has_permission("KIOSQUE_ARTICLES"))
+        self.tab_sous_nav.setTabVisible(3, AppSession.has_permission("KIOSQUE_VENTES"))
 
         layout_kiosque.addWidget(self.tab_sous_nav)
         self.tab_principal.addTab(tab_kiosque_widget, "KIOSQUE")
@@ -83,3 +87,5 @@ class KiosqueView(QWidget):
             self.view_approvis.load_historique()
         if AppSession.has_permission("KIOSQUE_ARTICLES"):
             self.view_articles.load_data()
+        if AppSession.has_permission("KIOSQUE_VENTES"):
+            self.view_tickets.load_data()

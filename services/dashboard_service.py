@@ -118,7 +118,10 @@ class DashboardService:
 
             total_ventes_kiosque = session.query(
                 func.sum(StockSortie.QuantiteSort * StockSortie.Prix_vente)
-            ).filter(StockSortie.IDTAnneeScolaire == id_annee).scalar() or Decimal("0")
+            ).filter(
+                StockSortie.IDTAnneeScolaire == id_annee,
+                StockSortie.Statut == "VALIDE",
+            ).scalar() or Decimal("0")
 
             total_depenses = session.query(
                 func.sum(SortieFin.Montant)
@@ -234,7 +237,8 @@ class DashboardService:
             rows = session.query(StockSortie).options(
                 joinedload(StockSortie.article),
             ).filter(
-                StockSortie.IDTAnneeScolaire == id_annee
+                StockSortie.IDTAnneeScolaire == id_annee,
+                StockSortie.Statut == "VALIDE",
             ).order_by(
                 StockSortie.DateSort.desc(),
                 StockSortie.HeureSortie.desc()

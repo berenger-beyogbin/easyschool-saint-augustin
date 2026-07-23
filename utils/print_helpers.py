@@ -39,7 +39,12 @@ def get_etablissement_print_info(parent=None) -> Optional[EtablissementPrintInfo
         return EtablissementPrintInfo(
             type_etablissement=(getattr(ecole, "TypeEtab", "") or "").strip(),
             nom=nom,
-            telephone=(getattr(ecole, "Telephone", "") or "").strip(),
+            telephone=" / ".join(
+                numero for numero in (
+                    (getattr(ecole, "Telephone", "") or "").strip(),
+                    (getattr(ecole, "TelephoneSecondaire", "") or "").strip(),
+                ) if numero
+            ),
             adresse=(getattr(ecole, "Adresse", "") or "").strip(),
             logo_path=resolve_asset_path(getattr(ecole, "LogoPath", None)),
             etablissement=ecole,

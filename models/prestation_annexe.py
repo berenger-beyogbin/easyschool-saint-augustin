@@ -23,6 +23,7 @@ class PrestationAnnexe(Base):
 
     prestataire = relationship("Prestataire", back_populates="prestations")
     ventilations = relationship("VentilationPrestation", back_populates="prestation", cascade="all, delete-orphan")
+    tarifs_niveau = relationship("PrestationTarifNiveau", back_populates="prestation", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<PrestationAnnexe(ID={self.IDPrestation}, Code={self.Code}, Montant={self.MontantAnnuel})>"

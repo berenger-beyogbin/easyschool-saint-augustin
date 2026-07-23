@@ -1,8 +1,10 @@
 from typing import List, Dict, Any, Optional
+from sqlalchemy.orm import joinedload
 from app.database import get_session
 from app.session import AppSession
 from models.prestataire import Prestataire
 from models.prestation_annexe import PrestationAnnexe
+from models.prestation_tarif_niveau import PrestationTarifNiveau
 
 # Prestations annexes incluses dans la scolarité — données par défaut
 _DEFAULT_PRESTATIONS = [
@@ -202,6 +204,97 @@ class PrestationService:
         except Exception as e:
             session.rollback()
             return False, f"Erreur : {str(e)}"
+        finally:
+            session.close()
+
+    # ─── Tarifs par niveau ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def get_tarifs_niveau_by_annee(id_annee: int) -> List[PrestationTarifNiveau]:
+        """Recupere toutes les surcharges de tarif par niveau pour une annee scolaire."""
+        session = get_session()
+        try:
+            return session.query(PrestationTarifNiveau).options(
+                joinedload(PrestationTarifNiveau.niveau),
+                joinedload(PrestationTarifNiveau.prestation)
+            ).filter(PrestationTarifNiveau.IDAnneeScolaire == id_annee).all()
+        except Exception as e:
+            print(f"Erreur get_tarifs_niveau_by_annee : {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_tarifs_niveau_by_prestation(id_annee: int, id_prestation: int) -> List[PrestationTarifNiveau]:
+        """Recupere les surcharges de tarif par niveau pour une prestation donnee."""
+        session = get_session()
+        try:
+            return session.query(PrestationTarifNiveau).options(
+                joinedload(PrestationTarifNiveau.niveau)
+            ).filter(
+                (PrestationTarifNiveau.IDAnneeScolaire == id_annee) &
+                (PrestationTarifNiveau.IDPrestation == id_prestation)
+            ).all()
+        except Exception as e:
+            print(f"Erreur get_tarifs_niveau_by_prestation : {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
+    def save_tarif_niveau(id_annee: int, id_niveau: int, id_prestation: int, montant: float) -> tuple[bool, str]:
+        """Cree ou met a jour la surcharge de tarif d'une prestation pour un niveau."""
+        if not id_annee or not id_niveau or not id_prestation:
+            return False, "Annee scolaire, niveau et prestation sont requis."
+        allowed, msg = AppSession.require_permission("PRESTATIONS_MODIFIER")
+        if not allowed:
+            return False, msg
+
+        session = get_session()
+        try:
+            t = session.query(PrestationTarifNiveau).filter(
+                (PrestationTarifNiveau.IDAnneeScolaire == id_annee) &
+                (PrestationTarifNiveau.IDT_Niveau == id_niveau) &
+                (PrestationTarifNiveau.IDPrestation == id_prestation)
+            ).first()
+
+            if t:
+                t.MontantAnnuel = montant
+            else:
+                t = PrestationTarifNiveau(
+                    IDAnneeScolaire=id_annee,
+                    IDT_Niveau=id_niveau,
+                    IDPrestation=id_prestation,
+                    MontantAnnuel=montant,
+                )
+                session.add(t)
+
+            session.commit()
+            return True, "Tarif de la prestation enregistre avec succes !"
+        except Exception as e:
+            session.rollback()
+            return False, f"Erreur base de donnees : {str(e)}"
+        finally:
+            session.close()
+
+    @staticmethod
+    def delete_tarif_niveau(id_tarif: int) -> tuple[bool, str]:
+        """Supprime une surcharge de tarif par niveau (retombe sur le montant par defaut)."""
+        allowed, msg = AppSession.require_permission("PRESTATIONS_MODIFIER")
+        if not allowed:
+            return False, msg
+
+        session = get_session()
+        try:
+            t = session.get(PrestationTarifNiveau, id_tarif)
+            if not t:
+                return False, "Tarif introuvable."
+            session.delete(t)
+            session.commit()
+            return True, "Tarif retire avec succes."
+        except Exception as e:
+            session.rollback()
+            return False, f"Erreur : {e}"
         finally:
             session.close()
 

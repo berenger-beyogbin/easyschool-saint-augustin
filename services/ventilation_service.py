@@ -23,6 +23,7 @@ from sqlalchemy import and_
 from app.database import get_session
 from models.ventilation_prestation import VentilationPrestation
 from models.prestation_annexe import PrestationAnnexe
+from models.prestation_tarif_niveau import PrestationTarifNiveau
 from models.inscription import TInscription
 from utils.datetime_utils import utcnow
 from models.eleve import Eleve
@@ -85,6 +86,21 @@ class VentilationService:
                 PrestationAnnexe.IsActive == True
             ).order_by(PrestationAnnexe.IDPrestation.asc()).all()
 
+            # 4b. Surcharges de tarif par niveau (ex-MontantAutresFrais) : si l'élève
+            # est inscrit à un niveau ayant un tarif spécifique pour une prestation,
+            # ce montant prime sur PrestationAnnexe.MontantAnnuel.
+            overrides: Dict[int, float] = {}
+            inscription = session.query(TInscription).filter(
+                TInscription.IDEleve == id_eleve,
+                TInscription.IDTAnneeScolaire == id_annee,
+            ).first()
+            if inscription and inscription.IDNiveau:
+                tarifs_niveau = session.query(PrestationTarifNiveau).filter(
+                    PrestationTarifNiveau.IDAnneeScolaire == id_annee,
+                    PrestationTarifNiveau.IDT_Niveau == inscription.IDNiveau,
+                ).all()
+                overrides = {t.IDPrestation: float(t.MontantAnnuel) for t in tarifs_niveau}
+
             # 5. Supprimer les anciennes ventilations de l'élève pour cette année
             session.query(VentilationPrestation).filter(
                 VentilationPrestation.IDEleve == id_eleve,
@@ -98,7 +114,7 @@ class VentilationService:
             now = utcnow()
             montant_restant = max(scol_paye, 0.0)
             for p in prestations:
-                montant_theorique = float(p.MontantAnnuel)
+                montant_theorique = overrides.get(p.IDPrestation, float(p.MontantAnnuel))
                 montant_ventile = round(min(montant_restant, montant_theorique), 2)
                 montant_restant = round(montant_restant - montant_ventile, 2)
                 taux_prestation = round(montant_ventile / montant_theorique, 4) if montant_theorique > 0 else 0.0

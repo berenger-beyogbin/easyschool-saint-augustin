@@ -348,7 +348,10 @@ class ComptabiliteService:
 
             q_vente = session.query(
                 func.coalesce(func.sum(StockSortie.QuantiteSort * StockSortie.Prix_vente), 0)
-            ).filter(StockSortie.IDTAnneeScolaire == id_annee)
+            ).filter(
+                StockSortie.IDTAnneeScolaire == id_annee,
+                StockSortie.Statut == "VALIDE",
+            )
             if date_debut:
                 q_vente = q_vente.filter(StockSortie.DateSort >= date_debut)
             if date_fin:

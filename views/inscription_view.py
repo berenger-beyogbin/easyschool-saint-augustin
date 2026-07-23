@@ -348,11 +348,8 @@ class InscriptionView(QWidget):
         self.chk_cantine = QCheckBox("Option Cantine midi")
         self.chk_cantine.setStyleSheet(_CHK_STYLE)
 
-        self.chk_autres = QCheckBox("Autres Frais / Activités")
-        self.chk_autres.setStyleSheet(_CHK_STYLE)
-
         for chk in [self.chk_scolarite, self.chk_nouveau,
-                    self.chk_transport, self.chk_cantine, self.chk_autres]:
+                    self.chk_transport, self.chk_cantine]:
             c3.addWidget(self._make_option_row(chk))
 
         # Bouton CTA
@@ -373,7 +370,7 @@ class InscriptionView(QWidget):
         for w in [self.cmb_niveau, self.cmb_classe,
                   self.chk_scolarite, self.chk_nouveau,
                   self.chk_transport, self.chk_cantine,
-                  self.chk_autres, self.btn_inscrire]:
+                  self.btn_inscrire]:
             w.setEnabled(enabled)
 
     def _prefill_inscription(self, inscription):
@@ -388,7 +385,6 @@ class InscriptionView(QWidget):
         self.chk_nouveau.setChecked(bool(inscription.Nouveau))
         self.chk_transport.setChecked(bool(inscription.Transport))
         self.chk_cantine.setChecked(bool(inscription.Cantine))
-        self.chk_autres.setChecked(bool(inscription.AutresFrais))
 
     def _reset_form(self):
         """Réinitialise le formulaire aux valeurs par défaut pour une nouvelle inscription."""
@@ -398,7 +394,6 @@ class InscriptionView(QWidget):
         self.chk_nouveau.setChecked(True)
         self.chk_transport.setChecked(False)
         self.chk_cantine.setChecked(False)
-        self.chk_autres.setChecked(False)
 
     # ── Helpers effectif ──────────────────────────────────────────────────────
 
@@ -681,7 +676,6 @@ class InscriptionView(QWidget):
             "Scolarite":   self.chk_scolarite.isChecked(),
             "Transport":   self.chk_transport.isChecked(),
             "Cantine":     self.chk_cantine.isChecked(),
-            "AutresFrais": self.chk_autres.isChecked(),
         }
 
         if self._mode_modification:

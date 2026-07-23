@@ -1,3 +1,5 @@
+import re
+import unicodedata
 from typing import List, Dict, Any
 from datetime import date
 from sqlalchemy import func
@@ -10,12 +12,36 @@ from models.annee_scolaire import TAnneeScolaire
 from models.montant_scol import MontantScol
 from models.montant_transport import MontantTransport
 from models.montant_cantine import MontantCantine
-from models.montant_autres_frais import MontantAutresFrais
 from models.versement_scol import VersementScol
 from app.database import get_session
 from app.session import AppSession
 
 class VersementService:
+    _NIVEAUX_PRIMAIRE_AVEC_FRAIS_NOUVEAU = {
+        "CP1", "CP2", "CE1", "CE2", "CM1", "CM2",
+    }
+
+    @staticmethod
+    def _normaliser_libelle_niveau(libelle: str | None) -> str:
+        """Retourne un code de niveau comparable (ex. ``CP 1`` -> ``CP1``)."""
+        texte = unicodedata.normalize("NFKD", libelle or "")
+        texte = "".join(car for car in texte if not unicodedata.combining(car))
+        return re.sub(r"[^A-Z0-9]", "", texte.upper())
+
+    @staticmethod
+    def _frais_nouvel_eleve_applicables(inscription: TInscription) -> bool:
+        """Les 10 000 F ne concernent que les nouveaux du CP1 au CM2.
+
+        Le prospectus 2026-2027 fixe un tarif unique pour le prescolaire,
+        que l'enfant soit nouveau ou ancien.
+        """
+        if not inscription.Nouveau or not inscription.niveau:
+            return False
+        code_niveau = VersementService._normaliser_libelle_niveau(
+            inscription.niveau.Libelle
+        )
+        return code_niveau in VersementService._NIVEAUX_PRIMAIRE_AVEC_FRAIS_NOUVEAU
+
     @staticmethod
     def _require_versements_permission() -> tuple[bool, str]:
         return AppSession.require_permission("SCOLARITE_VERSEMENTS")
@@ -83,7 +109,9 @@ class VersementService:
             session.close()
 
     @staticmethod
-    def get_infos_financieres_eleve(id_annee: int, id_eleve: int) -> Dict[str, Any]:
+    def get_infos_financieres_eleve(
+        id_annee: int, id_eleve: int, date_reference: date | None = None
+    ) -> Dict[str, Any]:
         """Calcule la situation financiere detaillee de l'eleve (Montants dus, Deja verses et Reste)."""
         res = {
             "scol_due": 0.0, "scol_paye": 0.0, "scol_reduc": 0.0, "scol_reste": 0.0,
@@ -91,7 +119,8 @@ class VersementService:
             "cant_due": 0.0, "cant_paye": 0.0, "cant_reste": 0.0,
             "autres_due": 0.0, "autres_paye": 0.0, "autres_reste": 0.0,
             "total_due": 0.0, "total_paye": 0.0, "total_reduc": 0.0, "total_reste": 0.0,
-            "options": {"scolarite": False, "transport": False, "cantine": False, "autres": False}
+            "options": {"scolarite": False, "transport": False, "cantine": False, "autres": False},
+            "echeanciers": {},
         }
 
         if not id_annee or not id_eleve:
@@ -101,7 +130,8 @@ class VersementService:
         try:
             # 1. Recuperer l'inscription active
             ins = session.query(TInscription).options(
-                joinedload(TInscription.famille)
+                joinedload(TInscription.famille),
+                joinedload(TInscription.niveau),
             ).filter(
                 (TInscription.IDTAnneeScolaire == id_annee) & (TInscription.IDEleve == id_eleve)
             ).first()
@@ -113,7 +143,6 @@ class VersementService:
                 "scolarite": bool(ins.Scolarite),
                 "transport": bool(ins.Transport),
                 "cantine": bool(ins.Cantine),
-                "autres": bool(ins.AutresFrais)
             }
 
             # 2. Calculer le montant du de Scolarite
@@ -133,8 +162,9 @@ class VersementService:
                 if ins.famille and ins.famille.EbrieAbobote:
                     res["scol_due"] = max(0.0, res["scol_due"] - 10000.0)
 
-                # Nouvel élève : +10 000 F de frais d'inscription
-                if ins.Nouveau:
+                # Prospectus 2026-2027 : +10 000 F uniquement du CP1 au CM2.
+                # Le prescolaire conserve le meme tarif pour nouveaux et anciens.
+                if VersementService._frais_nouvel_eleve_applicables(ins):
                     res["scol_due"] += 10000.0
 
                 # Famille 3+ enfants : -10 000 F à partir du 3e inscrit (ordre IDTInscription)
@@ -165,14 +195,6 @@ class VersementService:
                 ).first()
                 if m_cant:
                     res["cant_due"] = float(m_cant.Montant)
-
-            # 5. Calculer le montant du des Autres Frais Annexes
-            if ins.AutresFrais:
-                # Somme de tous les autres frais configures pour ce niveau
-                frais_items = session.query(MontantAutresFrais).filter(
-                    (MontantAutresFrais.IDAnneeScolaire == id_annee) & (MontantAutresFrais.IDT_Niveau == ins.IDNiveau)
-                ).all()
-                res["autres_due"] = sum(float(item.MontantFrais) for item in frais_items)
 
             # 6. Recuperer les vrais versements (hors reductions)
             totals = session.query(
@@ -221,6 +243,21 @@ class VersementService:
             res["total_due"]   = res["scol_due"]   + res["trans_due"]   + res["cant_due"]   + res["autres_due"]
             res["total_paye"]  = res["scol_paye"]  + res["trans_paye"]  + res["cant_paye"]  + res["autres_paye"]
             res["total_reste"] = res["scol_reste"] + res["trans_reste"] + res["cant_reste"] + res["autres_reste"]
+
+            # 8. Situation temporelle : exigible aujourd'hui, prochaine echeance et retard.
+            # Les reductions sont considerees comme acquittees pour ne pas signaler
+            # artificiellement un retard sur une somme qui n'est plus due.
+            from services.echeancier_service import EcheancierService
+            res["echeanciers"] = EcheancierService.get_situations_eleve(
+                id_annee,
+                id_eleve,
+                {
+                    "scolarite": res["scol_paye"] + scol_reduc,
+                    "transport": res["trans_paye"] + trans_reduc,
+                    "cantine": res["cant_paye"] + cant_reduc,
+                },
+                date_reference=date_reference,
+            )
 
         except Exception as e:
             print(f"Erreur get_infos_financieres_eleve : {e}")
