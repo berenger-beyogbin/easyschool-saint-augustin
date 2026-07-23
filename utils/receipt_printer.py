@@ -23,6 +23,21 @@ def _font(size_pt: float, bold: bool = False) -> QFont:
     return f
 
 
+def _texte_institutionnel_redondant(type_etablissement: str, nom: str) -> bool:
+    """Evite d'imprimer deux fois « Ecole primaire catholique »."""
+    import re
+    import unicodedata
+
+    def normaliser(texte):
+        texte = unicodedata.normalize("NFKD", texte or "")
+        texte = "".join(c for c in texte if not unicodedata.combining(c))
+        return re.sub(r"[^a-z0-9]+", " ", texte.casefold()).strip()
+
+    type_normalise = normaliser(type_etablissement)
+    nom_normalise = normaliser(nom)
+    return bool(type_normalise and type_normalise in nom_normalise)
+
+
 class ReceiptPrinter:
     """Reçu de paiement — A5 paysage. Libellés à gauche, 3 colonnes de valeurs."""
 
@@ -92,31 +107,39 @@ class ReceiptPrinter:
 
         logo_pix = QPixmap(etablissement.logo_path or "")
         if not logo_pix.isNull():
-            logo_h = mm(21)
+            logo_h = mm(20)
             logo_scaled = logo_pix.scaledToHeight(
                 int(logo_h), Qt.TransformationMode.SmoothTransformation
             )
-            logo_y = int(Y + mm(2.5))
+            logo_y = int(Y + mm(3))
             painter.drawPixmap(int(X + mm(2)), logo_y, logo_scaled)
             painter.drawPixmap(
                 int(X + CW - logo_scaled.width() - mm(2)), logo_y, logo_scaled
             )
 
-        painter.setFont(_font(9, bold=True))
-        painter.drawText(
-            QRectF(X, Y + mm(2.5), CW, mm(7)),
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            etablissement.type_etablissement,
+        afficher_type = not _texte_institutionnel_redondant(
+            etablissement.type_etablissement, etablissement.nom
         )
+        if afficher_type:
+            painter.setFont(_font(8.5, bold=True))
+            painter.drawText(
+                QRectF(X + mm(25), Y + mm(2), CW - mm(50), mm(5)),
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+                etablissement.type_etablissement,
+            )
 
-        painter.setFont(_font(20, bold=True))
+        painter.setFont(_font(14.5, bold=True))
         painter.drawText(
-            QRectF(X, Y + mm(8), CW, mm(12)),
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+            QRectF(
+                X + mm(25), Y + (mm(6.5) if afficher_type else mm(3)),
+                CW - mm(50), mm(11)
+            ),
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+            | Qt.TextFlag.TextWordWrap,
             etablissement.nom,
         )
 
-        painter.setFont(_font(8, bold=True))
+        painter.setFont(_font(6.8, bold=True))
         painter.drawText(
             QRectF(X, Y + mm(19), CW, mm(6)),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
@@ -129,7 +152,7 @@ class ReceiptPrinter:
         )
 
         # Ligne fine sous l'en-tête
-        y_sep1 = Y + mm(26)
+        y_sep1 = Y + mm(28)
         painter.setPen(QPen(C_BLACK, mm(0.22)))
         painter.drawLine(int(X + mm(1.5)), int(y_sep1), int(X + CW - mm(1.5)), int(y_sep1))
 

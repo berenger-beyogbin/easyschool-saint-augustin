@@ -1,6 +1,9 @@
 from datetime import date
 
+import pytest
+
 from app.session import AppSession
+from models.montant_scol import MontantScol
 from services.versement_service import VersementService
 from tests.factories import (
     make_annee, make_niveau_classe, make_famille, make_eleve,
@@ -53,10 +56,59 @@ def test_ebrie_abobote_reduction_applied(db_session):
     assert fin["scol_due"] == 80000.0  # 90000 - 10000
 
 
-def test_nouveau_eleve_surcharge_applied(db_session):
+def test_nouveau_eleve_cp1_cm2_surcharge_applied(db_session):
     annee, niveau, classe, famille, eleve, ins = _setup_base(db_session, ens_cat_primaire=True, nouveau=True)
     fin = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
     assert fin["scol_due"] == 100000.0  # 90000 + 10000
+
+
+def test_tarif_2026_ancien_primaire_is_186000(db_session):
+    annee, niveau, classe, famille, eleve, ins = _setup_base(
+        db_session, ens_cat_primaire=False, nouveau=False,
+    )
+    montant = db_session.query(MontantScol).filter_by(
+        IDTAnneeScolaire=annee.IDTAnneeScolaire,
+        IDNiveau=niveau.IDT_Niveau,
+    ).one()
+    montant.Montant = 186000
+    db_session.commit()
+
+    fin = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
+    assert fin["scol_due"] == 186000.0
+
+
+def test_tarif_2026_nouveau_primaire_is_196000(db_session):
+    annee, niveau, classe, famille, eleve, ins = _setup_base(
+        db_session, ens_cat_primaire=False, nouveau=True,
+    )
+    montant = db_session.query(MontantScol).filter_by(
+        IDTAnneeScolaire=annee.IDTAnneeScolaire,
+        IDNiveau=niveau.IDT_Niveau,
+    ).one()
+    montant.Montant = 186000
+    db_session.commit()
+
+    fin = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
+    assert fin["scol_due"] == 196000.0
+
+
+@pytest.mark.parametrize("libelle_niveau", ["PS", "MS", "GS"])
+def test_tarif_2026_nouveau_prescolaire_reste_a_170000(db_session, libelle_niveau):
+    annee, niveau, classe, famille, eleve, ins = _setup_base(
+        db_session,
+        ens_cat_primaire=False,
+        nouveau=True,
+    )
+    niveau.Libelle = libelle_niveau
+    montant = db_session.query(MontantScol).filter_by(
+        IDTAnneeScolaire=annee.IDTAnneeScolaire,
+        IDNiveau=niveau.IDT_Niveau,
+    ).one()
+    montant.Montant = 170000
+    db_session.commit()
+
+    fin = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
+    assert fin["scol_due"] == 170000.0
 
 
 def test_third_child_of_family_gets_reduction(db_session):

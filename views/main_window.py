@@ -20,7 +20,7 @@ from .scolarite_view import ScolariteView
 from .kiosque_view import KiosqueView
 from .comptabilite_view import ComptabiliteView
 from .statistiques_view import StatistiquesView
-from .dashboard_view import DashboardView
+from .dashboard_switcher_view import DashboardSwitcherView
 from .utilisateurs_view import UtilisateursView
 from .prestation_config_view import PrestationConfigView
 
@@ -540,7 +540,7 @@ class MainWindow(QMainWindow):
         self.stack.setStyleSheet(f"background-color: {COLORS['bg']};")
 
         # index 0: Tableau de bord
-        self.widget_dashboard = DashboardView(self)
+        self.widget_dashboard = DashboardSwitcherView(self)
         self.stack.addWidget(self.widget_dashboard)
 
         # index 1: Paramètres

@@ -1,11 +1,12 @@
 from datetime import date
 
 from app.session import AppSession
+from models.niveau import TNiveau
 from services.ventilation_service import VentilationService
 from services.versement_service import VersementService
 from tests.factories import (
     make_annee, make_niveau_classe, make_famille, make_eleve,
-    make_inscription, make_montant_scol, make_prestation,
+    make_inscription, make_montant_scol, make_prestation, make_tarif_niveau,
 )
 
 
@@ -32,11 +33,11 @@ def _setup_eleve(db_session, scol_due=100000, scolarite=True):
     if scolarite:
         make_montant_scol(db_session, annee, niveau, montant=scol_due, montant_pri=scol_due, montant_sec=scol_due)
     make_inscription(db_session, annee, famille, eleve, niveau, classe, scolarite=scolarite)
-    return annee, eleve, famille
+    return annee, eleve, famille, niveau
 
 
 def test_no_payment_gives_zero_ventilation(db_session):
-    annee, eleve, famille = _setup_eleve(db_session, scol_due=100000)
+    annee, eleve, famille, niveau = _setup_eleve(db_session, scol_due=100000)
     make_prestation(db_session, "ANGLAIS", 30000)
     make_prestation(db_session, "MUSIQUE", 50000)
 
@@ -47,7 +48,7 @@ def test_no_payment_gives_zero_ventilation(db_session):
 
 
 def test_partial_payment_covers_in_creation_order(db_session):
-    annee, eleve, famille = _setup_eleve(db_session, scol_due=100000)
+    annee, eleve, famille, niveau = _setup_eleve(db_session, scol_due=100000)
     make_prestation(db_session, "ANGLAIS", 30000)
     make_prestation(db_session, "MUSIQUE", 50000)
 
@@ -64,7 +65,7 @@ def test_partial_payment_covers_in_creation_order(db_session):
 
 
 def test_full_payment_covers_all_prestations(db_session):
-    annee, eleve, famille = _setup_eleve(db_session, scol_due=100000)
+    annee, eleve, famille, niveau = _setup_eleve(db_session, scol_due=100000)
     make_prestation(db_session, "ANGLAIS", 30000)
     make_prestation(db_session, "MUSIQUE", 50000)
 
@@ -83,7 +84,7 @@ def test_full_payment_covers_all_prestations(db_session):
 
 
 def test_surplus_beyond_last_prestation_is_ignored(db_session):
-    annee, eleve, famille = _setup_eleve(db_session, scol_due=100000)
+    annee, eleve, famille, niveau = _setup_eleve(db_session, scol_due=100000)
     make_prestation(db_session, "ANGLAIS", 30000)
     make_prestation(db_session, "MUSIQUE", 50000)
 
@@ -100,7 +101,7 @@ def test_surplus_beyond_last_prestation_is_ignored(db_session):
 
 
 def test_scolarite_non_due_resets_ventilations(db_session):
-    annee, eleve, famille = _setup_eleve(db_session, scol_due=100000)
+    annee, eleve, famille, niveau = _setup_eleve(db_session, scol_due=100000)
     make_prestation(db_session, "ANGLAIS", 30000)
     VersementService.create_versement(
         annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
@@ -116,7 +117,7 @@ def test_scolarite_non_due_resets_ventilations(db_session):
 
 
 def test_inactive_prestation_is_ignored(db_session):
-    annee, eleve, famille = _setup_eleve(db_session, scol_due=100000)
+    annee, eleve, famille, niveau = _setup_eleve(db_session, scol_due=100000)
     make_prestation(db_session, "ANGLAIS", 30000, is_active=True)
     make_prestation(db_session, "ARCHIVEE", 20000, is_active=False)
 
@@ -130,3 +131,43 @@ def test_inactive_prestation_is_ignored(db_session):
 
     assert "ARCHIVEE" not in codes
     assert "ANGLAIS" in codes
+
+
+def test_tarif_niveau_override_takes_precedence_over_montant_annuel(db_session):
+    annee, eleve, famille, niveau = _setup_eleve(db_session, scol_due=100000)
+    prestation = make_prestation(db_session, "TENUE", 10000)
+    make_tarif_niveau(db_session, annee, niveau, prestation, montant_annuel=25000)
+
+    VersementService.create_versement(
+        annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
+        date.today(), m_scol=100000, m_trans=0, m_cant=0, m_autres=0,
+    )
+
+    ventilations = VentilationService.get_student_ventilations(eleve.IDEleve, annee.IDTAnneeScolaire)
+    par_code = {v["code"]: v for v in ventilations}
+
+    # La surcharge niveau (25000) prime sur le MontantAnnuel par defaut (10000).
+    assert par_code["TENUE"]["montant_theorique"] == 25000.0
+    assert par_code["TENUE"]["montant_ventile"] == 25000.0
+
+
+def test_niveau_without_override_falls_back_to_montant_annuel(db_session):
+    annee, eleve, famille, niveau = _setup_eleve(db_session, scol_due=100000)
+    prestation = make_prestation(db_session, "TENUE", 10000)
+
+    # Surcharge posee sur un AUTRE niveau (meme cycle) : ne doit pas s'appliquer a cet eleve.
+    autre_niveau = TNiveau(Libelle="CP1", IDT_Cycle=niveau.IDT_Cycle, IDAnneeScolaire=annee.IDTAnneeScolaire)
+    db_session.add(autre_niveau)
+    db_session.commit()
+    make_tarif_niveau(db_session, annee, autre_niveau, prestation, montant_annuel=25000)
+
+    VersementService.create_versement(
+        annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
+        date.today(), m_scol=100000, m_trans=0, m_cant=0, m_autres=0,
+    )
+
+    ventilations = VentilationService.get_student_ventilations(eleve.IDEleve, annee.IDTAnneeScolaire)
+    par_code = {v["code"]: v for v in ventilations}
+
+    assert par_code["TENUE"]["montant_theorique"] == 10000.0
+    assert par_code["TENUE"]["montant_ventile"] == 10000.0

@@ -5,7 +5,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from services.article_service import ArticleService
-from services.stock_service import StockService
 from views.article_form_view import ArticleFormView
 from views.kit_form_view import KitFormView
 from app.styles import (
@@ -101,12 +100,10 @@ class ArticleListView(QWidget):
         """Récupère et rafraîchit tous les articles avec leurs stocks."""
         self.table.setRowCount(0)
         query = self.txt_recherche.text().strip()
-        articles = ArticleService.search_articles(query)
+        articles = ArticleService.search_articles_with_stock(query)
         self.table.setRowCount(len(articles))
 
-        for idx, art in enumerate(articles):
-            sc = StockService.get_stock_by_article(art.IDTArticle)
-            stock_qte = sc.QuantiteCour if sc else 0
+        for idx, (art, stock_qte) in enumerate(articles):
 
             est_kit = "OUI" if art.KIT else "NON"
 

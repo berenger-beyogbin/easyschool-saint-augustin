@@ -4,7 +4,7 @@ from views.caisse_view import CaisseView
 from views.montant_scolarite_view import MontantScolariteView
 from views.montant_transport_view import MontantTransportView
 from views.montant_cantine_view import MontantCantineView
-from views.autres_frais_view import AutresFraisView
+from views.echeancier_view import EcheancierView
 
 
 class VersementsView(QWidget):
@@ -28,13 +28,13 @@ class VersementsView(QWidget):
         self.view_scolarite     = MontantScolariteView(self.main_window)
         self.view_transport     = MontantTransportView(self.main_window)
         self.view_cantine       = MontantCantineView(self.main_window)
-        self.view_autres_frais  = AutresFraisView(self.main_window)
+        self.view_echeanciers   = EcheancierView(self.main_window)
 
         self.tabs.addTab(self.view_caisse,       "Caisse")
         self.tabs.addTab(self.view_scolarite,    "Scolarité")
         self.tabs.addTab(self.view_transport,    "Transport")
         self.tabs.addTab(self.view_cantine,      "Cantine")
-        self.tabs.addTab(self.view_autres_frais, "Autres Frais")
+        self.tabs.addTab(self.view_echeanciers,  "Échéanciers")
 
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
@@ -49,7 +49,7 @@ class VersementsView(QWidget):
         elif index == 3:
             self.view_cantine.load_montants()
         elif index == 4:
-            self.view_autres_frais.load_data()
+            self.view_echeanciers.load_data()
 
     def refresh_data(self):
         self.on_tab_changed(self.tabs.currentIndex())

@@ -11,9 +11,11 @@ class EtablissementEcole(Base):
     IDEtablissement_Ecole = Column(Integer, primary_key=True, autoincrement=True)
     RaisonSociale = Column(String(100), nullable=False) # Nom de l'etablissement
     Sigle = Column(String(50))
-    Adresse = Column(String(50))
+    Adresse = Column(String(170))
+    AdressePostale = Column(String(100), nullable=True)
     Localite = Column(String(170))
     Telephone = Column(String(50))
+    TelephoneSecondaire = Column(String(50), nullable=True)
     Email = Column(String(100))
     LogoPath = Column(String(255), nullable=True) # Pour stocker le chemin relatif du logo
     CODEcole = Column(String(10), nullable=True)

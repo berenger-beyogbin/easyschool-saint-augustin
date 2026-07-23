@@ -12,6 +12,7 @@ from models.montant_scol import MontantScol
 from models.montant_transport import MontantTransport
 from models.montant_cantine import MontantCantine
 from models.prestation_annexe import PrestationAnnexe
+from models.prestation_tarif_niveau import PrestationTarifNiveau
 
 
 def make_annee(session, libelle="2026-2027", cloturer=False):
@@ -115,3 +116,15 @@ def make_prestation(session, code, montant_annuel, is_active=True):
     session.add(p)
     session.commit()
     return p
+
+
+def make_tarif_niveau(session, annee, niveau, prestation, montant_annuel):
+    t = PrestationTarifNiveau(
+        IDAnneeScolaire=annee.IDTAnneeScolaire,
+        IDT_Niveau=niveau.IDT_Niveau,
+        IDPrestation=prestation.IDPrestation,
+        MontantAnnuel=montant_annuel,
+    )
+    session.add(t)
+    session.commit()
+    return t

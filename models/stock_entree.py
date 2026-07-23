@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -8,10 +8,11 @@ class StockEntree(Base):
     Mappe de la table HFSQL 'StockEnt'.
     """
     __tablename__ = "StockEnt"
+    __table_args__ = (CheckConstraint('"QuantiteEnt" > 0', name="ck_stock_entree_positive"),)
 
     IDStockEnt = Column(Integer, primary_key=True, autoincrement=True)
-    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="CASCADE"), nullable=False)
-    IDTArticle = Column(Integer, ForeignKey("TArticle.IDTArticle", ondelete="CASCADE"), nullable=False)
+    IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="RESTRICT"), nullable=False)
+    IDTArticle = Column(Integer, ForeignKey("TArticle.IDTArticle", ondelete="RESTRICT"), nullable=False)
     DateEnt = Column(Date, nullable=False)
     QuantiteEnt = Column(Integer, nullable=False)
     Login = Column(String(50), nullable=True)

@@ -4,6 +4,24 @@ from app.database import get_session
 from app.session import AppSession
 
 class EtablissementService:
+    INFORMATIONS_OFFICIELLES_2026_2027 = {
+        "RaisonSociale": "École Primaire Catholique Saint Augustin Abobo-té",
+        "Sigle": "EPC SAINT AUGUSTIN",
+        "Telephone": "07 57 47 13 43",
+        "TelephoneSecondaire": "05 04 08 13 55",
+        "Email": "epcsaintaugustin58@gmail.com",
+        "Adresse": "Route d'Alépé, 1ère rue à droite après la pharmacie MONASTERE",
+        "AdressePostale": "13 BP 1 434 Abidjan 13",
+        "Localite": "Abobo-té",
+        "TypeEtab": "École primaire catholique",
+        "Slogan": "L’EPC Saint Augustin, l’école pour la paix",
+        "LogoPath": "assets/logo.jpg",
+    }
+
+    @staticmethod
+    def get_informations_officielles() -> dict:
+        return dict(EtablissementService.INFORMATIONS_OFFICIELLES_2026_2027)
+
     @staticmethod
     def get_etablissement() -> EtablissementEcole:
         """Recupere la fiche de l'etablissement (s'il n'y en a pas, en cree une par defaut)."""
@@ -14,19 +32,12 @@ class EtablissementService:
             if not ecole:
                 # S'il n'existe aucun etablissement, on en cree un par defaut pour eviter une erreur
                 ecole = EtablissementEcole(
-                    RaisonSociale="EPC SAINT AUGUSTIN",
-                    Sigle="EPC",
-                    Telephone="01 01 01 01 01 / 01 01 01 01 01",
-                    Adresse="ABOBOTE",
-                    Localite="ABOBOTE",
+                    **EtablissementService.get_informations_officielles(),
                     ChefEtab="DONGO KOUAME",
                     CodeEtab="0037",
-                    TypeEtab="Enseignement Primaire",
                     Ministere="MENAET",
                     Dren="ABIDJAN 4",
                     IEP="PLATEAU DOKUI",
-                    Slogan="Discipline - Success",
-                    Email="contact@epcsaintaugustin.ci"
                 )
                 session.add(ecole)
                 session.commit()
@@ -57,8 +68,10 @@ class EtablissementService:
             ecole.RaisonSociale = data.get("RaisonSociale", ecole.RaisonSociale)
             ecole.Sigle = data.get("Sigle", ecole.Sigle)
             ecole.Telephone = data.get("Telephone", ecole.Telephone)
+            ecole.TelephoneSecondaire = data.get("TelephoneSecondaire", ecole.TelephoneSecondaire)
             ecole.Email = data.get("Email", ecole.Email)
             ecole.Adresse = data.get("Adresse", ecole.Adresse)
+            ecole.AdressePostale = data.get("AdressePostale", ecole.AdressePostale)
             ecole.ChefEtab = data.get("ChefEtab", ecole.ChefEtab)
             ecole.Slogan = data.get("Slogan", ecole.Slogan)
             ecole.Localite = data.get("Localite", ecole.Localite)

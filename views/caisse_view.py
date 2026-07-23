@@ -483,14 +483,23 @@ class CaisseView(QWidget):
         self.row_sc_reduc = self.fs_scol.add_row("Réduction", "0 F", COLORS["purple"])
         self.row_sc_reduc.setVisible(False)
         self.row_sc_rem   = self.fs_scol.add_row("Reste",     "0 F", COLORS["danger"], bold=True)
+        self.row_sc_exig  = self.fs_scol.add_row("Exigible à ce jour", "0 F")
+        self.row_sc_next  = self.fs_scol.add_row("Prochaine échéance", "—")
+        self.row_sc_stat  = self.fs_scol.add_row("Statut", "—", bold=True)
 
         self.row_tr_due  = self.fs_trans.add_row("Dû",    "0 F")
         self.row_tr_paid = self.fs_trans.add_row("Versé", "0 F", COLORS["success"])
         self.row_tr_rem  = self.fs_trans.add_row("Reste", "0 F", COLORS["danger"], bold=True)
+        self.row_tr_exig = self.fs_trans.add_row("Exigible à ce jour", "0 F")
+        self.row_tr_next = self.fs_trans.add_row("Prochaine échéance", "—")
+        self.row_tr_stat = self.fs_trans.add_row("Statut", "—", bold=True)
 
         self.row_ca_due  = self.fs_cant.add_row("Dû",    "0 F")
         self.row_ca_paid = self.fs_cant.add_row("Versé", "0 F", COLORS["success"])
         self.row_ca_rem  = self.fs_cant.add_row("Reste", "0 F", COLORS["danger"], bold=True)
+        self.row_ca_exig = self.fs_cant.add_row("Exigible à ce jour", "0 F")
+        self.row_ca_next = self.fs_cant.add_row("Prochaine échéance", "—")
+        self.row_ca_stat = self.fs_cant.add_row("Statut", "—", bold=True)
 
         self.fs_trans.setVisible(False)
         self.fs_cant.setVisible(False)
@@ -611,6 +620,38 @@ class CaisseView(QWidget):
         self.row_ca_due.set_value(fmt(fin["cant_due"]))
         self.row_ca_paid.set_value(fmt(fin["cant_paye"]))
         self.row_ca_rem.set_value(fmt(fin["cant_reste"]))
+
+        def appliquer_echeancier(prefixe, lignes):
+            situation = fin.get("echeanciers", {}).get(prefixe)
+            row_exig, row_next, row_stat = lignes
+            if not situation:
+                row_exig.set_value("Non configuré")
+                row_next.set_value("—")
+                row_stat.set_value("—")
+                row_stat.set_color(COLORS["muted"])
+                return
+            row_exig.set_value(fmt(situation["exigible"]))
+            prochaine = situation.get("prochaine_echeance")
+            if prochaine:
+                date_txt = prochaine["date_effective"].strftime("%d/%m/%Y")
+                row_next.set_value(f"{fmt(prochaine['montant'])} · {date_txt}")
+            else:
+                row_next.set_value("Aucune")
+            statut = situation["statut"]
+            row_stat.set_value(statut)
+            row_stat.set_color(
+                COLORS["danger"] if statut == "EN RETARD" else COLORS["success"]
+            )
+
+        appliquer_echeancier(
+            "scolarite", (self.row_sc_exig, self.row_sc_next, self.row_sc_stat)
+        )
+        appliquer_echeancier(
+            "transport", (self.row_tr_exig, self.row_tr_next, self.row_tr_stat)
+        )
+        appliquer_echeancier(
+            "cantine", (self.row_ca_exig, self.row_ca_next, self.row_ca_stat)
+        )
 
         total_due  = fin["scol_due"]  + fin["trans_due"]  + fin["cant_due"]
         total_paye = fin["scol_paye"] + fin["trans_paye"] + fin["cant_paye"]
@@ -766,10 +807,17 @@ class CaisseView(QWidget):
             self.row_sc_due,  self.row_sc_paid,  self.row_sc_rem,
             self.row_tr_due,  self.row_tr_paid,  self.row_tr_rem,
             self.row_ca_due,  self.row_ca_paid,  self.row_ca_rem,
+            self.row_sc_exig, self.row_tr_exig, self.row_ca_exig,
             self.row_tot_due, self.row_tot_paid, self.row_tot_rem,
         ]:
             row.set_value("0 F")
         self.row_sc_reduc.setVisible(False)
         self.row_tot_reduc.setVisible(False)
+        for row in [
+            self.row_sc_next, self.row_sc_stat,
+            self.row_tr_next, self.row_tr_stat,
+            self.row_ca_next, self.row_ca_stat,
+        ]:
+            row.set_value("—")
         self.fs_trans.setVisible(False)
         self.fs_cant.setVisible(False)

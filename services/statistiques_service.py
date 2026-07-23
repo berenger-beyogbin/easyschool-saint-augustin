@@ -357,7 +357,10 @@ class StatistiquesService:
             from models.article import Article
 
             q = session.query(StockSortie).join(Article, StockSortie.IDTArticle == Article.IDTArticle)\
-                                          .filter(StockSortie.IDTAnneeScolaire == id_annee)
+                                          .filter(
+                                              StockSortie.IDTAnneeScolaire == id_annee,
+                                              StockSortie.Statut == "VALIDE",
+                                          )
             if date_debut:
                 q = q.filter(StockSortie.DateSort >= date_debut)
             if date_fin:

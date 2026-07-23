@@ -179,6 +179,9 @@ class UtilisateurService:
                 Email=data.get("Email", "").strip() or None,
                 IDProfil=id_profil,
                 IsActive=data.get("IsActive", True),
+                # Le mot de passe fourni par l'administrateur est provisoire :
+                # l'utilisateur doit en choisir un personnel à sa 1re connexion.
+                MustChangePassword=True,
             )
             session.add(user)
             session.commit()

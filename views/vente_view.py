@@ -66,7 +66,22 @@ class VenteView(QWidget):
         layout_saisie.addWidget(QLabel("Prix unitaire de vente (F CFA) :"))
         self.txt_pu = QLineEdit()
         self.txt_pu.setStyleSheet(INPUT_STYLE)
+        self.txt_pu.setReadOnly(True)
         layout_saisie.addWidget(self.txt_pu)
+
+        self.lbl_remise = QLabel("Remise autorisée (%) :")
+        self.txt_remise = QLineEdit("0")
+        self.txt_remise.setStyleSheet(INPUT_STYLE)
+        self.txt_motif_remise = QLineEdit()
+        self.txt_motif_remise.setStyleSheet(INPUT_STYLE)
+        self.txt_motif_remise.setPlaceholderText("Motif obligatoire si remise")
+        can_discount = AppSession.has_permission("KIOSQUE_REMISES")
+        self.lbl_remise.setVisible(can_discount)
+        self.txt_remise.setVisible(can_discount)
+        self.txt_motif_remise.setVisible(can_discount)
+        layout_saisie.addWidget(self.lbl_remise)
+        layout_saisie.addWidget(self.txt_remise)
+        layout_saisie.addWidget(self.txt_motif_remise)
 
         layout_saisie.addWidget(QLabel("Quantité à acheter :"))
         self.txt_quantite = QLineEdit("1")
@@ -190,6 +205,8 @@ class VenteView(QWidget):
         self.cmb_articles.setCurrentIndex(0)
         self.on_article_changed()
         self.txt_quantite.setText("1")
+        self.txt_remise.setText("0")
+        self.txt_motif_remise.clear()
 
     def on_ajouter_panier(self):
         """Valide et insère la ligne d'achat dans le panier temporaire."""
@@ -210,12 +227,22 @@ class VenteView(QWidget):
             return
 
         try:
-            pu = float(pu_str)
-            if pu < 0:
+            prix_catalogue = float(pu_str)
+            remise_pct = float(self.txt_remise.text().strip() or 0)
+            if prix_catalogue < 0 or remise_pct < 0 or remise_pct > 100:
                 raise ValueError()
         except ValueError:
-            QMessageBox.critical(self, "Tarif", "Le tarif doit etre positif ou nul.")
+            QMessageBox.critical(self, "Tarif", "Le tarif et la remise (0 à 100 %) sont invalides.")
             return
+
+        motif_remise = self.txt_motif_remise.text().strip()
+        if remise_pct and not AppSession.has_permission("KIOSQUE_REMISES"):
+            QMessageBox.critical(self, "Remise", "Vous n'avez pas le droit d'accorder une remise.")
+            return
+        if remise_pct and not motif_remise:
+            QMessageBox.warning(self, "Remise", "Le motif de la remise est obligatoire.")
+            return
+        pu = round(prix_catalogue * (1 - remise_pct / 100), 2)
 
         art = ArticleService.get_article_by_id(id_art)
         if not art:
@@ -225,6 +252,9 @@ class VenteView(QWidget):
         stock_qte = sc.QuantiteCour if sc else 0
 
         deja_dans_panier_qte = self.panier.get(id_art, {}).get("qte", 0)
+        if id_art in self.panier and self.panier[id_art]["pu"] != pu:
+            QMessageBox.warning(self, "Remise", "Retirez d'abord cet article pour changer sa remise.")
+            return
         total_qte_demandee = qte + deja_dans_panier_qte
 
         if total_qte_demandee > stock_qte:
@@ -238,7 +268,9 @@ class VenteView(QWidget):
             "nom": art.Libelle + (" (KIT)" if art.KIT else ""),
             "pu": pu,
             "qte": total_qte_demandee,
-            "total": total_qte_demandee * pu
+            "total": total_qte_demandee * pu,
+            "motif_remise": motif_remise,
+            "remise_pct": remise_pct,
         }
 
         self.update_table_panier()
@@ -310,36 +342,11 @@ class VenteView(QWidget):
             QMessageBox.critical(self, "Erreur Session", "Aucune année scolaire active n'est configurée.")
             return
 
-        # Audit stock avant écriture
-        errs = []
-        for id_art, info in self.panier.items():
-            sc = StockService.get_stock_by_article(id_art)
-            stock_dispo = sc.QuantiteCour if sc else 0
-            if info["qte"] > stock_dispo:
-                errs.append(f"- {info['nom']} : demandé {info['qte']}, dispo {stock_dispo}")
-
-        if errs:
-            msg_err = "Certains articles ne possèdent plus le stock suffisant :\n" + "\n".join(errs)
-            QMessageBox.critical(self, "Vente Avortée", msg_err)
-            return
-
-        login_util = AppSession.get_logged_in_username() or "admin"
-        ventes_reussies = 0
-
-        for id_art, info in self.panier.items():
-            success, msg = StockService.remove_stock(
-                id_art, info["qte"], active_annee_id, info["pu"], login_util
-            )
-            if success:
-                ventes_reussies += 1
-            else:
-                QMessageBox.critical(self, "Erreur lors du traitement", f"Erreur durant l'enregistrement de '{info['nom']}' : {msg}")
-                break
-
-        if ventes_reussies == len(self.panier):
+        success, msg = StockService.enregistrer_panier(self.panier, active_annee_id)
+        if success:
             QMessageBox.information(
                 self, "Vente Validée",
-                f"Vente finalisée avec succès ! {ventes_reussies} article(s)/KIT(s) débité(s) des stocks."
+                msg
             )
             self.on_vider_panier()
 
@@ -349,6 +356,7 @@ class VenteView(QWidget):
                 except:
                     pass
         else:
+            QMessageBox.critical(self, "Vente annulée", msg)
             self.update_table_panier()
 
     def on_fermer(self):

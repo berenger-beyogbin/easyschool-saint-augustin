@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, Boolean, Text
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, Text, CheckConstraint
 from app.database import Base
 
 class Article(Base):
@@ -7,6 +7,10 @@ class Article(Base):
     Mappe de la table HFSQL 'TArticle'.
     """
     __tablename__ = "TArticle"
+    __table_args__ = (
+        CheckConstraint('"PU" >= 0', name="ck_article_pu_non_negatif"),
+        CheckConstraint('"QTESeuil" >= 0', name="ck_article_seuil_non_negatif"),
+    )
 
     IDTArticle = Column(Integer, primary_key=True, autoincrement=True)
     Libelle = Column(String(100), nullable=False, unique=True)
