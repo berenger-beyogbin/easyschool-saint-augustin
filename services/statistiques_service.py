@@ -120,7 +120,8 @@ class StatistiquesService:
                 func.sum(VersementScol.MontantVersSco).label("vers_sum"),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).group_by(VersementScol.IDEleve).all()
 
             versements_map = {v[0]: float(v[1]) if v[1] is not None else 0.0 for v in versements_sums}
@@ -131,7 +132,8 @@ class StatistiquesService:
                 func.sum(VersementScol.MontantVersSco).label("reduc_sum"),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == True
+                VersementScol.Reduction == True,
+                VersementScol.Annule == False,
             ).group_by(VersementScol.IDEleve).all()
 
             reductions_map = {v[0]: float(v[1]) if v[1] is not None else 0.0 for v in reductions_sums}
@@ -218,7 +220,10 @@ class StatistiquesService:
             payments_sums = session.query(
                 VersementScol.IDEleve,
                 func.sum(VersementScol.MontantCantine).label("cant_sum")
-            ).filter(VersementScol.IDTAnneeScolaire == id_annee).group_by(VersementScol.IDEleve).all()
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Annule == False,
+            ).group_by(VersementScol.IDEleve).all()
 
             payments_map = {p[0]: float(p[1]) if p[1] is not None else 0.0 for p in payments_sums}
 
@@ -284,7 +289,10 @@ class StatistiquesService:
             payments_sums = session.query(
                 VersementScol.IDEleve,
                 func.sum(VersementScol.MontantVersTrans).label("trans_sum")
-            ).filter(VersementScol.IDTAnneeScolaire == id_annee).group_by(VersementScol.IDEleve).all()
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Annule == False,
+            ).group_by(VersementScol.IDEleve).all()
 
             payments_map = {p[0]: float(p[1]) if p[1] is not None else 0.0 for p in payments_sums}
 

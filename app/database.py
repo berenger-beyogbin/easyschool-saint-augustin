@@ -13,6 +13,9 @@ Base = declarative_base()
 _engine = None
 _SessionLocal = None
 
+LOCAL_DATABASE_ENVIRONMENTS = {"dev", "dev_debug", "test"}
+KNOWN_DATABASE_ENVIRONMENTS = LOCAL_DATABASE_ENVIRONMENTS | {"prod"}
+
 def init_db():
     """Initialise le moteur SQLAlchemy et cree la session locale."""
     global _engine, _SessionLocal
@@ -20,7 +23,7 @@ def init_db():
 
     # echo=True uniquement en mode dev_debug — évite de flooder la console en prod.
     # Configurer APP_ENV=dev_debug dans .env pour activer les logs SQL.
-    app_env = os.environ.get("APP_ENV", "dev")
+    app_env = os.environ.get("APP_ENV", "prod").strip().lower()
     sql_echo = (app_env == "dev_debug")
 
     # Creation de l'moteur de base de donnees (PostgreSQL)
@@ -54,7 +57,12 @@ def get_session():
     return _SessionLocal()
 
 def create_tables():
-    """Cree toutes les tables SQLAlchemy dans la base PostgreSQL si elles n'existent pas."""
+    """Cree/met a niveau une base locale de dev/test.
+
+    Cette fonction conserve les mises a niveau historiques necessaires aux
+    tests, a la CI et aux installations locales existantes. Elle ne doit pas
+    etre utilisee pour migrer une base de production : utiliser Alembic.
+    """
     global _engine
     if _engine is None:
         init_db()
@@ -219,3 +227,36 @@ def create_tables():
             logger.info("Contraintes d'integrite financiere verifiees/ajoutees avec succes.")
     except Exception as e:
         raise RuntimeError(f"Echec de la migration des contraintes d'integrite : {e}") from e
+
+
+def prepare_database_for_startup() -> str:
+    """Initialise et verifie la base, sans migration implicite en production.
+
+    En dev/dev_debug/test, la creation locale historique reste disponible pour
+    simplifier le premier lancement. En production, le schema doit avoir ete
+    migre explicitement avec ``alembic upgrade head`` avant le demarrage.
+
+    Retourne le mode de preparation applique (utile pour les logs et tests).
+    """
+    app_env = os.environ.get("APP_ENV", "prod").strip().lower()
+    if app_env not in KNOWN_DATABASE_ENVIRONMENTS:
+        allowed = ", ".join(sorted(KNOWN_DATABASE_ENVIRONMENTS))
+        raise RuntimeError(f"APP_ENV invalide ({app_env!r}). Valeurs autorisees : {allowed}.")
+
+    init_db()
+    test_connection()
+
+    if app_env in LOCAL_DATABASE_ENVIRONMENTS:
+        logger.warning(
+            "Mode %s : creation/mise a niveau locale du schema activee. "
+            "Ne pas utiliser ce mode en production.",
+            app_env,
+        )
+        create_tables()
+        return "local_schema_created"
+
+    logger.info(
+        "Mode prod : connexion verifiee, aucune creation ou migration de schema implicite. "
+        "Le schema doit etre prepare avec 'alembic upgrade head'."
+    )
+    return "connection_only"

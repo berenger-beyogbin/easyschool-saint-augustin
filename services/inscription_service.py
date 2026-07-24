@@ -15,6 +15,15 @@ class InscriptionService:
     """
 
     @staticmethod
+    def _get_classe_for_capacity_update(session, id_classe: int):
+        """Verrouille la classe cible jusqu'a la fin de la transaction.
+
+        Les inscriptions concurrentes visant la meme classe calculent ainsi
+        leur effectif l'une apres l'autre, apres le commit precedent.
+        """
+        return session.query(TClasse).filter_by(IDTClasse=id_classe).with_for_update().first()
+
+    @staticmethod
     def get_inscriptions_by_annee(id_annee: int) -> list[TInscription]:
         """Récupère toutes les inscriptions d'une année donnée."""
         session = get_session()
@@ -118,7 +127,7 @@ class InscriptionService:
                 return False, "Cet élève possède déjà une inscription pour cette année scolaire."
 
             # 3. Vérifier la capacité de la classe
-            classe = session.get(TClasse, id_classe)
+            classe = InscriptionService._get_classe_for_capacity_update(session, id_classe)
             if not classe:
                 return False, "La classe sélectionnée est inconnue."
                 
@@ -227,7 +236,7 @@ class InscriptionService:
 
             # Vérifier la capacité uniquement si la classe change
             if id_classe != inscription.IDClasse:
-                classe = session.get(TClasse, id_classe)
+                classe = InscriptionService._get_classe_for_capacity_update(session, id_classe)
                 if not classe:
                     return False, "La classe sélectionnée est inconnue."
                 effectif = session.query(TInscription).filter_by(

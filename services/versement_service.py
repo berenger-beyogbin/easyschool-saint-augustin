@@ -14,6 +14,7 @@ from models.versement_scol import VersementScol
 from models.versement_autres_frais import VersementAutresFrais
 from app.database import get_session
 from services.tarification_service import TarificationService
+from services.authorization import permission_denied
 import logging
 logger = logging.getLogger(__name__)
 
@@ -237,6 +238,9 @@ class VersementService:
         login: str = "ADMIN",
         ids_autres_frais: Optional[List[int]] = None,
     ) -> tuple[bool, str, Optional[int]]:
+        denied = permission_denied("SCOLARITE_VERSEMENTS", "enregistrer un versement")
+        if denied:
+            return denied[0], denied[1], None
         """Enregistre un versement dans la table VersementScol après validations métier.
 
         ids_autres_frais : IDInscriptionAutresFrais des frais annexes que ce versement solde.
@@ -347,6 +351,9 @@ class VersementService:
     def annuler_versement(
         id_versement: int, motif: str, login: str = "ADMIN", id_utilisateur: Optional[int] = None
     ) -> tuple[bool, str]:
+        denied = permission_denied("SCOLARITE_VERSEMENTS", "annuler un versement")
+        if denied:
+            return denied
         """Annule un versement (piste d'audit conservee) au lieu de le supprimer
         physiquement. Un versement annule reste visible dans l'historique mais est
         exclu du calcul du reste a payer et des agregations comptables."""

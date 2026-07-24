@@ -10,6 +10,16 @@ comptabilite, statistiques, utilisateurs et permissions.
 Voir [README_PYTHON.md](README_PYTHON.md) pour l'installation et le
 lancement en local.
 
+En production, configurer `APP_ENV=prod` et appliquer les migrations avant
+chaque démarrage/déploiement :
+
+```bash
+alembic upgrade head
+python main.py
+```
+
+L'application vérifie alors la connexion sans créer ni modifier le schéma.
+
 ## Documentation du projet
 
 - [MIGRATIONS.md](MIGRATIONS.md) — migrations de schema (Alembic).

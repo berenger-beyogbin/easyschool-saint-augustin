@@ -1,15 +1,33 @@
 import hashlib
+import hmac
 import os
+import threading
+import time
 from datetime import datetime
 from app.database import get_session
 from models.utilisateur import Utilisateur
 from models.profil import Profil
 from sqlalchemy.orm import joinedload
+from services.authorization import permission_denied
 
 
 # ---------------------------------------------------------------------------
 # Hachage des mots de passe (PBKDF2-SHA256, stdlib uniquement)
 # ---------------------------------------------------------------------------
+
+MIN_PASSWORD_LENGTH = 10
+MAX_AUTH_FAILURES = 5
+AUTH_LOCKOUT_SECONDS = 30
+AUTH_FAILURE_MESSAGE = "Identifiant ou mot de passe incorrect."
+
+_auth_failures: dict[str, tuple[int, float]] = {}
+_auth_failures_lock = threading.Lock()
+
+
+def _password_policy_error(password: str) -> str | None:
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return f"Le mot de passe doit contenir au moins {MIN_PASSWORD_LENGTH} caractères."
+    return None
 
 def _hash_password(password: str) -> str:
     salt = os.urandom(16).hex()
@@ -21,9 +39,44 @@ def _verify_password(password: str, stored: str) -> bool:
     try:
         salt, h = stored.split(":", 1)
         computed = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000)
-        return computed.hex() == h
-    except Exception:
+        return hmac.compare_digest(computed, bytes.fromhex(h))
+    except (AttributeError, TypeError, ValueError):
         return False
+
+
+_DUMMY_PASSWORD_HASH = _hash_password("mot-de-passe-factice")
+
+
+def _is_auth_locked(login: str) -> bool:
+    now = time.monotonic()
+    with _auth_failures_lock:
+        attempts, locked_until = _auth_failures.get(login, (0, 0.0))
+        if locked_until > now:
+            return True
+        if locked_until:
+            _auth_failures.pop(login, None)
+        return False
+
+
+def _record_auth_failure(login: str) -> None:
+    now = time.monotonic()
+    with _auth_failures_lock:
+        attempts, locked_until = _auth_failures.get(login, (0, 0.0))
+        if locked_until <= now:
+            attempts += 1
+            locked_until = now + AUTH_LOCKOUT_SECONDS if attempts >= MAX_AUTH_FAILURES else 0.0
+        _auth_failures[login] = (attempts, locked_until)
+
+
+def _clear_auth_failures(login: str) -> None:
+    with _auth_failures_lock:
+        _auth_failures.pop(login, None)
+
+
+def _reset_auth_throttle() -> None:
+    """Réinitialise le verrou local (principalement utile pour isoler les tests)."""
+    with _auth_failures_lock:
+        _auth_failures.clear()
 
 
 class UtilisateurService:
@@ -63,7 +116,7 @@ class UtilisateurService:
         data = dict(data)
         data["IDProfil"] = id_profil
         data["IsActive"] = True
-        return UtilisateurService.create(data)
+        return UtilisateurService.create(data, _bootstrap=True)
 
     @staticmethod
     def authenticate(login: str, password: str) -> tuple[bool, str, dict | None]:
@@ -72,21 +125,30 @@ class UtilisateurService:
         Retourne (succès, message, user_data_dict) où user_data_dict contient
         les informations de session sans dépendance à la session SQLAlchemy.
         """
+        normalized_login = login.strip()
+        if _is_auth_locked(normalized_login):
+            return False, AUTH_FAILURE_MESSAGE, None
+
         session = get_session()
         try:
             user = (
                 session.query(Utilisateur)
                 .options(joinedload(Utilisateur.profil))
-                .filter_by(Login=login.strip())
+                .filter_by(Login=normalized_login)
                 .first()
             )
             if not user:
-                return False, "Identifiant inconnu.", None
-            if not user.IsActive:
-                return False, "Ce compte est désactivé. Contactez l'administrateur.", None
-            if not _verify_password(password, user.MotDePasseHash):
-                return False, "Mot de passe incorrect.", None
+                # Effectue le même calcul coûteux que pour un compte existant afin
+                # de limiter aussi l'énumération par mesure du temps de réponse.
+                _verify_password(password, _DUMMY_PASSWORD_HASH)
+                _record_auth_failure(normalized_login)
+                return False, AUTH_FAILURE_MESSAGE, None
+            password_matches = _verify_password(password, user.MotDePasseHash)
+            if not user.IsActive or not password_matches:
+                _record_auth_failure(normalized_login)
+                return False, AUTH_FAILURE_MESSAGE, None
 
+            _clear_auth_failures(normalized_login)
             user.DernierAcces = datetime.now()
             session.commit()
 
@@ -103,8 +165,8 @@ class UtilisateurService:
                 "ImprimanteDefaut": user.ImprimanteDefaut or None,
             }
             return True, "Connexion réussie.", user_data
-        except Exception as e:
-            return False, f"Erreur d'authentification : {str(e)}", None
+        except Exception:
+            return False, "Connexion impossible. Veuillez réessayer.", None
         finally:
             session.close()
 
@@ -135,12 +197,16 @@ class UtilisateurService:
             session.close()
 
     @staticmethod
-    def create(data: dict) -> tuple[bool, str]:
+    def create(data: dict, _bootstrap: bool = False) -> tuple[bool, str]:
+        if not _bootstrap:
+            denied = permission_denied("UTILISATEURS_MODIFIER", "créer un utilisateur")
+            if denied:
+                return denied
         session = get_session()
         try:
             login = data.get("Login", "").strip()
             nom = data.get("Nom", "").strip()
-            password = data.get("Password", "").strip()
+            password = data.get("Password", "")
             id_profil = data.get("IDProfil")
 
             if not login:
@@ -149,8 +215,9 @@ class UtilisateurService:
                 return False, "Le nom est obligatoire."
             if not password:
                 return False, "Le mot de passe est obligatoire."
-            if len(password) < 6:
-                return False, "Le mot de passe doit contenir au moins 6 caractères."
+            policy_error = _password_policy_error(password)
+            if policy_error:
+                return False, policy_error
             if not id_profil:
                 return False, "Le profil est obligatoire."
 
@@ -177,6 +244,9 @@ class UtilisateurService:
 
     @staticmethod
     def update(id_user: int, data: dict) -> tuple[bool, str]:
+        denied = permission_denied("UTILISATEURS_MODIFIER", "modifier un utilisateur")
+        if denied:
+            return denied
         session = get_session()
         try:
             user = session.get(Utilisateur, id_user)
@@ -203,10 +273,11 @@ class UtilisateurService:
             user.IDProfil = data.get("IDProfil", user.IDProfil)
             user.IsActive = data.get("IsActive", user.IsActive)
 
-            new_pwd = data.get("Password", "").strip()
+            new_pwd = data.get("Password", "")
             if new_pwd:
-                if len(new_pwd) < 6:
-                    return False, "Le mot de passe doit contenir au moins 6 caractères."
+                policy_error = _password_policy_error(new_pwd)
+                if policy_error:
+                    return False, policy_error
                 user.MotDePasseHash = _hash_password(new_pwd)
 
             session.commit()
@@ -219,6 +290,9 @@ class UtilisateurService:
 
     @staticmethod
     def toggle_active(id_user: int) -> tuple[bool, str]:
+        denied = permission_denied("UTILISATEURS_MODIFIER", "activer ou désactiver un utilisateur")
+        if denied:
+            return denied
         session = get_session()
         try:
             user = session.get(Utilisateur, id_user)
@@ -253,6 +327,9 @@ class UtilisateurService:
     @staticmethod
     def delete(id_user: int) -> tuple[bool, str]:
         from app.session import AppSession
+        denied = permission_denied("UTILISATEURS_MODIFIER", "supprimer un utilisateur")
+        if denied:
+            return denied
         session = get_session()
         try:
             user = session.get(Utilisateur, id_user)

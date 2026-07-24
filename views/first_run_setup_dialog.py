@@ -81,7 +81,7 @@ class FirstRunSetupDialog(QDialog):
 
         self.field_nom = add_field("Nom", "Votre nom")
         self.field_login = add_field("Identifiant", "Identifiant de connexion")
-        self.field_pwd = add_field("Mot de passe", "Au moins 6 caracteres", echo_password=True)
+        self.field_pwd = add_field("Mot de passe", "Au moins 10 caracteres", echo_password=True)
         self.field_pwd_confirm = add_field("Confirmer le mot de passe", "Ressaisissez le mot de passe", echo_password=True)
 
         self.lbl_error = QLabel("")

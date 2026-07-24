@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Numeric, Date, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Numeric, Date, DateTime, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -7,6 +7,9 @@ class SortieFin(Base):
     Table SortieFin - Mouvements financiers de la comptabilite (Debit / Credit).
     """
     __tablename__ = "SortieFin"
+    __table_args__ = (
+        UniqueConstraint("CodeSortie", name="uq_sortie_fin_code_sortie"),
+    )
 
     IDSortieFin = Column(Integer, primary_key=True, autoincrement=True)
     Benef = Column(String(100), nullable=False)

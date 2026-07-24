@@ -9,7 +9,7 @@ def _make_user(db_session):
     db_session.add(profil)
     db_session.commit()
     UtilisateurService.create({
-        "Login": "auditeur", "Nom": "Auditeur", "Password": "secret123", "IDProfil": profil.IDProfil,
+        "Login": "auditeur", "Nom": "Auditeur", "Password": "secret1234", "IDProfil": profil.IDProfil,
     })
     from models.utilisateur import Utilisateur
     return db_session.query(Utilisateur).filter_by(Login="auditeur").first()

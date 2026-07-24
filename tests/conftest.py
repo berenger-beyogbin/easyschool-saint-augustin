@@ -8,6 +8,7 @@ os.environ["DB_NAME"] = "easy_school_test_db"
 import pytest
 
 from app.database import init_db, create_tables, get_session, Base
+from app.session import AppSession
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -21,6 +22,10 @@ def _test_database():
 @pytest.fixture(autouse=True)
 def _clean_tables():
     """Vide les tables entre chaque test pour eviter les effets de bord."""
+    AppSession.set_current_user(
+        {"Login": "test-admin", "Nom": "Test", "IsAdmin": True},
+        set(),
+    )
     yield
     session = get_session()
     try:
@@ -29,6 +34,7 @@ def _clean_tables():
         session.commit()
     finally:
         session.close()
+        AppSession.set_current_user({}, set())
 
 
 @pytest.fixture

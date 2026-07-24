@@ -1,5 +1,37 @@
 # Migrations de base de données — Alembic
 
+## Flux de démarrage recommandé
+
+La mise à niveau d'une base doit être exécutée explicitement pendant le
+déploiement, avant de lancer l'application :
+
+```bash
+alembic upgrade head
+```
+
+Le démarrage sépare désormais quatre responsabilités :
+
+1. `init_db()` configure le moteur et les sessions SQLAlchemy, sans requête ni DDL.
+2. `test_connection()` vérifie PostgreSQL avec un simple `SELECT 1`.
+3. `create_tables()` crée/met à niveau une base **locale de dev/test**.
+4. Alembic est le seul mécanisme de migration de production.
+
+Avec `APP_ENV=prod`, `main.py` initialise le moteur et vérifie la connexion,
+mais n'appelle jamais `create_tables()` : aucun `CREATE TABLE`, `ALTER TABLE`
+ou `DROP COLUMN` implicite n'est exécuté. Si `APP_ENV` est absent, le
+comportement est volontairement le même que `prod`. Une valeur inconnue
+bloque le démarrage avant de toucher la base.
+
+Avec `APP_ENV=dev`, `dev_debug` ou `test`, la création locale automatique est
+conservée pour faciliter le premier lancement et la CI.
+
+## Compatibilité historique
+
+Les anciens blocs `ALTER TABLE` de `create_tables()` ne sont pas supprimés :
+les tests, la CI et certaines bases locales antérieures à Alembic s'appuient
+encore sur le schéma qu'ils produisent. Ils sont confinés au chemin dev/test
+et gelés : aucun nouveau changement de schéma ne doit y être ajouté.
+
 Depuis cette introduction, les changements de schéma **futurs** doivent passer
 par une révision Alembic versionnée plutôt que par un nouveau bloc `ALTER
 TABLE` ajouté à la main dans `app/database.py::create_tables()`.
@@ -12,10 +44,9 @@ historique ni possibilité de rollback. Un schéma peut ainsi rester à moitié
 migré sans que personne ne s'en aperçoive. Alembic donne un historique
 explicite, ordonné, et rejouable.
 
-**Le comportement actuel de `create_tables()` n'a pas changé** : il continue
-de créer les tables au démarrage de l'application. Cette introduction
-d'Alembic est la première étape ; le remplacement complet des blocs `ALTER
-TABLE` ad hoc par des révisions Alembic est un chantier séparé.
+`create_tables()` continue de produire le schéma local historique lorsqu'elle
+est appelée explicitement ou via un démarrage dev/test. Elle n'est plus
+appelée au démarrage en production.
 
 ## Mise en route sur une base existante (dev, test, ou une install déjà en prod)
 
@@ -48,9 +79,11 @@ psql -d <nom_base> -c "\dt Prestataire PrestationAnnexe VentilationPrestation"
   → `alembic stamp 057c2c9d281a` (ou `head` si aucune révision plus
   récente n'a été ajoutée depuis).
 
-Sur une base neuve (jamais initialisée), l'application continue de créer le
-schéma via `create_tables()` au premier lancement (donc toujours avec les 3
-tables présentes) ; stamper sur la baseline `f0e0bbadf6a8`, pas `head`.
+Sur une base locale neuve (jamais initialisée), un démarrage avec
+`APP_ENV=dev` crée le schéma via `create_tables()` (donc toujours avec les 3
+tables présentes) ; stamper sur la baseline `f0e0bbadf6a8`, puis lancer
+`alembic upgrade head`. En production, préparer la base pendant le déploiement
+avant le premier lancement ; l'application ne la crée pas elle-même.
 
 ## Ajouter un changement de schéma
 

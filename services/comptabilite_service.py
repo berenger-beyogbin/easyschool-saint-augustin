@@ -1,10 +1,12 @@
 import datetime
 from typing import List, Optional, Tuple
 from decimal import Decimal
-from sqlalchemy import func, case
+from sqlalchemy import func, case, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 from app.database import get_session
 from app.session import AppSession
+from services.authorization import permission_denied
 from models.compte import Compte
 from models.sortie_fin import SortieFin
 from models.annee_scolaire import TAnneeScolaire
@@ -12,6 +14,10 @@ from models.versement_scol import VersementScol
 from models.stock_sortie import StockSortie
 import logging
 logger = logging.getLogger(__name__)
+
+_CODE_SORTIE_LOCK_NAMESPACE = 1_394_501
+_CODE_SORTIE_UNIQUE_CONSTRAINT = "uq_sortie_fin_code_sortie"
+_CODE_SORTIE_MAX_ATTEMPTS = 3
 
 
 # Correspondance NumCompte SYSCOA → clé rubrique dans get_totaux_entrees_rubriques
@@ -26,7 +32,15 @@ _SYSCOA_RUBRIQUE = {
 class ComptabiliteService:
     @staticmethod
     def generate_code_sortie(session, id_annee: int) -> str:
-        """Génère un code séquentiel simple : SF-AAAA-0001."""
+        """Génère un code SF-AAAA-0001 sous verrou transactionnel par année.
+
+        Le verrou est libéré au commit/rollback de la transaction appelante :
+        le mouvement doit donc être inséré dans la même session.
+        """
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(:namespace, :id_annee)"),
+            {"namespace": _CODE_SORTIE_LOCK_NAMESPACE, "id_annee": id_annee},
+        )
         annee = session.query(TAnneeScolaire).filter_by(IDTAnneeScolaire=id_annee).first()
         year_str = "YYYY"
         if annee and annee.Libelle:
@@ -60,6 +74,9 @@ class ComptabiliteService:
     def create_mouvement(benef: str, montant: float, date_sortie: datetime.date, 
                          id_compte: int, debit_credit: str, detail: Optional[str] = None, 
                          num_benef: Optional[str] = None) -> Tuple[bool, str]:
+        denied = permission_denied("COMPTABILITE_SAISIE", "créer un mouvement comptable")
+        if denied:
+            return denied
         """Crée un nouveau mouvement financier dans SortieFin."""
         # Validation des paramètres obligatoires
         if not benef or not benef.strip():
@@ -105,25 +122,30 @@ class ComptabiliteService:
                     "compterait cette recette deux fois dans la balance."
                 )
 
-            # Génération automatique du CodeSortie
-            code = ComptabiliteService.generate_code_sortie(session, active_annee_id)
-
-            nouveau_mouvement = SortieFin(
-                Benef=benef.strip(),
-                Detail=detail.strip() if detail else None,
-                Montant=Decimal(str(montant)),
-                NumBenef=num_benef.strip() if num_benef else None,
-                DateSortie=date_sortie,
-                Login=login_util,
-                CodeSortie=code,
-                IDAnSco=active_annee_id,
-                DebitCredit=debit_credit,
-                IDCompte=id_compte
-            )
-
-            session.add(nouveau_mouvement)
-            session.commit()
-            return True, f"Mouvement {code} enregistré avec succès !"
+            for attempt in range(_CODE_SORTIE_MAX_ATTEMPTS):
+                code = ComptabiliteService.generate_code_sortie(session, active_annee_id)
+                nouveau_mouvement = SortieFin(
+                    Benef=benef.strip(),
+                    Detail=detail.strip() if detail else None,
+                    Montant=Decimal(str(montant)),
+                    NumBenef=num_benef.strip() if num_benef else None,
+                    DateSortie=date_sortie,
+                    Login=login_util,
+                    CodeSortie=code,
+                    IDAnSco=active_annee_id,
+                    DebitCredit=debit_credit,
+                    IDCompte=id_compte,
+                )
+                session.add(nouveau_mouvement)
+                try:
+                    session.commit()
+                    return True, f"Mouvement {code} enregistré avec succès !"
+                except IntegrityError as exc:
+                    session.rollback()
+                    constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+                    if constraint != _CODE_SORTIE_UNIQUE_CONSTRAINT or attempt == _CODE_SORTIE_MAX_ATTEMPTS - 1:
+                        raise
+                    logger.warning("Collision sur %s, nouvelle tentative de génération.", code)
         except Exception as e:
             session.rollback()
             return False, f"Erreur base de données : {str(e)}"
@@ -134,6 +156,9 @@ class ComptabiliteService:
     def update_mouvement(id_sortie_fin: int, benef: str, montant: float, date_sortie: datetime.date, 
                          id_compte: int, debit_credit: str, detail: Optional[str] = None, 
                          num_benef: Optional[str] = None) -> Tuple[bool, str]:
+        denied = permission_denied("COMPTABILITE_SAISIE", "modifier un mouvement comptable")
+        if denied:
+            return denied
         """Met à jour un mouvement financier existant."""
         if not benef or not benef.strip():
             return False, "Le beneficiaire est obligatoire."
@@ -186,6 +211,9 @@ class ComptabiliteService:
     def annuler_mouvement(
         id_sortie_fin: int, motif: str, login: Optional[str] = None, id_utilisateur: Optional[int] = None
     ) -> Tuple[bool, str]:
+        denied = permission_denied("COMPTABILITE_SAISIE", "annuler un mouvement comptable")
+        if denied:
+            return denied
         """Annule un mouvement financier (piste d'audit conservee) au lieu de le supprimer
         physiquement. Un mouvement annule reste visible dans les listes mais est exclu
         des agregations de la balance."""

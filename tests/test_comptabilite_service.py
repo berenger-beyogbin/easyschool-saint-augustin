@@ -1,7 +1,10 @@
 from datetime import date
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 from app.session import AppSession
 from models.compte import Compte
+from models.sortie_fin import SortieFin
 from models.versement_scol import VersementScol
 from services.comptabilite_service import ComptabiliteService, _SYSCOA_RUBRIQUE
 from services.compte_service import SYSCOA_INCOME_ACCOUNTS
@@ -113,6 +116,42 @@ def test_create_mouvement_allows_credit_on_non_reserved_account(db_session):
     )
 
     assert ok is True
+
+
+def test_code_sortie_has_a_database_unique_constraint():
+    constraints = {constraint.name for constraint in SortieFin.__table__.constraints}
+
+    assert "uq_sortie_fin_code_sortie" in constraints
+
+
+def test_concurrent_mouvements_receive_distinct_codes(db_session):
+    annee = make_annee(db_session)
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+    compte = Compte(NumCompte="6011", LibCompte="Achats fournitures")
+    db_session.add(compte)
+    db_session.commit()
+    compte_id = compte.IDCompte
+    barrier = Barrier(2)
+
+    def create_mouvement(benef):
+        barrier.wait()
+        return ComptabiliteService.create_mouvement(
+            benef=benef,
+            montant=5_000,
+            date_sortie=date.today(),
+            id_compte=compte_id,
+            debit_credit="Debit",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(create_mouvement, ["Concurrent A", "Concurrent B"]))
+
+    assert all(ok for ok, _ in results), results
+    codes = {
+        mouvement.CodeSortie
+        for mouvement in db_session.query(SortieFin).filter_by(IDAnSco=annee.IDTAnneeScolaire).all()
+    }
+    assert codes == {"SF-2026-0001", "SF-2026-0002"}
 
 
 def test_annuler_mouvement_excludes_it_from_balance_but_stays_visible(db_session):

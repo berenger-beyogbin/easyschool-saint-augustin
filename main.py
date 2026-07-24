@@ -7,7 +7,7 @@ from PySide6.QtGui import QPalette, QColor, QIcon
 # les modules du dossier courant sans conflit
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from app.database import init_db, test_connection, create_tables
+from app.database import prepare_database_for_startup
 from app.logging_config import setup_logging
 from app.session import AppSession
 from app.styles import MESSAGEBOX_STYLE, install_messagebox_autostyle
@@ -61,12 +61,11 @@ def main():
     # a son propre setStyleSheet qui masquerait sinon le style applicatif.
     install_messagebox_autostyle()
     
-    # 2. Tentative de connexion PostgreSQL et creation des tables
+    # 2. Preparation de la base selon APP_ENV. En production, cette etape
+    # verifie uniquement la connexion : les migrations sont appliquees hors
+    # processus avec `alembic upgrade head`.
     try:
-        init_db()
-        test_connection()
-        # Creation automatique des tables si inexistantes sur PostgreSQL
-        create_tables()
+        prepare_database_for_startup()
 
         # 3. Seeding du référentiel utilisateurs (idempotent)
         from services.permission_service import PermissionService

@@ -102,21 +102,32 @@ class DashboardService:
                 func.sum(VersementScol.MontantVersSco)
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).scalar() or Decimal("0")
 
             total_versements_cantine = session.query(
                 func.sum(VersementScol.MontantCantine)
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).scalar() or Decimal("0")
 
             total_versements_transport = session.query(
                 func.sum(VersementScol.MontantVersTrans)
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
+            ).scalar() or Decimal("0")
+
+            total_versements_autres = session.query(
+                func.sum(VersementScol.MontantVersAutres)
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).scalar() or Decimal("0")
 
             total_ventes_kiosque = session.query(
@@ -127,13 +138,15 @@ class DashboardService:
                 func.sum(SortieFin.Montant)
             ).filter(
                 SortieFin.IDAnSco == id_annee,
-                SortieFin.DebitCredit == "Debit"
+                SortieFin.DebitCredit == "Debit",
+                SortieFin.Annule == False,
             ).scalar() or Decimal("0")
 
             total_recettes = (
                 total_versements_scolarite
                 + total_versements_cantine
                 + total_versements_transport
+                + total_versements_autres
                 + total_ventes_kiosque
             )
 
@@ -359,7 +372,9 @@ class DashboardService:
                 VersementScol.IDEleve,
                 func.coalesce(func.sum(VersementScol.MontantVersSco), 0).label("total_verse")
             ).filter(
-                VersementScol.IDTAnneeScolaire == id_annee
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).group_by(VersementScol.IDEleve).all()
 
             verses_par_eleve = {v.IDEleve: float(v.total_verse) for v in versements}
