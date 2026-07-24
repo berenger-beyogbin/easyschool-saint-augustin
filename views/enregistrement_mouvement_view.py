@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, QDate
-from services.compte_service import CompteService
+from services.compte_service import CompteService, SYSCOA_INCOME_ACCOUNTS
 from services.comptabilite_service import ComptabiliteService
 from app.session import AppSession
 from app.styles import (
@@ -237,7 +237,11 @@ class EnregistrementMouvementView(QWidget):
     # ── données ───────────────────────────────────────────────────────────────
     def load_comptes(self):
         self.combo_compte.clear()
-        self.comptes_list = CompteService.get_all_comptes()
+        # Les comptes SYSCOA 7041-7044 sont alimentés automatiquement à partir des
+        # versements scolarité/transport/cantine/kiosque : les exclure de la saisie
+        # manuelle évite de compter deux fois les mêmes recettes dans la Balance.
+        tous_comptes = CompteService.get_all_comptes()
+        self.comptes_list = [c for c in tous_comptes if c.NumCompte not in SYSCOA_INCOME_ACCOUNTS]
         self.combo_compte.addItem("--- Sélectionner un compte ---", None)
         for c in self.comptes_list:
             self.combo_compte.addItem(f"{c.NumCompte} - {c.LibCompte}", c.IDCompte)
@@ -314,7 +318,10 @@ class EnregistrementMouvementView(QWidget):
             return
 
         try:
-            montant = float(montant_str.replace(" ", "").replace(",", "."))
+            # Le FCFA n'a pas de sous-unité : l'espace et la virgule sont ici des
+            # séparateurs de milliers (ex : "25 000" ou "25,000"), jamais des
+            # séparateurs décimaux — sinon "15,000" serait lu comme 15.0.
+            montant = float(montant_str.replace(" ", "").replace(",", ""))
         except ValueError:
             QMessageBox.warning(self, "Erreur de format", "Veuillez saisir un montant numérique valide !")
             return

@@ -253,6 +253,7 @@ class FamilleFormView(QDialog):
         self.txt_adr_resp   = _field("Adresse")
         self.txt_hab_resp   = _field("Habitation")
         self.txt_hab_resp.textChanged.connect(self.on_resp_info_changed)
+        self.txt_piece_id   = _field("N° pièce d'identité")
 
         # Grille 2 colonnes : (label | champ) × 2
         gr = QGridLayout()
@@ -276,9 +277,11 @@ class FamilleFormView(QDialog):
         gr.addWidget(self.txt_email_resp,         2, 1)
         gr.addWidget(_gl("Adresse :"),            2, 2)
         gr.addWidget(self.txt_adr_resp,           2, 3)
-        # Ligne 3 : Habitation pleine largeur
+        # Ligne 3 : Habitation | Pièce d'identité
         gr.addWidget(_gl("Habitation :"),         3, 0)
-        gr.addWidget(self.txt_hab_resp,           3, 1, 1, 3)
+        gr.addWidget(self.txt_hab_resp,           3, 1)
+        gr.addWidget(_gl("Pièce d'identité :"),   3, 2)
+        gr.addWidget(self.txt_piece_id,           3, 3)
 
         lyt_resp.addLayout(gr)
 
@@ -450,6 +453,7 @@ QCheckBox::indicator:checked:hover {{
         self.txt_email_resp.setText(fam.EmailResponsable or "")
         self.txt_adr_resp.setText(fam.AdresseResponsable or "")
         self.txt_hab_resp.setText(fam.HabitationParent or "")
+        self.txt_piece_id.setText(fam.NumeroPieceIdentite or "")
         self.chk_ebrie.setChecked(fam.EbrieAbobote)
         self.chk_cat_pri.setChecked(fam.EnsCatPrimaire)
         self.chk_cat_sec.setChecked(fam.EnsCatSecondaire)
@@ -475,7 +479,7 @@ QCheckBox::indicator:checked:hover {{
             "QualiteResponsable":    self.cmb_qualite.currentIndex() + 1,
             "ProfessionResponsable": self.txt_prof_resp.text().strip(),
             "TypeResponsable":       1,
-            "NumeroPieceIdentite":   self.txt_adr_resp.text().strip(),
+            "NumeroPieceIdentite":   self.txt_piece_id.text().strip(),
             "AdresseResponsable":    self.txt_adr_resp.text().strip(),
             "CellulaireResponsable": tel_resp,
             "EmailResponsable":      self.txt_email_resp.text().strip(),

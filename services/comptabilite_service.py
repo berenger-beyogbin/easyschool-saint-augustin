@@ -98,6 +98,11 @@ class ComptabiliteService:
             compte = session.query(Compte).filter_by(IDCompte=id_compte).first()
             if not compte:
                 return False, "Le compte spécifié n'existe pas."
+            if compte.NumCompte in SYSCOA_INCOME_ACCOUNTS:
+                return False, (
+                    "Ce compte est alimenté automatiquement par les versements "
+                    "(scolarité/transport/cantine/kiosque) et n'accepte pas de saisie manuelle."
+                )
 
             # Génération automatique du CodeSortie
             code = ComptabiliteService.generate_code_sortie(session, active_annee_id)
@@ -157,6 +162,11 @@ class ComptabiliteService:
             compte = session.query(Compte).filter_by(IDCompte=id_compte).first()
             if not compte:
                 return False, "Le compte specifie n'existe pas."
+            if compte.NumCompte in SYSCOA_INCOME_ACCOUNTS:
+                return False, (
+                    "Ce compte est alimenté automatiquement par les versements "
+                    "(scolarité/transport/cantine/kiosque) et n'accepte pas de saisie manuelle."
+                )
 
             mouvement.Benef = benef.strip()
             mouvement.Detail = detail.strip() if detail else None

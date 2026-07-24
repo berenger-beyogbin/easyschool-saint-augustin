@@ -123,6 +123,23 @@ QPushButton:pressed {{ background-color: #C05500; }}
 QPushButton:disabled {{ background-color: #E5E7EB; color: #9CA3AF; }}
 """
 
+_BTN_DESINSCRIRE = f"""
+QPushButton {{
+    background-color: transparent;
+    color: {COLORS['danger']};
+    padding: 0 20px;
+    font-weight: 700;
+    font-size: 13px;
+    border-radius: 9px;
+    border: 1.5px solid {COLORS['danger']};
+    min-height: 38px;
+    letter-spacing: 0.3px;
+}}
+QPushButton:hover {{ background-color: #FEF2F2; }}
+QPushButton:pressed {{ background-color: #FEE2E2; }}
+QPushButton:disabled {{ border-color: #E5E7EB; color: #9CA3AF; }}
+"""
+
 
 class InscriptionView(QWidget):
     """Vue INSCRIPTION ÉLÈVE — liaison élève / classe / année académique."""
@@ -358,8 +375,16 @@ class InscriptionView(QWidget):
         self.btn_inscrire.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_inscrire.clicked.connect(self.on_inscrire)
 
+        # Bouton de désinscription — visible uniquement en mode modification
+        self.btn_desinscrire = QPushButton("Désinscrire l'Élève")
+        self.btn_desinscrire.setStyleSheet(_BTN_DESINSCRIRE)
+        self.btn_desinscrire.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_desinscrire.clicked.connect(self.on_desinscrire)
+        self.btn_desinscrire.setVisible(False)
+
         c3.addStretch()
         c3.addWidget(self.btn_inscrire)
+        c3.addWidget(self.btn_desinscrire)
 
         main_layout.addWidget(card3, 0, 1, 2, 1)  # rowspan=2 : de card1 à card2
 
@@ -519,6 +544,7 @@ class InscriptionView(QWidget):
         selected_indexes = self.table_eleves.selectedIndexes()
         if not selected_indexes:
             self.selected_eleve_id = None
+            self.btn_desinscrire.setVisible(False)
             self._set_form_enabled(False)
             return
 
@@ -537,6 +563,7 @@ class InscriptionView(QWidget):
             self._prefill_inscription(inscription)
             self.btn_inscrire.setText("Modifier l'Inscription")
             self.btn_inscrire.setStyleSheet(_BTN_MODIFIER)
+            self.btn_desinscrire.setVisible(True)
         else:
             # Élève non inscrit → mode création
             self._mode_modification = False
@@ -544,6 +571,7 @@ class InscriptionView(QWidget):
             self._reset_form()
             self.btn_inscrire.setText("Inscrire l'Élève")
             self.btn_inscrire.setStyleSheet(_BTN_INSCRIRE)
+            self.btn_desinscrire.setVisible(False)
 
         self._set_form_enabled(True)
 
@@ -695,3 +723,24 @@ class InscriptionView(QWidget):
             self.on_classe_changed()
         else:
             QMessageBox.critical(self, title_err, message)
+
+    def on_desinscrire(self):
+        if not self._mode_modification or not self._id_inscription_courante:
+            return
+
+        reponse = QMessageBox.question(
+            self, "Confirmation",
+            "Voulez-vous vraiment désinscrire cet élève ? Cette action est irréversible "
+            "et n'est possible qu'en l'absence de versement déjà enregistré.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reponse != QMessageBox.Yes:
+            return
+
+        success, message = InscriptionService.delete_inscription(self._id_inscription_courante)
+        if success:
+            QMessageBox.information(self, "Désinscription réussie", message)
+            self.on_responsable_selected()
+            self.on_classe_changed()
+        else:
+            QMessageBox.critical(self, "Erreur de désinscription", message)

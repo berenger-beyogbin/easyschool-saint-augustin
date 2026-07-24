@@ -152,6 +152,7 @@ def main() -> int:
     parser.add_argument("--analyze-only", action="store_true", help="Analyser le fichier sans connexion à la base.")
     parser.add_argument("--new-ids", action="store_true", help="Générer de nouveaux ID (déconseillé avant import des élèves).")
     parser.add_argument("--rejects", type=Path, default=Path("familles_rejetees.csv"))
+    parser.add_argument("--warnings", type=Path, default=Path("familles_avertissements.csv"))
     args = parser.parse_args()
 
     if not args.xlsx.is_file():
@@ -161,6 +162,7 @@ def main() -> int:
     preserve_ids = not args.new_ids
     accepted: list[tuple[int, dict[str, Any]]] = []
     rejected: list[Rejection] = []
+    warnings: list[Rejection] = []
     seen_keys: set[tuple[str, str]] = set()
     seen_ids: set[int] = set()
 
@@ -169,6 +171,15 @@ def main() -> int:
         name = payload["NomResponsable"]
         phone = payload["CellulaireResponsable"]
         legacy_id = clean(source.get("IdTFamille"))
+
+        raw_email = clean(source.get("pa_Mail"))
+        if raw_email and payload["EmailResponsable"] is None:
+            warnings.append(Rejection(
+                excel_row, legacy_id,
+                f"Email invalide ignoré : '{raw_email}'",
+                name, phone,
+            ))
+
         reason = ""
         if not name:
             reason = "Nom du responsable introuvable"
@@ -191,10 +202,13 @@ def main() -> int:
 
     if args.analyze_only:
         write_rejections(args.rejects, rejected)
+        write_rejections(args.warnings, warnings)
         print(f"Lignes lues : {len(source_rows)}")
         print(f"Importables : {len(accepted)}")
         print(f"Rejetées : {len(rejected)}")
+        print(f"Avertissements (email invalide ignoré) : {len(warnings)}")
         print(f"Rapport : {args.rejects.resolve()}")
+        print(f"Avertissements : {args.warnings.resolve()}")
         return 0
 
     from sqlalchemy import select, text
@@ -241,6 +255,7 @@ def main() -> int:
                 "COALESCE((SELECT MAX(\"IdTFamille\") FROM \"TFamille\"), 1), true)"
             ))
         write_rejections(args.rejects, rejected)
+        write_rejections(args.warnings, warnings)
         if args.commit:
             session.commit()
             action = "IMPORT VALIDÉ"
@@ -250,7 +265,9 @@ def main() -> int:
         print(action)
         print(f"Lignes prêtes à être insérées : {inserted}")
         print(f"Lignes rejetées/ignorées : {len(rejected)}")
+        print(f"Avertissements (email invalide ignoré) : {len(warnings)}")
         print(f"Rapport : {args.rejects.resolve()}")
+        print(f"Avertissements : {args.warnings.resolve()}")
         return 0
     except IntegrityError as exc:
         session.rollback()

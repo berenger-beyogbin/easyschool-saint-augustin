@@ -4,6 +4,7 @@ from models.classe import TClasse
 from models.eleve import Eleve
 from models.famille import TFamille
 from models.annee_scolaire import TAnneeScolaire
+from models.versement_scol import VersementScol
 from app.session import AppSession
 from datetime import date
 
@@ -133,7 +134,6 @@ class InscriptionService:
                 return False, f"Impossible d'inscrire l'élève : l'effectif actuel ({effectif}) a atteint la capacité maximale ({capacite}) de cette classe."
 
             # 4. Enregistrement de l'inscription
-            # TODO: remplacer par l'utilisateur authentifié lorsque le module de connexion sera finalisé.
             nouvelle_inscription = TInscription(
                 IDTAnneeScolaire=id_annee,
                 IDFamille=id_famille,
@@ -241,6 +241,11 @@ class InscriptionService:
                         f"la capacité maximale ({capacite}) de cette classe."
                     )
 
+            id_eleve = inscription.IDEleve
+            has_versements = session.query(VersementScol).filter_by(
+                IDEleve=id_eleve, IDTAnneeScolaire=id_annee
+            ).first() is not None
+
             inscription.IDNiveau = id_niveau
             inscription.IDClasse = id_classe
             inscription.Nouveau = data.get("Nouveau", inscription.Nouveau)
@@ -250,10 +255,77 @@ class InscriptionService:
             inscription.AutresFrais = data.get("AutresFrais", inscription.AutresFrais)
 
             session.commit()
-            return True, "L'inscription a été modifiée avec succès !"
         except Exception as e:
             session.rollback()
             return False, f"Erreur lors de la modification : {str(e)}"
+        finally:
+            session.close()
+
+        message = "L'inscription a été modifiée avec succès !"
+
+        # Recalcul de la ventilation analytique (hors transaction principale),
+        # comme le fait déjà VersementService après un versement.
+        try:
+            from services.ventilation_service import VentilationService
+            VentilationService.recalculate_student_ventilation(id_eleve, id_annee)
+        except Exception as e:
+            print(f"Avertissement recalcul ventilation après modification d'inscription : {e}")
+
+        # Avertir si des versements ont déjà été encaissés : un changement de niveau ou
+        # d'options peut modifier rétroactivement le montant dû et créer un trop-perçu.
+        if has_versements:
+            try:
+                from services.versement_service import VersementService
+                fin = VersementService.get_infos_financieres_eleve(id_annee, id_eleve)
+                trop_percu = []
+                if fin["scol_paye"] > fin["scol_due"]:
+                    trop_percu.append(f"scolarité ({fin['scol_paye']:.0f} F versés pour {fin['scol_due']:.0f} F dus)")
+                if fin["trans_paye"] > fin["trans_due"]:
+                    trop_percu.append(f"transport ({fin['trans_paye']:.0f} F versés pour {fin['trans_due']:.0f} F dus)")
+                if fin["cant_paye"] > fin["cant_due"]:
+                    trop_percu.append(f"cantine ({fin['cant_paye']:.0f} F versés pour {fin['cant_due']:.0f} F dus)")
+                if trop_percu:
+                    message += " Attention, trop-perçu détecté sur " + ", ".join(trop_percu) + " suite à ce changement."
+            except Exception as e:
+                print(f"Avertissement calcul trop-perçu après modification d'inscription : {e}")
+
+        return True, message
+
+    @staticmethod
+    def delete_inscription(id_inscription: int) -> tuple[bool, str]:
+        """
+        Annule une inscription (élève inscrit par erreur, désistement) à condition
+        qu'aucun versement n'ait déjà été enregistré pour cet élève sur cette année.
+        """
+        allowed, msg = InscriptionService._require_inscriptions_permission()
+        if not allowed:
+            return False, msg
+
+        session = get_session()
+        try:
+            inscription = session.get(TInscription, id_inscription)
+            if not inscription:
+                return False, "L'inscription à supprimer est introuvable."
+
+            annee = session.get(TAnneeScolaire, inscription.IDTAnneeScolaire)
+            if annee and annee.Cloturer:
+                return False, "Impossible de supprimer une inscription d'une année clôturée."
+
+            has_versements = session.query(VersementScol).filter_by(
+                IDEleve=inscription.IDEleve, IDTAnneeScolaire=inscription.IDTAnneeScolaire
+            ).first() is not None
+            if has_versements:
+                return False, (
+                    "Impossible de supprimer cette inscription : des versements ont déjà "
+                    "été enregistrés pour cet élève sur cette année scolaire."
+                )
+
+            session.delete(inscription)
+            session.commit()
+            return True, "L'inscription a été supprimée avec succès !"
+        except Exception as e:
+            session.rollback()
+            return False, f"Erreur lors de la suppression de l'inscription : {str(e)}"
         finally:
             session.close()
 

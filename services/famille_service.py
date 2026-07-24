@@ -2,6 +2,7 @@ from app.database import get_session
 from app.session import AppSession
 from models.famille import TFamille
 from models.eleve import Eleve
+from models.inscription import TInscription
 import re
 
 class FamilleService:
@@ -199,6 +200,13 @@ class FamilleService:
             has_eleves = session.query(Eleve).filter_by(IDFamille=id_famille).first() is not None
             if has_eleves:
                 return False, "Impossible de supprimer cette famille car elle est liée à un ou plusieurs élèves."
+
+            # Vérifier si des inscriptions (historique) référencent encore cette famille,
+            # même si plus aucun élève ne lui est directement rattaché (ex: élève réaffecté
+            # à une autre famille après une inscription initiale).
+            has_inscriptions = session.query(TInscription).filter_by(IDFamille=id_famille).first() is not None
+            if has_inscriptions:
+                return False, "Impossible de supprimer cette famille car elle est référencée par une ou plusieurs inscriptions."
 
             session.delete(famille)
             session.commit()

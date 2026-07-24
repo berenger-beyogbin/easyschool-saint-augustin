@@ -50,23 +50,28 @@ def as_optional_id(value: Any) -> int | None:
     return result if result is not None and result > 0 else None
 
 
+def _valid_birthdate(result: date | None) -> date | None:
+    # Même règle que EleveService.create_eleve : pas de date future, pas d'année farfelue.
+    return result if isinstance(result, date) and date(1900, 1, 1) <= result <= date.today() else None
+
+
 def as_date(value: Any) -> date | None:
     if isinstance(value, datetime):
-        return value.date()
+        return _valid_birthdate(value.date())
     if isinstance(value, date):
-        return value
+        return _valid_birthdate(value)
     if isinstance(value, (int, float)):
         try:
             converted = from_excel(value)
             result = converted.date() if isinstance(converted, datetime) else converted
-            return result if isinstance(result, date) and 1900 <= result.year <= date.today().year else None
+            return _valid_birthdate(result)
         except (OverflowError, ValueError):
             return None
     raw = clean(value)
     for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
         try:
             result = datetime.strptime(raw, fmt).date()
-            return result if 1900 <= result.year <= date.today().year else None
+            return _valid_birthdate(result)
         except ValueError:
             pass
     return None

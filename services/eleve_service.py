@@ -278,9 +278,18 @@ class EleveService:
                 return False, "La date de naissance est obligatoire."
             if sexe is None:
                 return False, "Le sexe est obligatoire."
-                
+
             if isinstance(dat_nais, date) and dat_nais > date.today():
                 return False, "La date de naissance ne peut pas être dans le futur."
+
+            nouvelle_famille = data.get("IDFamille")
+            if nouvelle_famille is None and eleve.IDFamille is not None:
+                has_inscriptions = session.query(TInscription).filter_by(IDEleve=id_eleve).first() is not None
+                if has_inscriptions:
+                    return False, (
+                        "Impossible de délier la famille : cet élève possède déjà une ou "
+                        "plusieurs inscriptions rattachées à sa famille actuelle."
+                    )
 
             # Unicité matricule hors élève lui-même
             doublon = session.query(Eleve).filter(
@@ -310,7 +319,14 @@ class EleveService:
             eleve.Sexe = sexe
             eleve.IDNationalite = data.get("IDNationalite")
             eleve.IDReligion = data.get("IDReligion")
-            eleve.IDFamille = data.get("IDFamille")
+            if nouvelle_famille != eleve.IDFamille:
+                # Garder les inscriptions de l'élève alignées sur sa famille actuelle
+                # (même invariant que InscriptionService.create_inscription, qui aligne
+                # Eleve.IDFamille sur la famille de la nouvelle inscription).
+                session.query(TInscription).filter_by(IDEleve=id_eleve).update(
+                    {"IDFamille": nouvelle_famille}
+                )
+            eleve.IDFamille = nouvelle_famille
             eleve.NumExtrait = data.get("NumExtrait")
             eleve.DateExtrait = data.get("DateExtrait")
             eleve.LieuDelivrance = data.get("LieuDelivrance")
