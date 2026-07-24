@@ -74,9 +74,9 @@ class StatTransportView(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.setColumnCount(8)
+        self.table.setColumnCount(9)
         self.table.setHorizontalHeaderLabels([
-            "N°", "Matricule", "Nom et Prénoms", "Classe", "Montant dû", "Montant versé", "Reste", "État"
+            "N°", "Matricule", "Nom et Prénoms", "Classe", "Montant dû", "Montant versé", "Réduction", "Reste", "État"
         ])
         apply_table_style(self.table, alternate="yellow")
 
@@ -89,16 +89,19 @@ class StatTransportView(QWidget):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
 
         layout.addWidget(self.table)
 
         self.totaux_panel, (
             self.lbl_tot_du,
             self.lbl_tot_verse,
+            self.lbl_tot_reduc,
             self.lbl_tot_reste,
         ) = make_totaux_panel_widget([
             ("Total dû",     COLORS['primary']),
             ("Total versé",  COLORS['success']),
+            ("Réduction",    COLORS['purple']),
             ("Reste global", COLORS['warning']),
         ])
         layout.addWidget(self.totaux_panel)
@@ -136,11 +139,13 @@ class StatTransportView(QWidget):
 
         sum_du = 0.0
         sum_verse = 0.0
+        sum_reduc = 0.0
         sum_reste = 0.0
 
         for idx, item in enumerate(data):
             sum_du += item["MontantDu"]
             sum_verse += item["MontantVerse"]
+            sum_reduc += item["Reduction"]
             sum_reste += item["Reste"]
 
             it_idx = QTableWidgetItem(str(idx + 1))
@@ -157,6 +162,9 @@ class StatTransportView(QWidget):
 
             it_verse = QTableWidgetItem(StatistiquesService.format_fcfa(item["MontantVerse"]))
             it_verse.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            it_reduc = QTableWidgetItem(StatistiquesService.format_fcfa(item["Reduction"]) if item["Reduction"] > 0 else "—")
+            it_reduc.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
             it_reste = QTableWidgetItem(StatistiquesService.format_fcfa(item["Reste"]))
             it_reste.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -176,11 +184,13 @@ class StatTransportView(QWidget):
             self.table.setItem(idx, 3, it_classe)
             self.table.setItem(idx, 4, it_du)
             self.table.setItem(idx, 5, it_verse)
-            self.table.setItem(idx, 6, it_reste)
-            self.table.setItem(idx, 7, it_etat)
+            self.table.setItem(idx, 6, it_reduc)
+            self.table.setItem(idx, 7, it_reste)
+            self.table.setItem(idx, 8, it_etat)
 
         self.lbl_tot_du.setText(StatistiquesService.format_fcfa(sum_du))
         self.lbl_tot_verse.setText(StatistiquesService.format_fcfa(sum_verse))
+        self.lbl_tot_reduc.setText(StatistiquesService.format_fcfa(sum_reduc))
         self.lbl_tot_reste.setText(StatistiquesService.format_fcfa(sum_reste))
 
     def imprimer_clic(self):

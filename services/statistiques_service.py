@@ -108,6 +108,7 @@ class StatistiquesService:
             from models.classe import TClasse
             from models.montant_scol import MontantScol
             from models.versement_scol import VersementScol
+            from services.versement_service import VersementService
 
             # Enseignant/famille categorisation possible
             # 1. Recuperer tous les tarifs de cette annee
@@ -177,7 +178,9 @@ class StatistiquesService:
 
                     if ins.famille and ins.famille.EbrieAbobote:
                         scol_due = max(0.0, scol_due - 10000.0)
-                    if ins.Nouveau:
+                    # Prospectus 2026-2027 : +10 000 F uniquement du CP1 au CM2,
+                    # le prescolaire garde le meme tarif nouveau/ancien (cf VersementService).
+                    if VersementService._frais_nouvel_eleve_applicables(ins):
                         scol_due += 10000.0
                     rang, nb_famille = rang_par_eleve.get(ins.IDEleve, (1, 1))
                     if nb_famille >= 3 and rang >= 3:
@@ -233,9 +236,22 @@ class StatistiquesService:
             payments_sums = session.query(
                 VersementScol.IDEleve,
                 func.sum(VersementScol.MontantCantine).label("cant_sum")
-            ).filter(VersementScol.IDTAnneeScolaire == id_annee).group_by(VersementScol.IDEleve).all()
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == False
+            ).group_by(VersementScol.IDEleve).all()
 
             payments_map = {p[0]: float(p[1]) if p[1] is not None else 0.0 for p in payments_sums}
+
+            reductions_sums = session.query(
+                VersementScol.IDEleve,
+                func.sum(VersementScol.MontantCantine).label("cant_reduc_sum")
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == True
+            ).group_by(VersementScol.IDEleve).all()
+
+            reductions_map = {r[0]: float(r[1]) if r[1] is not None else 0.0 for r in reductions_sums}
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
@@ -253,11 +269,13 @@ class StatistiquesService:
                 m_cant = cantine_map.get(ins.IDNiveau)
                 cant_due = float(m_cant.Montant) if m_cant else 0.0
                 cant_vers = payments_map.get(ins.IDEleve, 0.0)
-                reste = max(0.0, cant_due - cant_vers)
+                cant_reduc = reductions_map.get(ins.IDEleve, 0.0)
+                reste = max(0.0, cant_due - cant_vers - cant_reduc)
 
-                if cant_vers >= cant_due and cant_due > 0:
+                total_couvert = cant_vers + cant_reduc
+                if total_couvert >= cant_due and cant_due > 0:
                     etat = "Payé"
-                elif cant_vers > 0:
+                elif total_couvert > 0:
                     etat = "Partiel"
                 else:
                     etat = "Impayé"
@@ -268,6 +286,7 @@ class StatistiquesService:
                     "LibClasse": ins.classe.LibClasse,
                     "MontantDu": cant_due,
                     "MontantVerse": cant_vers,
+                    "Reduction": cant_reduc,
                     "Reste": reste,
                     "Etat": etat
                 })
@@ -299,9 +318,22 @@ class StatistiquesService:
             payments_sums = session.query(
                 VersementScol.IDEleve,
                 func.sum(VersementScol.MontantVersTrans).label("trans_sum")
-            ).filter(VersementScol.IDTAnneeScolaire == id_annee).group_by(VersementScol.IDEleve).all()
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == False
+            ).group_by(VersementScol.IDEleve).all()
 
             payments_map = {p[0]: float(p[1]) if p[1] is not None else 0.0 for p in payments_sums}
+
+            reductions_sums = session.query(
+                VersementScol.IDEleve,
+                func.sum(VersementScol.MontantVersTrans).label("trans_reduc_sum")
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == True
+            ).group_by(VersementScol.IDEleve).all()
+
+            reductions_map = {r[0]: float(r[1]) if r[1] is not None else 0.0 for r in reductions_sums}
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
@@ -319,11 +351,13 @@ class StatistiquesService:
                 m_trans = trans_map.get(ins.IDNiveau)
                 trans_due = float(m_trans.Montant) if m_trans else 0.0
                 trans_vers = payments_map.get(ins.IDEleve, 0.0)
-                reste = max(0.0, trans_due - trans_vers)
+                trans_reduc = reductions_map.get(ins.IDEleve, 0.0)
+                reste = max(0.0, trans_due - trans_vers - trans_reduc)
 
-                if trans_vers >= trans_due and trans_due > 0:
+                total_couvert = trans_vers + trans_reduc
+                if total_couvert >= trans_due and trans_due > 0:
                     etat = "Payé"
-                elif trans_vers > 0:
+                elif total_couvert > 0:
                     etat = "Partiel"
                 else:
                     etat = "Impayé"
@@ -334,6 +368,7 @@ class StatistiquesService:
                     "LibClasse": ins.classe.LibClasse,
                     "MontantDu": trans_due,
                     "MontantVerse": trans_vers,
+                    "Reduction": trans_reduc,
                     "Reste": reste,
                     "Etat": etat
                 })

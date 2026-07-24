@@ -514,9 +514,9 @@ class CantineStatPrinter:
     """Impression A4 paysage de l'état des versements de cantine."""
 
     TITRE       = "ETAT DES VERSEMENTS DE LA CANTINE"
-    COL_RATIOS  = [0.035, 0.090, 0.295, 0.085, 0.145, 0.145, 0.115, 0.090]
-    COL_HEADERS = ["N°", "Matricule", "Élèves", "Classe", "Montant dû", "Versé", "Reste", "État"]
-    COL_ALIGN   = ["C", "C", "L", "C", "R", "R", "R", "C"]
+    COL_RATIOS  = [0.035, 0.090, 0.270, 0.080, 0.130, 0.130, 0.090, 0.090, 0.085]
+    COL_HEADERS = ["N°", "Matricule", "Élèves", "Classe", "Montant dû", "Versé", "Red.", "Reste", "État"]
+    COL_ALIGN   = ["C", "C", "L", "C", "R", "R", "R", "R", "C"]
 
     @classmethod
     def print_report(cls, parent, rows: list, titre_filtre: str = ""):
@@ -532,17 +532,19 @@ class CantineStatPrinter:
         printer.setFullPage(True)
 
         formatted = []
-        sum_du = sum_vers = sum_reste = 0.0
+        sum_du = sum_vers = sum_reduc = sum_reste = 0.0
         for idx, item in enumerate(rows):
             etat_raw = item.get("Etat", "Impayé")
             etat_lbl = payment_status_label(etat_raw)
 
             du    = item.get("MontantDu", 0.0)
             vers  = item.get("MontantVerse", 0.0)
+            reduc = item.get("Reduction", 0.0)
             reste = item.get("Reste", 0.0)
 
             sum_du    += du
             sum_vers  += vers
+            sum_reduc += reduc
             sum_reste += reste
 
             formatted.append({
@@ -553,13 +555,14 @@ class CantineStatPrinter:
                     item.get("LibClasse") or "",
                     _fmt_f(du),
                     _fmt_f(vers),
+                    _fmt_f(reduc) if reduc > 0 else "",
                     _fmt_f(reste) if reste > 0 else "",
                     etat_lbl,
                 ],
                 "solde": etat_raw,
             })
 
-        totaux = {"sum_du": sum_du, "sum_vers": sum_vers, "sum_reste": sum_reste}
+        totaux = {"sum_du": sum_du, "sum_vers": sum_vers, "sum_reduc": sum_reduc, "sum_reste": sum_reste}
 
         etablissement = get_etablissement_print_info(parent)
         if etablissement is None:
@@ -713,6 +716,7 @@ class CantineStatPrinter:
                 totaux_lines = [
                     ("Total Montant dû :",      _fmt_f(totaux["sum_du"])),
                     ("Total Montant versé :",   _fmt_f(totaux["sum_vers"])),
+                    ("Réduction :",             _fmt_f(totaux["sum_reduc"])),
                     ("Total Montant restant :", _fmt_f(totaux["sum_reste"])),
                 ]
 
