@@ -93,8 +93,6 @@ class FamilleService:
                 NomMere=data.get("NomMere"),
                 ProfessionMere=data.get("ProfessionMere"),
                 TelMere=data.get("TelMere"),
-                EnsCatPrimaire=data.get("EnsCatPrimaire", False),
-                EnsCatSecondaire=data.get("EnsCatSecondaire", False)
             )
             session.add(famille)
             session.commit()
@@ -134,7 +132,7 @@ class FamilleService:
                 TFamille.IdTFamille != id_famille
             ).first()
             if doublon:
-                return False, f"Une autre famille possède déjà ce couple Responsable / Téléphone."
+                return False, "Une autre famille possède déjà ce couple Responsable / Téléphone."
 
             # Mise à jour des valeurs
             famille.NomResponsable = nom_resp
@@ -158,8 +156,6 @@ class FamilleService:
             famille.NomMere = data.get("NomMere")
             famille.ProfessionMere = data.get("ProfessionMere")
             famille.TelMere = data.get("TelMere")
-            famille.EnsCatPrimaire = data.get("EnsCatPrimaire", False)
-            famille.EnsCatSecondaire = data.get("EnsCatSecondaire", False)
 
             session.commit()
             return True, "Famille mise à jour avec succès !"

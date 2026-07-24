@@ -1,6 +1,9 @@
 from typing import List
 from models.annee_scolaire import TAnneeScolaire
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class AnneeScolaireService:
     @staticmethod
@@ -9,8 +12,8 @@ class AnneeScolaireService:
         session = get_session()
         try:
             return session.query(TAnneeScolaire).order_by(TAnneeScolaire.Libelle.desc()).all()
-        except Exception as e:
-            print(f"Erreur get_all TAnneeScolaire : {e}")
+        except Exception:
+            logger.exception("Erreur get_all TAnneeScolaire")
             return []
         finally:
             session.close()
@@ -65,9 +68,9 @@ class AnneeScolaireService:
                     AppSession.initialize_session()
                 return True
             return False
-        except Exception as e:
+        except Exception:
             session.rollback()
-            print(f"Erreur de cloture d'annee : {e}")
+            logger.exception("Erreur de cloture d'annee")
             return False
         finally:
             session.close()

@@ -7,6 +7,9 @@ from datetime import date
 from sqlalchemy.orm import joinedload
 import os
 import shutil
+import logging
+logger = logging.getLogger(__name__)
+
 
 class EleveService:
     """
@@ -134,8 +137,8 @@ class EleveService:
             
             next_seq_str = str(max_seq + 1).zfill(3)
             return f"{prefix}-{next_seq_str}"
-        except Exception as e:
-            print(f"Erreur de génération de matricule: {e}")
+        except Exception:
+            logger.exception("Erreur de génération de matricule")
             return "26-001"
         finally:
             session.close()
@@ -162,8 +165,8 @@ class EleveService:
             shutil.copy2(photo_source_path, dest_path)
             # Retourner le chemin relatif
             return f"assets/photos_eleves/{new_filename}"
-        except Exception as e:
-            print(f"Erreur de copie de la photo d'élève : {e}")
+        except Exception:
+            logger.exception("Erreur de copie de la photo d'élève")
             return None
 
     @staticmethod

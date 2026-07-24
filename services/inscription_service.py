@@ -7,10 +7,21 @@ from models.annee_scolaire import TAnneeScolaire
 from app.session import AppSession
 from datetime import date
 
+STATUTS_AFFECTATION_VALIDES = ("AFFECTE_ETAT", "NON_AFFECTE_ETAT")
+
 class InscriptionService:
     """
     Service d'inscription des élèves dans l'année scolaire active.
     """
+
+    @staticmethod
+    def _get_classe_for_capacity_update(session, id_classe: int):
+        """Verrouille la classe cible jusqu'a la fin de la transaction.
+
+        Les inscriptions concurrentes visant la meme classe calculent ainsi
+        leur effectif l'une apres l'autre, apres le commit precedent.
+        """
+        return session.query(TClasse).filter_by(IDTClasse=id_classe).with_for_update().first()
 
     @staticmethod
     def get_inscriptions_by_annee(id_annee: int) -> list[TInscription]:
@@ -103,6 +114,10 @@ class InscriptionService:
             if not id_classe:
                 return False, "Veuillez sélectionner une classe."
 
+            statut_affectation = data.get("StatutAffectation") or "AFFECTE_ETAT"
+            if statut_affectation not in STATUTS_AFFECTATION_VALIDES:
+                return False, "Statut d'affectation invalide."
+
             # 2. Vérifier si l'élève est déjà inscrit pour cette année scolaire
             doublon = session.query(TInscription).filter_by(
                 IDEleve=id_eleve,
@@ -112,7 +127,7 @@ class InscriptionService:
                 return False, "Cet élève possède déjà une inscription pour cette année scolaire."
 
             # 3. Vérifier la capacité de la classe
-            classe = session.get(TClasse, id_classe)
+            classe = InscriptionService._get_classe_for_capacity_update(session, id_classe)
             if not classe:
                 return False, "La classe sélectionnée est inconnue."
                 
@@ -138,6 +153,7 @@ class InscriptionService:
                 Transport=data.get("Transport", False),
                 Cantine=data.get("Cantine", False),
                 AutresFrais=data.get("AutresFrais", False),
+                StatutAffectation=statut_affectation,
                 Login=AppSession.get_logged_in_username(),
                 DateInscription=date.today()
             )
@@ -214,9 +230,13 @@ class InscriptionService:
             if not id_classe:
                 return False, "Veuillez sélectionner une classe."
 
+            statut_affectation = data.get("StatutAffectation", inscription.StatutAffectation)
+            if statut_affectation not in STATUTS_AFFECTATION_VALIDES:
+                return False, "Statut d'affectation invalide."
+
             # Vérifier la capacité uniquement si la classe change
             if id_classe != inscription.IDClasse:
-                classe = session.get(TClasse, id_classe)
+                classe = InscriptionService._get_classe_for_capacity_update(session, id_classe)
                 if not classe:
                     return False, "La classe sélectionnée est inconnue."
                 effectif = session.query(TInscription).filter_by(
@@ -237,6 +257,7 @@ class InscriptionService:
             inscription.Transport = data.get("Transport", inscription.Transport)
             inscription.Cantine = data.get("Cantine", inscription.Cantine)
             inscription.AutresFrais = data.get("AutresFrais", inscription.AutresFrais)
+            inscription.StatutAffectation = statut_affectation
 
             session.commit()
             return True, "L'inscription a été modifiée avec succès !"

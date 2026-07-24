@@ -9,9 +9,8 @@ from PySide6.QtGui import QColor
 
 from app.styles import (
     COLORS, TAB_STYLE, INPUT_STYLE, COMBO_STYLE,
-    BUTTON_PRIMARY, BUTTON_DANGER, BUTTON_WARNING, BUTTON_SUCCESS,
-    MESSAGEBOX_STYLE, apply_table_style, configure_button,
-    make_title_label, make_section_label
+    apply_table_style, configure_button,
+    make_title_label
 )
 
 

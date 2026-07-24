@@ -1,0 +1,32 @@
+# Metadonnees de version Windows pour l'executable PyInstaller (audit P2-12).
+# Genere manuellement (pas par pyi-grab_version) pour rester synchronise avec
+# app/version.py. A mettre a jour a chaque bump de version.
+#
+# Format : voir https://pyinstaller.org/en/stable/usage.html#capturing-windows-version-data
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(2, 0, 0, 0),
+    prodvers=(2, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+      StringTable(
+        u'040c04b0',
+        [StringStruct(u'CompanyName', u'Easy School CJGA'),
+        StringStruct(u'FileDescription', u'Easy School - Gestion d\'ecole (adaptation CJGA)'),
+        StringStruct(u'FileVersion', u'2.0.0.0'),
+        StringStruct(u'InternalName', u'EasySchool'),
+        StringStruct(u'OriginalFilename', u'EasySchool.exe'),
+        StringStruct(u'ProductName', u'Easy School'),
+        StringStruct(u'ProductVersion', u'2.0.0.0')])
+      ]),
+    VarFileInfo([VarStruct(u'Translation', [1036, 1200])])
+  ]
+)

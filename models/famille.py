@@ -47,10 +47,6 @@ class TFamille(Base):
     ProfessionMere = Column(String(25), nullable=True)
     TelMere = Column(String(25), nullable=True)
     
-    # Autres indicateurs
-    EnsCatPrimaire = Column(Boolean, default=False)
-    EnsCatSecondaire = Column(Boolean, default=False)
-
     # Relations — cascade limitée volontairement pour éviter les suppressions en masse
     # delete-orphan retiré : la suppression d'une famille ne doit pas supprimer automatiquement les élèves.
     # La protection est assurée au niveau service (FamilleService.delete_famille vérifie les élèves liés).

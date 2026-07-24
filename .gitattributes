@@ -1,0 +1,15 @@
+# Normalise les fins de ligne : LF dans le depot, adaptees a l'OS a la sortie.
+* text=auto
+
+*.py text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.svg text eol=lf
+
+*.jpg binary
+*.png binary
+*.ico binary
+*.exe binary
+*.dll binary

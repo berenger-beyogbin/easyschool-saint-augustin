@@ -1,6 +1,6 @@
 import datetime
 from typing import List, Optional, Any
-from sqlalchemy import func, case
+from sqlalchemy import func
 from app.database import get_session
 from app.session import AppSession
 
@@ -107,6 +107,7 @@ class StatistiquesService:
             from models.classe import TClasse
             from models.montant_scol import MontantScol
             from models.versement_scol import VersementScol
+            from services.tarification_service import TarificationService
 
             # Enseignant/famille categorisation possible
             # 1. Recuperer tous les tarifs de cette annee
@@ -119,7 +120,8 @@ class StatistiquesService:
                 func.sum(VersementScol.MontantVersSco).label("vers_sum"),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).group_by(VersementScol.IDEleve).all()
 
             versements_map = {v[0]: float(v[1]) if v[1] is not None else 0.0 for v in versements_sums}
@@ -130,7 +132,8 @@ class StatistiquesService:
                 func.sum(VersementScol.MontantVersSco).label("reduc_sum"),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == True
+                VersementScol.Reduction == True,
+                VersementScol.Annule == False,
             ).group_by(VersementScol.IDEleve).all()
 
             reductions_map = {v[0]: float(v[1]) if v[1] is not None else 0.0 for v in reductions_sums}
@@ -147,40 +150,25 @@ class StatistiquesService:
             q = q.order_by(TClasse.LibClasse, Eleve.Nom, Eleve.Prenoms)
             inscriptions = q.all()
 
-            # Pré-calcul des rangs par famille (ordre IDTInscription) pour la règle 3e enfant
-            from collections import defaultdict
-            fam_buckets = defaultdict(list)
-            for row in session.query(
-                TInscription.IDFamille, TInscription.IDEleve, TInscription.IDTInscription
-            ).filter(TInscription.IDTAnneeScolaire == id_annee
-            ).order_by(TInscription.IDFamille, TInscription.IDTInscription.asc()).all():
-                fam_buckets[row.IDFamille].append(row.IDEleve)
-            rang_par_eleve = {}
-            for id_fam, eleve_ids in fam_buckets.items():
-                for idx, id_el in enumerate(eleve_ids):
-                    rang_par_eleve[id_el] = (idx + 1, len(eleve_ids))
+            # Rangs par famille pour la regle 3e enfant (centralise : TarificationService)
+            rang_par_eleve = TarificationService.get_rangs_famille_par_eleve(session, id_annee)
 
             lst = []
             for ins in inscriptions:
-                # Calcul montant du
+                # Calcul montant du (regles centralisees : TarificationService)
                 scol_due = 0.0
                 if ins.Scolarite:
                     m_scol = montants_map.get(ins.IDNiveau)
-                    if m_scol:
-                        if ins.famille and ins.famille.EnsCatPrimaire:
-                            scol_due = float(m_scol.MontantEnsPri)
-                        elif ins.famille and ins.famille.EnsCatSecondaire:
-                            scol_due = float(m_scol.MontantEnsSecondaire)
-                        else:
-                            scol_due = float(m_scol.Montant)
-
-                    if ins.famille and ins.famille.EbrieAbobote:
-                        scol_due = max(0.0, scol_due - 10000.0)
-                    if ins.Nouveau:
-                        scol_due += 10000.0
                     rang, nb_famille = rang_par_eleve.get(ins.IDEleve, (1, 1))
-                    if nb_famille >= 3 and rang >= 3:
-                        scol_due = max(0.0, scol_due - 10000.0)
+                    scol_due = TarificationService.calculer_scolarite_due(
+                        montant_affecte=m_scol.MontantAffecte if m_scol else 0,
+                        montant_non_affecte=m_scol.MontantNonAffecte if m_scol else 0,
+                        statut_affectation=ins.StatutAffectation,
+                        ebrie_abobote=bool(ins.famille and ins.famille.EbrieAbobote),
+                        nouveau=bool(ins.Nouveau),
+                        rang_famille=rang,
+                        nb_enfants_famille=nb_famille,
+                    )
 
                 scol_vers  = versements_map.get(ins.IDEleve, 0.0)
                 scol_reduc = reductions_map.get(ins.IDEleve, 0.0)
@@ -232,7 +220,10 @@ class StatistiquesService:
             payments_sums = session.query(
                 VersementScol.IDEleve,
                 func.sum(VersementScol.MontantCantine).label("cant_sum")
-            ).filter(VersementScol.IDTAnneeScolaire == id_annee).group_by(VersementScol.IDEleve).all()
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Annule == False,
+            ).group_by(VersementScol.IDEleve).all()
 
             payments_map = {p[0]: float(p[1]) if p[1] is not None else 0.0 for p in payments_sums}
 
@@ -298,7 +289,10 @@ class StatistiquesService:
             payments_sums = session.query(
                 VersementScol.IDEleve,
                 func.sum(VersementScol.MontantVersTrans).label("trans_sum")
-            ).filter(VersementScol.IDTAnneeScolaire == id_annee).group_by(VersementScol.IDEleve).all()
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Annule == False,
+            ).group_by(VersementScol.IDEleve).all()
 
             payments_map = {p[0]: float(p[1]) if p[1] is not None else 0.0 for p in payments_sums}
 

@@ -261,9 +261,9 @@ python main.py
   SELECT
       e."Nom" || ' ' || e."Prenoms" AS eleve,
       c."LibClasse",
-      m."Montant" AS montant_du,
+      CASE WHEN i."StatutAffectation" = 'NON_AFFECTE_ETAT' THEN m."MontantNonAffecte" ELSE m."MontantAffecte" END AS montant_du,
       COALESCE(SUM(v."MontantVersSco"), 0) AS total_verse,
-      m."Montant" - COALESCE(SUM(v."MontantVersSco"), 0) AS reste
+      CASE WHEN i."StatutAffectation" = 'NON_AFFECTE_ETAT' THEN m."MontantNonAffecte" ELSE m."MontantAffecte" END - COALESCE(SUM(v."MontantVersSco"), 0) AS reste
   FROM "TInscription" i
   JOIN "Eleve" e ON i."IDEleve" = e."IDEleve"
   JOIN "TClasse" c ON i."IDClasse" = c."IDTClasse"
@@ -273,8 +273,8 @@ python main.py
       AND v."IDTAnneeScolaire" = i."IDTAnneeScolaire"
   JOIN "TAnneeScolaire" a ON i."IDTAnneeScolaire" = a."IDTAnneeScolaire"
   WHERE a."Cloturer" = false AND i."Scolarite" = true
-  GROUP BY e."Nom", e."Prenoms", c."LibClasse", m."Montant"
-  HAVING m."Montant" - COALESCE(SUM(v."MontantVersSco"), 0) > 0
+  GROUP BY e."Nom", e."Prenoms", c."LibClasse", i."StatutAffectation", m."MontantNonAffecte", m."MontantAffecte"
+  HAVING CASE WHEN i."StatutAffectation" = 'NON_AFFECTE_ETAT' THEN m."MontantNonAffecte" ELSE m."MontantAffecte" END - COALESCE(SUM(v."MontantVersSco"), 0) > 0
   ORDER BY reste DESC
   LIMIT 10;
   ```

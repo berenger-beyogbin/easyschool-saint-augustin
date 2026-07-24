@@ -2,14 +2,12 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor
 from services.annee_scolaire_service import AnneeScolaireService
 from app.styles import (
     COLORS, PAGE_TITLE_STYLE, INPUT_STYLE,
-    BUTTON_PRIMARY, BUTTON_SECONDARY, BUTTON_SUCCESS, BUTTON_WARNING,
-    BUTTON_TABLE_ACTION_WARNING,
-    apply_table_style, configure_table_action_button, make_table_action_container
+    BUTTON_PRIMARY, BUTTON_SECONDARY, apply_table_style, configure_table_action_button, make_table_action_container
 )
 
 class AnneeScolaireView(QWidget):

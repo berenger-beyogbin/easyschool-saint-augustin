@@ -1,6 +1,9 @@
 from typing import List
 from models.religion import TReligion
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class ReligionService:
     @staticmethod
@@ -9,8 +12,8 @@ class ReligionService:
         session = get_session()
         try:
             return session.query(TReligion).order_by(TReligion.Religion.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_all TReligion : {e}")
+        except Exception:
+            logger.exception("Erreur get_all TReligion")
             return []
         finally:
             session.close()

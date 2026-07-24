@@ -1,8 +1,7 @@
-import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QFrame,
-    QDateEdit, QComboBox
+    QDateEdit, QComboBox, QInputDialog
 )
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, QDate
@@ -264,10 +263,18 @@ class EnregistrementMouvementView(QWidget):
 
             item_code    = QTableWidgetItem(item.CodeSortie or f"SF-{item.IDSortieFin}")
             item_date    = QTableWidgetItem(date_str)
-            item_benef   = QTableWidgetItem(item.Benef)
+            item_benef   = QTableWidgetItem(
+                f"{item.Benef} (ANNULÉ)" if item.Annule else item.Benef
+            )
             item_compte  = QTableWidgetItem(compte_str)
             item_montant = QTableWidgetItem(self.format_fcfa(item.Montant))
             item_montant.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            if item.Annule:
+                for cell in (item_code, item_date, item_benef, item_compte, item_montant):
+                    cell.setForeground(QColor(COLORS["muted"]))
+                    tip = f"Annulé par {item.AnnulePar or '?'} : {item.MotifAnnulation or ''}"
+                    cell.setToolTip(tip)
 
             self.table.setItem(i, 0, item_code)
             self.table.setItem(i, 1, item_date)
@@ -278,12 +285,13 @@ class EnregistrementMouvementView(QWidget):
             # Badge Sens
             self.table.setCellWidget(i, 5, self._make_sens_badge(item.DebitCredit))
 
-            # Bouton suppression
-            btn_suppr = QPushButton("Supprimer")
+            # Bouton annulation (un mouvement deja annule n'est plus actionnable)
+            btn_suppr = QPushButton("Déjà annulé" if item.Annule else "Annuler")
             configure_table_action_button(btn_suppr, "danger")
+            btn_suppr.setEnabled(not item.Annule)
             btn_suppr.clicked.connect(
                 lambda checked=False, id_s=item.IDSortieFin, c=item.CodeSortie:
-                self.delete_mouvement(id_s, c)
+                self.annuler_mouvement(id_s, c)
             )
             self.table.setCellWidget(i, 6, make_table_action_container(btn_suppr))
             self.table.setRowHeight(i, 44)
@@ -336,19 +344,25 @@ class EnregistrementMouvementView(QWidget):
         else:
             QMessageBox.critical(self, "Erreur d'enregistrement", msg)
 
-    def delete_mouvement(self, id_mouv, code_mouv):
-        ans = QMessageBox.question(
-            self, "Confirmation",
-            f"Voulez-vous supprimer le mouvement {code_mouv or ''} ?",
-            QMessageBox.Yes | QMessageBox.No
+    def annuler_mouvement(self, id_mouv, code_mouv):
+        motif, ok = QInputDialog.getMultiLineText(
+            self, "Annulation du mouvement",
+            f"Motif d'annulation du mouvement {code_mouv or ''} :"
         )
-        if ans == QMessageBox.Yes:
-            success, msg = ComptabiliteService.delete_mouvement(id_mouv)
-            if success:
-                QMessageBox.information(self, "Succès", msg)
-                self.load_data()
-            else:
-                QMessageBox.critical(self, "Erreur", msg)
+        if not ok:
+            return
+        if not motif.strip():
+            QMessageBox.warning(self, "Motif requis", "Le motif d'annulation est obligatoire.")
+            return
+
+        login_util = AppSession.get_logged_in_username() or "admin"
+        id_utilisateur = AppSession.get_current_user_id()
+        success, msg = ComptabiliteService.annuler_mouvement(id_mouv, motif, login_util, id_utilisateur)
+        if success:
+            QMessageBox.information(self, "Succès", msg)
+            self.load_data()
+        else:
+            QMessageBox.critical(self, "Erreur", msg)
 
     def clear_form(self):
         self.txt_benef.clear()

@@ -1,4 +1,3 @@
-import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
@@ -9,7 +8,7 @@ from services.article_service import ArticleService
 from services.stock_service import StockService
 from app.session import AppSession
 from app.styles import (
-    COLORS, INPUT_STYLE, COMBO_STYLE, DATE_STYLE, SECTION_TITLE_STYLE,
+    INPUT_STYLE, COMBO_STYLE, DATE_STYLE, SECTION_TITLE_STYLE,
     BUTTON_PRIMARY, BUTTON_SECONDARY,
     GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE, apply_table_style
 )
@@ -221,7 +220,7 @@ class ApprovisionnementView(QWidget):
             if hasattr(self.main_window, "load_data"):
                 try:
                     self.main_window.load_data()
-                except:
+                except Exception:
                     pass
         else:
             QMessageBox.critical(self, "Erreur de Stock", msg)

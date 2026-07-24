@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Numeric, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Numeric, Date, DateTime, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -7,6 +7,9 @@ class SortieFin(Base):
     Table SortieFin - Mouvements financiers de la comptabilite (Debit / Credit).
     """
     __tablename__ = "SortieFin"
+    __table_args__ = (
+        UniqueConstraint("CodeSortie", name="uq_sortie_fin_code_sortie"),
+    )
 
     IDSortieFin = Column(Integer, primary_key=True, autoincrement=True)
     Benef = Column(String(100), nullable=False)
@@ -19,6 +22,13 @@ class SortieFin(Base):
     IDAnSco = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="RESTRICT"), nullable=False)
     DebitCredit = Column(String(10), nullable=False) # 'Debit' ou 'Credit'
     IDCompte = Column(Integer, ForeignKey("Compte.IDCompte", ondelete="RESTRICT"), nullable=False)
+
+    # Annulation tracee : un mouvement finance valide n'est jamais supprime
+    # physiquement, il est marque annule (piste d'audit conservee).
+    Annule = Column(Boolean, nullable=False, default=False)
+    AnnulePar = Column(String(50), nullable=True)
+    DateAnnulation = Column(DateTime, nullable=True)
+    MotifAnnulation = Column(Text, nullable=True)
 
     # Relations
     compte = relationship("Compte")

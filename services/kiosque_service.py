@@ -1,11 +1,9 @@
 from typing import List, Tuple, Optional
-from decimal import Decimal
 from models.article import Article
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
 from services.article_service import ArticleService
 from services.stock_service import StockService
-from app.database import get_session
 
 class KiosqueService:
     @staticmethod

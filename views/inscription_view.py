@@ -2,7 +2,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
     QHeaderView, QComboBox, QCheckBox, QFrame,
-    QDialog, QDialogButtonBox
+    QDialog, QDialogButtonBox, QScrollArea, QSizePolicy,
+    QListWidget, QListWidgetItem, QAbstractItemView
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -10,12 +11,14 @@ from services.famille_service import FamilleService
 from services.eleve_service import EleveService
 from services.niveau_service import NiveauService
 from services.inscription_service import InscriptionService
+from services.inscription_autres_frais_service import InscriptionAutresFraisService
 from app.session import AppSession
 from app.database import get_session
+from app.config import Config
 from models.classe import TClasse
 from app.styles import (
     COLORS, INPUT_STYLE, COMBO_STYLE, TABLE_STYLE,
-    apply_card_shadow
+    apply_card_shadow, format_fcfa
 )
 
 _CARD_STYLE = """
@@ -89,6 +92,43 @@ QCheckBox::indicator:checked:hover {{
 }}
 """
 
+_FRAIS_LIST_STYLE = f"""
+QListWidget {{
+    background-color: {COLORS['card']};
+    border: 1px solid {COLORS['border']};
+    border-radius: 7px;
+    outline: none;
+    font-size: 12px;
+    color: {COLORS['text_soft']};
+}}
+QListWidget::item {{
+    padding: 8px 10px;
+    border-bottom: 1px solid {COLORS['border']};
+}}
+QListWidget::item:hover {{
+    background-color: {COLORS['surface_soft']};
+}}
+QListWidget::indicator {{
+    width: 18px;
+    height: 18px;
+    border: 2px solid {COLORS['input_border']};
+    border-radius: 4px;
+    background-color: {COLORS['card']};
+}}
+QListWidget::indicator:unchecked:hover {{
+    border-color: {COLORS['primary']};
+    background-color: {COLORS['surface_soft']};
+}}
+QListWidget::indicator:checked {{
+    background-color: {COLORS['primary']};
+    border-color: {COLORS['primary']};
+}}
+QListWidget::indicator:checked:hover {{
+    background-color: {COLORS['primary_dark']};
+    border-color: {COLORS['primary_dark']};
+}}
+"""
+
 _BTN_INSCRIRE = f"""
 QPushButton {{
     background-color: {COLORS['success']};
@@ -135,6 +175,8 @@ class InscriptionView(QWidget):
         self._mode_modification = False
         self._id_inscription_courante = None
         self._inscriptions_map = {}  # {id_eleve: TInscription}
+        self._frais_items = []  # [(QListWidgetItem, frais_dict)] — liste dynamique selon le niveau
+        self._form_enabled = False
         self.setStyleSheet(f"background-color: {COLORS['bg']};")
         self.init_ui()
         self.load_responsables()
@@ -143,8 +185,14 @@ class InscriptionView(QWidget):
 
     # ── Helpers UI ────────────────────────────────────────────────────────────
 
-    def _make_step_card(self, step_num: str, title: str):
-        """Crée une carte premium avec badge numéroté et header dégradé."""
+    def _make_step_card(self, step_num: str, title: str, scrollable: bool = False):
+        """Crée une carte premium avec badge numéroté et header dégradé.
+
+        Si scrollable=True, le corps de la carte est placé dans une QScrollArea :
+        utile pour les cartes à contenu de longueur variable (ex. liste de frais
+        annexes dépendant du niveau), qui ne doivent jamais être écrasées par la
+        hauteur imposée par les cartes voisines dans la grille.
+        """
         card = QFrame()
         card.setObjectName("stepCard")
         card.setStyleSheet(_CARD_STYLE)
@@ -180,12 +228,28 @@ class InscriptionView(QWidget):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(14, 12, 14, 14)
         content_layout.setSpacing(10)
-        card_vbox.addWidget(content)
+
+        if scrollable:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.setWidget(content)
+            card_vbox.addWidget(scroll)
+        else:
+            card_vbox.addWidget(content)
 
         return card, content_layout
 
-    def _make_option_row(self, checkbox: QCheckBox) -> QFrame:
-        """Enveloppe un checkbox dans une ligne stylisée avec hover."""
+    def _make_option_row(self, checkbox: QCheckBox, wrap_text: str = None) -> QFrame:
+        """Enveloppe un checkbox dans une ligne stylisée avec hover.
+
+        Si wrap_text est fourni, le libellé est affiché via un QLabel à part
+        (avec retour à la ligne automatique) plutôt que sur le texte natif du
+        checkbox — un QCheckBox ne wrap jamais son texte, ce qui provoquait un
+        débordement horizontal de la carte pour les libellés de frais longs.
+        """
         frame = QFrame()
         frame.setObjectName("optionRow")
         frame.setStyleSheet("""
@@ -200,9 +264,26 @@ class InscriptionView(QWidget):
             }
         """)
         row = QHBoxLayout(frame)
-        row.setContentsMargins(12, 7, 12, 7)
+        if wrap_text is not None:
+            # Lignes de la liste des frais annexes : plus compactes pour
+            # afficher davantage d'éléments avant de devoir défiler.
+            row.setContentsMargins(10, 4, 10, 4)
+            row.setSpacing(8)
+        else:
+            row.setContentsMargins(12, 7, 12, 7)
+            row.setSpacing(10)
         row.addWidget(checkbox)
-        row.addStretch()
+        if wrap_text is not None:
+            checkbox.setText("")
+            lbl = QLabel(wrap_text)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet(
+                f"font-size: 11px; font-weight: 500; color: {COLORS['text_soft']};"
+                "background-color: transparent; border: none;"
+            )
+            row.addWidget(lbl, 1)
+        else:
+            row.addStretch()
         return frame
 
     # ── Construction UI ───────────────────────────────────────────────────────
@@ -216,8 +297,8 @@ class InscriptionView(QWidget):
         main_layout.setContentsMargins(18, 18, 18, 18)
         main_layout.setHorizontalSpacing(16)
         main_layout.setVerticalSpacing(14)
-        main_layout.setColumnStretch(0, 4)
-        main_layout.setColumnStretch(1, 3)
+        main_layout.setColumnStretch(0, 1)
+        main_layout.setColumnStretch(1, 1)
         main_layout.setRowStretch(2, 1)
 
         # ── Carte 1 : Responsable ──────────────────────────────────────────────
@@ -233,8 +314,8 @@ class InscriptionView(QWidget):
         self.txt_search_resp.textChanged.connect(self.load_responsables)
 
         self.table_resp = QTableWidget()
-        self.table_resp.setColumnCount(4)
-        self.table_resp.setHorizontalHeaderLabels(["Responsable", "Téléphone", "Prim.", "Sec."])
+        self.table_resp.setColumnCount(2)
+        self.table_resp.setHorizontalHeaderLabels(["Responsable", "Téléphone"])
         self.table_resp.setStyleSheet(TABLE_STYLE)
         self.table_resp.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.table_resp.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -275,8 +356,8 @@ class InscriptionView(QWidget):
         self.btn_lier_eleve = QPushButton("+ Lier un élève existant sans famille")
         self.btn_lier_eleve.setEnabled(False)
         self.btn_lier_eleve.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_lier_eleve.setStyleSheet(f"""
-            QPushButton {{
+        self.btn_lier_eleve.setStyleSheet("""
+            QPushButton {
                 background-color: transparent;
                 color: #2563EB;
                 border: 1px dashed #93C5FD;
@@ -284,9 +365,9 @@ class InscriptionView(QWidget):
                 font-size: 12px;
                 font-weight: 600;
                 padding: 6px 12px;
-            }}
-            QPushButton:hover {{ background-color: #EFF6FF; border-color: #2563EB; }}
-            QPushButton:disabled {{ color: #CBD5E1; border-color: #E2E8F0; }}
+            }
+            QPushButton:hover { background-color: #EFF6FF; border-color: #2563EB; }
+            QPushButton:disabled { color: #CBD5E1; border-color: #E2E8F0; }
         """)
         self.btn_lier_eleve.clicked.connect(self.on_lier_eleve)
         c2.addWidget(self.btn_lier_eleve)
@@ -294,42 +375,73 @@ class InscriptionView(QWidget):
         main_layout.addWidget(card2, 1, 0)
 
         # ── Carte 3 : Affectation (rowspan=2 → aligne haut sur card1, bas sur card2)
-        card3, c3 = self._make_step_card("3", "Choix de l'affectation de classe")
+        # Reconstruite intégralement : un seul QVBoxLayout (c3, fourni par
+        # _make_step_card) porte tous les blocs de la carte dans l'ordre visuel,
+        # chacun séparé par une marge explicite. Seule la liste des frais
+        # annexes (bloc 5, longueur variable selon le niveau) a son propre
+        # QScrollArea borné en hauteur ; le total et le bouton restent toujours
+        # visibles sous elle, jamais à l'intérieur.
+        card3, c3 = self._make_step_card("3", "Choix de l'affectation de classe", scrollable=False)
+        c3.setSpacing(0)
 
-        # Niveau scolaire
+        # Bloc 1 — Affectation classe : niveau + classe, grille à 2 colonnes égales
         lbl_niveau = QLabel("NIVEAU SCOLAIRE *")
         lbl_niveau.setStyleSheet(_FIELD_LABEL_STYLE)
         self.cmb_niveau = QComboBox()
         self.cmb_niveau.setStyleSheet(COMBO_STYLE)
         self.cmb_niveau.setFixedHeight(36)
+        self.cmb_niveau.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_niveau.currentIndexChanged.connect(self.load_classes_par_niveau)
 
-        # Classe
         lbl_classe = QLabel("CLASSE DE DESTINATION *")
         lbl_classe.setStyleSheet(_FIELD_LABEL_STYLE)
         self.cmb_classe = QComboBox()
         self.cmb_classe.setStyleSheet(COMBO_STYLE)
         self.cmb_classe.setFixedHeight(36)
+        self.cmb_classe.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cmb_classe.currentIndexChanged.connect(self.on_classe_changed)
 
-        c3.addWidget(lbl_niveau)
-        c3.addWidget(self.cmb_niveau)
-        c3.addWidget(lbl_classe)
-        c3.addWidget(self.cmb_classe)
+        grid_affectation = QGridLayout()
+        grid_affectation.setHorizontalSpacing(10)
+        grid_affectation.setVerticalSpacing(4)
+        grid_affectation.setColumnStretch(0, 1)
+        grid_affectation.setColumnStretch(1, 1)
+        grid_affectation.addWidget(lbl_niveau, 0, 0)
+        grid_affectation.addWidget(lbl_classe, 0, 1)
+        grid_affectation.addWidget(self.cmb_niveau, 1, 0)
+        grid_affectation.addWidget(self.cmb_classe, 1, 1)
+        c3.addLayout(grid_affectation)
 
-        # Effectif badge
+        # Bloc 2 — Effectif actuel (badge pleine largeur)
+        c3.addSpacing(10)
         self.lbl_effectif = QLabel("Effectif actuel : — / —")
         self._set_effectif_style("default")
         c3.addWidget(self.lbl_effectif)
 
-        # Séparateur
+        # Bloc 3 — Statut affectation (pleine largeur, pour ne tronquer aucune valeur)
+        c3.addSpacing(14)
+        lbl_statut_affectation = QLabel("STATUT AFFECTATION *")
+        lbl_statut_affectation.setStyleSheet(_FIELD_LABEL_STYLE)
+        self.cmb_statut_affectation = QComboBox()
+        self.cmb_statut_affectation.setStyleSheet(COMBO_STYLE)
+        self.cmb_statut_affectation.setFixedHeight(36)
+        self.cmb_statut_affectation.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.cmb_statut_affectation.addItem("Affecté de l'État", "AFFECTE_ETAT")
+        self.cmb_statut_affectation.addItem("Non affecté de l'État", "NON_AFFECTE_ETAT")
+        c3.addWidget(lbl_statut_affectation)
+        c3.addSpacing(4)
+        c3.addWidget(self.cmb_statut_affectation)
+
+        # Séparateur avant les options de service
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
         sep.setFixedHeight(1)
+        c3.addSpacing(14)
         c3.addWidget(sep)
 
-        # Options de services
+        # Bloc 4 — Options de services scolarité
+        c3.addSpacing(10)
         lbl_services = QLabel("OPTIONS DE SERVICES SCOLARITÉ")
         lbl_services.setStyleSheet(_FIELD_LABEL_STYLE)
         c3.addWidget(lbl_services)
@@ -348,20 +460,69 @@ class InscriptionView(QWidget):
         self.chk_cantine = QCheckBox("Option Cantine midi")
         self.chk_cantine.setStyleSheet(_CHK_STYLE)
 
-        self.chk_autres = QCheckBox("Autres Frais / Activités")
-        self.chk_autres.setStyleSheet(_CHK_STYLE)
+        c3.addSpacing(6)
+        row_base = QHBoxLayout()
+        row_base.setSpacing(10)
+        row_base.addWidget(self._make_option_row(self.chk_scolarite))
+        row_base.addWidget(self._make_option_row(self.chk_nouveau))
+        c3.addLayout(row_base)
 
-        for chk in [self.chk_scolarite, self.chk_nouveau,
-                    self.chk_transport, self.chk_cantine, self.chk_autres]:
-            c3.addWidget(self._make_option_row(chk))
+        # Transport / Cantine désactivés pour la version collège CJGA
+        # (voir app.config.Config) — masqués, non proposés en saisie.
+        self.row_transport = self._make_option_row(self.chk_transport)
+        self.row_transport.setVisible(Config.ENABLE_TRANSPORT)
+        c3.addWidget(self.row_transport)
 
-        # Bouton CTA
+        self.row_cantine = self._make_option_row(self.chk_cantine)
+        self.row_cantine.setVisible(Config.ENABLE_CANTINE)
+        c3.addWidget(self.row_cantine)
+
+        # Séparateur avant la section frais annexes
+        sep_frais = QFrame()
+        sep_frais.setFrameShape(QFrame.HLine)
+        sep_frais.setStyleSheet(f"background-color: {COLORS['border']}; border: none;")
+        sep_frais.setFixedHeight(1)
+        c3.addSpacing(14)
+        c3.addWidget(sep_frais)
+
+        # Bloc 5 — Frais annexes à l'inscription : liste cochable, dépend du niveau choisi
+        c3.addSpacing(10)
+        lbl_frais_annexes = QLabel("FRAIS ANNEXES À L'INSCRIPTION")
+        lbl_frais_annexes.setStyleSheet(_FIELD_LABEL_STYLE)
+        c3.addWidget(lbl_frais_annexes)
+
+        # Liste de frais annexes, de longueur variable selon le niveau choisi.
+        # QListWidget gère nativement son propre défilement (ascenseur vertical
+        # affiché automatiquement seulement si le contenu dépasse la hauteur
+        # fixée) : plus robuste qu'un QScrollArea+QVBoxLayout artisanal, qui
+        # provoquait un chevauchement visuel avec le total affiché en dessous.
+        self.frais_annexes_list = QListWidget()
+        self.frais_annexes_list.setStyleSheet(_FRAIS_LIST_STYLE)
+        self.frais_annexes_list.setFrameShape(QFrame.NoFrame)
+        self.frais_annexes_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.frais_annexes_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.frais_annexes_list.setSelectionMode(QAbstractItemView.NoSelection)
+        self.frais_annexes_list.setFocusPolicy(Qt.NoFocus)
+        self.frais_annexes_list.setFixedHeight(130)
+        self.frais_annexes_list.itemChanged.connect(self._update_total_frais_annexes)
+        c3.addSpacing(6)
+        c3.addWidget(self.frais_annexes_list)
+
+        # Bloc 6 — Total des frais annexes (toujours hors du QScrollArea)
+        c3.addSpacing(12)
+        self.lbl_total_frais_annexes = QLabel("Total frais annexes sélectionnés : 0 FCFA")
+        self.lbl_total_frais_annexes.setStyleSheet(
+            f"font-size: 12px; font-weight: 700; color: {COLORS['primary_dark']};"
+            "background-color: transparent; border: none;"
+        )
+        c3.addWidget(self.lbl_total_frais_annexes)
+
+        # Bloc 7 — Bouton final (toujours hors du QScrollArea, pleine largeur)
+        c3.addSpacing(12)
         self.btn_inscrire = QPushButton("Inscrire l'Élève")
         self.btn_inscrire.setStyleSheet(_BTN_INSCRIRE)
         self.btn_inscrire.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_inscrire.clicked.connect(self.on_inscrire)
-
-        c3.addStretch()
         c3.addWidget(self.btn_inscrire)
 
         main_layout.addWidget(card3, 0, 1, 2, 1)  # rowspan=2 : de card1 à card2
@@ -370,35 +531,114 @@ class InscriptionView(QWidget):
 
     def _set_form_enabled(self, enabled: bool):
         """Active ou désactive les champs du panneau d'affectation."""
-        for w in [self.cmb_niveau, self.cmb_classe,
+        self._form_enabled = enabled
+        for w in [self.cmb_niveau, self.cmb_classe, self.cmb_statut_affectation,
                   self.chk_scolarite, self.chk_nouveau,
                   self.chk_transport, self.chk_cantine,
-                  self.chk_autres, self.btn_inscrire]:
+                  self.btn_inscrire, self.frais_annexes_list]:
             w.setEnabled(enabled)
 
     def _prefill_inscription(self, inscription):
         """Pré-remplit le formulaire à partir d'une inscription existante."""
         idx = self.cmb_niveau.findData(inscription.IDNiveau)
         if idx >= 0:
-            self.cmb_niveau.setCurrentIndex(idx)  # déclenche load_classes_par_niveau
+            self.cmb_niveau.setCurrentIndex(idx)  # déclenche load_classes_par_niveau puis on_classe_changed
         idx = self.cmb_classe.findData(inscription.IDClasse)
         if idx >= 0:
-            self.cmb_classe.setCurrentIndex(idx)
+            self.cmb_classe.setCurrentIndex(idx)  # déclenche on_classe_changed (recharge les frais annexes)
         self.chk_scolarite.setChecked(bool(inscription.Scolarite))
         self.chk_nouveau.setChecked(bool(inscription.Nouveau))
         self.chk_transport.setChecked(bool(inscription.Transport))
         self.chk_cantine.setChecked(bool(inscription.Cantine))
-        self.chk_autres.setChecked(bool(inscription.AutresFrais))
+        idx = self.cmb_statut_affectation.findData(inscription.StatutAffectation or "AFFECTE_ETAT")
+        self.cmb_statut_affectation.setCurrentIndex(idx if idx >= 0 else 0)
+
+        # Précoche les frais annexes déjà enregistrés pour cette inscription.
+        # La liste des frais proposés a déjà été rechargée ci-dessus (changement niveau/classe).
+        self._precocher_frais_annexes(inscription.IDTInscription)
 
     def _reset_form(self):
         """Réinitialise le formulaire aux valeurs par défaut pour une nouvelle inscription."""
         self.cmb_niveau.setCurrentIndex(0)
         self.cmb_classe.setCurrentIndex(0)
+        self.cmb_statut_affectation.setCurrentIndex(0)
         self.chk_scolarite.setChecked(True)
         self.chk_nouveau.setChecked(True)
         self.chk_transport.setChecked(False)
         self.chk_cantine.setChecked(False)
-        self.chk_autres.setChecked(False)
+        # La remise à zéro de cmb_niveau ci-dessus déclenche on_classe_changed,
+        # qui recharge (et donc vide) la sélection des frais annexes.
+
+    # ── Frais annexes cochables ───────────────────────────────────────────────
+
+    def _clear_frais_annexes_layout(self):
+        """Retire toutes les entrées actuellement affichées dans la liste des frais annexes."""
+        self.frais_annexes_list.blockSignals(True)
+        self.frais_annexes_list.clear()
+        self.frais_annexes_list.blockSignals(False)
+        self._frais_items = []
+
+    def _load_frais_annexes(self, id_niveau):
+        """
+        Recharge la liste des frais annexes cochables pour le niveau sélectionné.
+        Vide systématiquement l'ancienne sélection avant de reconstruire la liste.
+
+        NOTE : pas de filtrage par sexe pour l'instant — le catalogue MontantAutresFrais
+        ne porte pas cette dimension aujourd'hui. Un filtrage par sexe pourra être
+        ajouté ici plus tard si le modèle évolue pour le supporter.
+        """
+        self._clear_frais_annexes_layout()
+
+        id_annee = AppSession.get_active_annee_id()
+        if not id_niveau or not id_annee:
+            self._update_total_frais_annexes()
+            return
+
+        frais_list = InscriptionAutresFraisService.get_frais_proposes(id_niveau, id_annee)
+
+        if not frais_list:
+            lbl_vide = QListWidgetItem("Aucun frais annexe paramétré pour ce niveau.")
+            lbl_vide.setFlags(Qt.ItemIsEnabled)
+            self.frais_annexes_list.addItem(lbl_vide)
+            self._update_total_frais_annexes()
+            return
+
+        self.frais_annexes_list.blockSignals(True)
+        for frais in frais_list:
+            libelle = frais.get("LibelleFrais") or frais.get("CodeFrais") or "Frais"
+            montant = frais.get("MontantFrais") or 0
+            libelle_complet = f"{libelle} — {format_fcfa(montant)}"
+            item = QListWidgetItem(libelle_complet)
+            item.setToolTip(libelle_complet)
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            self.frais_annexes_list.addItem(item)
+            self._frais_items.append((item, frais))
+        self.frais_annexes_list.blockSignals(False)
+
+        self._update_total_frais_annexes()
+
+    def _update_total_frais_annexes(self):
+        """Recalcule et affiche le total des frais annexes actuellement cochés."""
+        total = sum(
+            (frais.get("MontantFrais") or 0)
+            for item, frais in self._frais_items
+            if item.checkState() == Qt.Checked
+        )
+        self.lbl_total_frais_annexes.setText(f"Total frais annexes sélectionnés : {format_fcfa(total)}")
+
+    def _precocher_frais_annexes(self, id_inscription):
+        """Précoche les frais annexes déjà enregistrés pour une inscription existante."""
+        if not id_inscription:
+            return
+        coches = InscriptionAutresFraisService.get_frais_coches(id_inscription)
+        ids_montant_coches = {c["IDMontantAutres"] for c in coches if c.get("IDMontantAutres")}
+        self.frais_annexes_list.blockSignals(True)
+        for item, frais in self._frais_items:
+            if frais.get("IDMontantAutres") in ids_montant_coches:
+                item.setCheckState(Qt.Checked)
+        self.frais_annexes_list.blockSignals(False)
+        self._update_total_frais_annexes()
 
     # ── Helpers effectif ──────────────────────────────────────────────────────
 
@@ -434,8 +674,6 @@ class InscriptionView(QWidget):
             item_nom.setData(Qt.UserRole, fam.IdTFamille)
             self.table_resp.setItem(i, 0, item_nom)
             self.table_resp.setItem(i, 1, QTableWidgetItem(fam.CellulaireResponsable or ""))
-            self.table_resp.setItem(i, 2, QTableWidgetItem("OUI" if fam.EnsCatPrimaire else "NON"))
-            self.table_resp.setItem(i, 3, QTableWidgetItem("OUI" if fam.EnsCatSecondaire else "NON"))
             self.table_resp.setRowHeight(i, 32)
 
     def load_niveaux(self):
@@ -553,6 +791,11 @@ class InscriptionView(QWidget):
         self._set_form_enabled(True)
 
     def on_classe_changed(self):
+        # Le niveau pilote les frais annexes proposés (indépendant de la classe) :
+        # on recharge ici pour couvrir à la fois un changement de niveau (qui repeuple
+        # cmb_classe et déclenche ce slot) et un changement de classe direct.
+        self._load_frais_annexes(self.cmb_niveau.currentData())
+
         id_classe = self.cmb_classe.currentData()
         id_annee = AppSession.get_active_annee_id()
         if not id_classe or not id_annee:
@@ -672,6 +915,12 @@ class InscriptionView(QWidget):
             self.cmb_classe.setFocus()
             return
 
+        # Frais annexes actuellement cochés (IDMontantAutres du catalogue paramétré)
+        ids_montant_frais = [
+            frais["IDMontantAutres"] for item, frais in self._frais_items
+            if item.checkState() == Qt.Checked
+        ]
+
         payload = {
             "IDEleve":     self.selected_eleve_id,
             "IDFamille":   self.selected_famille_id,
@@ -681,19 +930,39 @@ class InscriptionView(QWidget):
             "Scolarite":   self.chk_scolarite.isChecked(),
             "Transport":   self.chk_transport.isChecked(),
             "Cantine":     self.chk_cantine.isChecked(),
-            "AutresFrais": self.chk_autres.isChecked(),
+            # Indicateur global : au moins un frais annexe coché.
+            "AutresFrais": bool(ids_montant_frais),
+            "StatutAffectation": self.cmb_statut_affectation.currentData(),
         }
 
+        id_inscription = None
         if self._mode_modification:
             success, message = InscriptionService.update_inscription(
                 self._id_inscription_courante, payload
             )
             title_ok = "Modification Réussie"
             title_err = "Erreur de Modification"
+            id_inscription = self._id_inscription_courante
         else:
             success, message = InscriptionService.create_inscription(payload)
             title_ok = "Inscription Réussie"
             title_err = "Régulation d'Inscription"
+            if success:
+                inscription_creee = InscriptionService.get_inscription_by_eleve_annee(
+                    self.selected_eleve_id, id_annee
+                )
+                id_inscription = inscription_creee.IDTInscription if inscription_creee else None
+
+        if success and id_inscription:
+            ok_frais, msg_frais = InscriptionAutresFraisService.set_frais_coches(
+                id_inscription, ids_montant_frais, login=None
+            )
+            if not ok_frais:
+                QMessageBox.warning(
+                    self, "Frais annexes",
+                    f"L'inscription a été enregistrée mais les frais annexes n'ont pas pu être "
+                    f"sauvegardés : {msg_frais}"
+                )
 
         if success:
             QMessageBox.information(self, title_ok, message)
