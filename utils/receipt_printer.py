@@ -66,14 +66,41 @@ class ReceiptPrinter:
         )
         preview.exec()
 
+    @staticmethod
+    def print_receipt_examen_cm2(parent, data: dict):
+        """Reçu dédié à l'encaissement du frais d'examen CM2 — même gabarit
+        (cadre, en-tête établissement, pied de page) que le reçu Caisse,
+        avec un corps à une seule rubrique."""
+        etablissement = get_etablissement_print_info(parent)
+        if etablissement is None:
+            return
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+
+        from app.session import AppSession
+        preferred = AppSession.get_current_user_imprimante()
+        if preferred:
+            printer.setPrinterName(preferred)
+
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A5))
+        printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        printer.setFullPage(True)
+
+        preview = QPrintPreviewDialog(printer, parent)
+        preview.setWindowTitle("Aperçu — Reçu frais d'examen CM2")
+        preview.resize(980, 700)
+        preview.paintRequested.connect(
+            lambda p: ReceiptPrinter._render_examen(p, data, etablissement)
+        )
+        preview.exec()
+
     # ─────────────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _render(printer: QPrinter, data: dict, etablissement):
-        painter = QPainter(printer)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-
+    def _render_chrome_header(painter: QPainter, printer: QPrinter, data: dict, etablissement):
+        """Cadre, marques de coin, en-tête établissement et infos élève —
+        partie commune à tous les reçus. Retourne la géométrie utile au corps
+        et au pied de page : (mm, X, Y, CW, CH, y_body_top, y_footer_top)."""
         dpi = printer.resolution()
 
         def mm(v: float) -> float:
@@ -189,6 +216,76 @@ class ReceiptPrinter:
         painter.setPen(pen_dot)
         painter.drawLine(int(X), int(y_dot_h), int(X + CW), int(y_dot_h))
 
+        y_body_top = y_dot_h
+        y_footer_top = Y + CH - mm(37)
+
+        return mm, X, Y, CW, CH, y_body_top, y_footer_top
+
+    @staticmethod
+    def _render_footer(painter: QPainter, mm, X, Y, CW, CH, y_footer_top):
+        """Pied de page — partie commune à tous les reçus."""
+        # Ligne corps / pied de page
+        painter.setPen(QPen(C_BLACK, mm(0.22)))
+        painter.drawLine(int(X), int(y_footer_top), int(X + CW), int(y_footer_top))
+
+        nb_h = mm(13)
+        nb_y = y_footer_top + mm(2)
+
+        nb_text = (
+            "NB : Tout paiement effectué ne sera pas remboursé, si les paiements ne sont pas "
+            "effectués selon l'échéance fixée, l'enfant peut être retourné à la maison.   "
+            "Si l'enfant cesse de prendre le car ou arrête de manger à la cantine, merci "
+            "de mentionner par écrit à la comptabilité."
+        )
+
+        painter.setFont(_font(6))
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(X + mm(2), nb_y, CW - mm(4), nb_h),
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
+            nb_text,
+        )
+
+        # Signature unique centrée
+        cx = X + CW / 2
+        y_sig = nb_y + nb_h + mm(4)
+
+        painter.setPen(QPen(C_BLACK, mm(0.28)))
+        painter.drawLine(int(cx - mm(30)), int(y_sig), int(cx + mm(30)), int(y_sig))
+
+        f_sig = _font(9, bold=True)
+        f_sig.setUnderline(True)
+        painter.setFont(f_sig)
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(cx - mm(32), y_sig + mm(1.5), mm(64), mm(7)),
+            Qt.AlignmentFlag.AlignCenter,
+            "Signature et cachet",
+        )
+
+        # ── BANDEROLE BAS ─────────────────────────────────────────────────────
+        y_bot = Y + CH - mm(9)
+        painter.setPen(QPen(C_BLACK, mm(0.28)))
+        painter.drawLine(int(X + mm(1.5)), int(y_bot), int(X + CW - mm(1.5)), int(y_bot))
+
+        painter.setFont(_font(9, bold=True))
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(X, y_bot + mm(0.8), CW, mm(8)),
+            Qt.AlignmentFlag.AlignCenter,
+            "APPORTER CE RECU AU PROCHAIN VERSEMENT",
+        )
+
+    @staticmethod
+    def _render(printer: QPrinter, data: dict, etablissement):
+        painter = QPainter(printer)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+
+        mm, X, Y, CW, CH, y_body_top, y_footer_top = ReceiptPrinter._render_chrome_header(
+            painter, printer, data, etablissement
+        )
+
         # ── CORPS : GRILLE LIBELLÉS + 3 COLONNES DE VALEURS ──────────────────
         #
         #  | LIBELLÉS (30%) | SCOLARITE (23%) | TRANSPORT (23%) | CANTINE (24%) |
@@ -205,23 +302,16 @@ class ReceiptPrinter:
         x_trans = x_scol + val_w
         x_cant  = x_trans + val_w
 
-        y_body_top   = y_dot_h
-        y_footer_top = Y + CH - mm(37)
-
-        # Ligne corps / pied de page
-        painter.setPen(QPen(C_BLACK, mm(0.22)))
-        painter.drawLine(int(X), int(y_footer_top), int(X + CW), int(y_footer_top))
-
         # Séparateur vertical gauche (libellés / valeurs) — trait continu fin
         painter.setPen(QPen(C_BORDER, mm(0.25)))
-        painter.drawLine(int(x_scol), int(y_dot_h), int(x_scol), int(y_footer_top))
+        painter.drawLine(int(x_scol), int(y_body_top), int(x_scol), int(y_footer_top))
 
         # Séparateurs verticaux entre colonnes de valeurs — pointillés
         for sep_x in [x_trans, x_cant]:
             pen_v = QPen(C_BORDER, mm(0.25))
             pen_v.setStyle(Qt.PenStyle.DotLine)
             painter.setPen(pen_v)
-            painter.drawLine(int(sep_x), int(y_dot_h), int(sep_x), int(y_footer_top))
+            painter.drawLine(int(sep_x), int(y_body_top), int(sep_x), int(y_footer_top))
 
         # ── Titres des rubriques ──────────────────────────────────────────────
         TITLE_H = mm(13)
@@ -323,53 +413,93 @@ class ReceiptPrinter:
                 painter.drawText(int(-tw / 2), int(th / 4), "SOLDE")
                 painter.restore()
 
-        # ── PIED DE PAGE ─────────────────────────────────────────────────────
-        nb_h = mm(13)
-        nb_y = y_footer_top + mm(2)
+        ReceiptPrinter._render_footer(painter, mm, X, Y, CW, CH, y_footer_top)
+        painter.end()
 
-        nb_text = (
-            "NB : Tout paiement effectué ne sera pas remboursé, si les paiements ne sont pas "
-            "effectués selon l'échéance fixée, l'enfant peut être retourné à la maison.   "
-            "Si l'enfant cesse de prendre le car ou arrête de manger à la cantine, merci "
-            "de mentionner par écrit à la comptabilité."
+    @staticmethod
+    def _render_examen(printer: QPrinter, data: dict, etablissement):
+        """Corps à une seule rubrique : FRAIS D'EXAMEN CM2."""
+        painter = QPainter(printer)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+
+        mm, X, Y, CW, CH, y_body_top, y_footer_top = ReceiptPrinter._render_chrome_header(
+            painter, printer, data, etablissement
         )
 
-        painter.setFont(_font(6))
+        # ── CORPS : UNE SEULE RUBRIQUE, CENTRÉE ──────────────────────────────
+        lbl_w = CW * 0.42
+        val_w = CW - lbl_w
+        x_lbl = X
+        x_val = X + lbl_w
+
+        # Séparateur vertical libellés / valeur
+        painter.setPen(QPen(C_BORDER, mm(0.25)))
+        painter.drawLine(int(x_val), int(y_body_top), int(x_val), int(y_footer_top))
+
+        # ── Titre de la rubrique ────────────────────────────────────────────
+        TITLE_H = mm(13)
+        painter.setFont(_font(12, bold=True))
         painter.setPen(QPen(C_BLACK))
         painter.drawText(
-            QRectF(X + mm(2), nb_y, CW - mm(4), nb_h),
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
-            nb_text,
-        )
-
-        # Signature unique centrée
-        cx = X + CW / 2
-        y_sig = nb_y + nb_h + mm(4)
-
-        painter.setPen(QPen(C_BLACK, mm(0.28)))
-        painter.drawLine(int(cx - mm(30)), int(y_sig), int(cx + mm(30)), int(y_sig))
-
-        f_sig = _font(9, bold=True)
-        f_sig.setUnderline(True)
-        painter.setFont(f_sig)
-        painter.setPen(QPen(C_BLACK))
-        painter.drawText(
-            QRectF(cx - mm(32), y_sig + mm(1.5), mm(64), mm(7)),
+            QRectF(X, y_body_top + mm(2), CW, TITLE_H - mm(2)),
             Qt.AlignmentFlag.AlignCenter,
-            "Signature et cachet",
+            "FRAIS D'EXAMEN CM2",
+        )
+        painter.fillRect(
+            QRectF(x_val + mm(4), y_body_top + TITLE_H - mm(0.8), val_w - mm(8), mm(0.8)),
+            C_BLUE,
         )
 
-        # ── BANDEROLE BAS ─────────────────────────────────────────────────────
-        y_bot = Y + CH - mm(9)
-        painter.setPen(QPen(C_BLACK, mm(0.28)))
-        painter.drawLine(int(X + mm(1.5)), int(y_bot), int(X + CW - mm(1.5)), int(y_bot))
+        # ── Lignes de données ────────────────────────────────────────────────
+        data_rows = [
+            ("Montant dû :",      "examen_due",   False),
+            ("Montant reçu :",    "examen_recu",  False),
+            ("Reste à verser :",  "examen_reste", True),
+        ]
+        d_row_h = mm(11)
+        y_row = y_body_top + TITLE_H + mm(1)
 
-        painter.setFont(_font(9, bold=True))
-        painter.setPen(QPen(C_BLACK))
-        painter.drawText(
-            QRectF(X, y_bot + mm(0.8), CW, mm(8)),
-            Qt.AlignmentFlag.AlignCenter,
-            "APPORTER CE RECU AU PROCHAIN VERSEMENT",
-        )
+        for label, vkey, is_reste in data_rows:
+            painter.setFont(_font(9, bold=is_reste))
+            painter.setPen(QPen(C_BLACK))
+            painter.drawText(
+                QRectF(x_lbl + mm(3), y_row, lbl_w - mm(4), d_row_h),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                label,
+            )
 
+            val = data.get(vkey, 0)
+            col = (C_GREEN if float(val) <= 0.0 else C_ORANGE) if is_reste else C_BLACK
+            painter.setFont(_font(9, bold=True))
+            painter.setPen(QPen(col))
+            painter.drawText(
+                QRectF(x_val + mm(2), y_row, val_w - mm(6), d_row_h),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                _fmt(val),
+            )
+
+            if not is_reste:
+                painter.setPen(QPen(QColor(220, 220, 220), mm(0.15)))
+                painter.drawLine(
+                    int(X + mm(2)), int(y_row + d_row_h - mm(0.5)),
+                    int(X + CW - mm(2)), int(y_row + d_row_h - mm(0.5)),
+                )
+
+            y_row += d_row_h
+
+        # ── Filigrane SOLDE si entièrement réglé ────────────────────────────
+        if float(data.get("examen_reste", 1)) <= 0.0:
+            painter.save()
+            painter.translate(X + CW / 2, (y_body_top + TITLE_H + y_footer_top) / 2)
+            painter.rotate(-28)
+            painter.setFont(_font(24, bold=True))
+            painter.setPen(QPen(QColor(22, 163, 74, 55), 1))
+            fm = painter.fontMetrics()
+            tw = fm.horizontalAdvance("SOLDE")
+            th = fm.height()
+            painter.drawText(int(-tw / 2), int(th / 4), "SOLDE")
+            painter.restore()
+
+        ReceiptPrinter._render_footer(painter, mm, X, Y, CW, CH, y_footer_top)
         painter.end()

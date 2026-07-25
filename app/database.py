@@ -91,6 +91,7 @@ def create_tables():
     import models.prestation_annexe
     import models.prestation_tarif_niveau
     import models.ventilation_prestation
+    import models.frais_examen_cm2
 
     Base.metadata.create_all(bind=_engine)
     print("Tables creees avec succes dans PostgreSQL !")

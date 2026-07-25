@@ -24,6 +24,7 @@ from .kit_assemblage import KitAssemblage
 from .compte import Compte
 from .type_sortie import TypeSortie
 from .sortie_fin import SortieFin
+from .frais_examen_cm2 import MontantExamenCM2, VersementExamenCM2
 
 # Utile pour que Base.metadata connaisse tous nos modeles
 __all__ = [
@@ -52,5 +53,7 @@ __all__ = [
     "KitAssemblage",
     "Compte",
     "TypeSortie",
-    "SortieFin"
+    "SortieFin",
+    "MontantExamenCM2",
+    "VersementExamenCM2",
 ]
