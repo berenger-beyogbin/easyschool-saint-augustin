@@ -23,7 +23,6 @@ from .statistiques_view import StatistiquesView
 from .dashboard_switcher_view import DashboardSwitcherView
 from .utilisateurs_view import UtilisateursView
 from .prestation_config_view import PrestationConfigView
-from .examen_cm2_view import ExamenCM2View
 
 from app.styles import (
     COLORS, SIDEBAR_MENU_STYLE, TAB_STYLE, COMBO_STYLE, BUTTON_SECONDARY
@@ -274,16 +273,6 @@ class SidebarItemDelegate(QStyledItemDelegate):
             painter.drawEllipse(QRectF(cx - 4.0, cy - r + 1, 8, 8))
             painter.drawArc(QRectF(cx - r + 1, cy + 2, s - 3, r + 2), 0, 180 * 16)
 
-        elif row == 8:  # Frais Examen CM2 — diplome (rouleau + ruban)
-            painter.drawRoundedRect(QRectF(cx - r + 2, cy - r + 2, s - 4, s - 7), 1.5, 1.5)
-            painter.drawLine(QPointF(cx - r + 4, cy - 1.5), QPointF(cx + r - 4, cy - 1.5))
-            painter.drawLine(QPointF(cx - r + 4, cy + 1.5), QPointF(cx + 1.0, cy + 1.5))
-            p = QPainterPath()
-            p.moveTo(cx - 2.5, cy + r - 5); p.lineTo(cx - 2.5, cy + r - 1)
-            p.lineTo(cx, cy + r - 3); p.lineTo(cx + 2.5, cy + r - 1)
-            p.lineTo(cx + 2.5, cy + r - 5)
-            painter.drawPath(p)
-
     def sizeHint(self, option, index):
         return QSize(max(option.rect.width(), 200), self.ITEM_H)
 
@@ -301,7 +290,6 @@ class MainWindow(QMainWindow):
         ("SMS",             "SMS_VIEW"),
         ("Paramètres",      "PARAMETRES_VIEW"),
         ("Utilisateurs",    "UTILISATEURS_VIEW"),
-        ("Frais Examen CM2", "EXAMEN_CM2_VIEW"),
     ]
 
     def __init__(self):
@@ -585,10 +573,6 @@ class MainWindow(QMainWindow):
         self.widget_utilisateurs = UtilisateursView(self)
         self.stack.addWidget(self.widget_utilisateurs)
 
-        # index 8: Frais Examen CM2
-        self.widget_examen_cm2 = ExamenCM2View(self)
-        self.stack.addWidget(self.widget_examen_cm2)
-
         layout.addWidget(self.stack)
         return workspace
 
@@ -669,7 +653,6 @@ class MainWindow(QMainWindow):
             5: "SMS  ·  BIENTÔT",
             6: "PARAMÈTRES",
             7: "GESTION DES UTILISATEURS",
-            8: "FRAIS D'EXAMEN CM2",
         }
         label = titles.get(orig, "")
         primary_color = COLORS["primary"]
@@ -708,10 +691,6 @@ class MainWindow(QMainWindow):
             if hasattr(self.widget_utilisateurs, "refresh_data"):
                 self.widget_utilisateurs.refresh_data()
             self.stack.setCurrentIndex(7)
-        elif orig == 8:
-            if hasattr(self.widget_examen_cm2, "load_data"):
-                self.widget_examen_cm2.load_data()
-            self.stack.setCurrentIndex(8)
 
     def _open_printer_dialog(self):
         from views.imprimante_dialog import ImprimanteDialog

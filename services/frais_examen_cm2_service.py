@@ -22,7 +22,7 @@ class FraisExamenCM2Service:
 
     @staticmethod
     def _require_permission() -> tuple[bool, str]:
-        return AppSession.require_permission("EXAMEN_CM2_VIEW")
+        return AppSession.require_permission("SCOLARITE_VERSEMENTS")
 
     # ─── Montant configure ──────────────────────────────────────────────────
 

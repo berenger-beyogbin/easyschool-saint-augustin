@@ -17,7 +17,7 @@ def _set_examen_user():
             "ProfilLibelle": "Caisse",
             "IsAdmin": False,
         },
-        permissions={"EXAMEN_CM2_VIEW"},
+        permissions={"SCOLARITE_VERSEMENTS"},
     )
 
 

@@ -5,10 +5,11 @@ from views.montant_scolarite_view import MontantScolariteView
 from views.montant_transport_view import MontantTransportView
 from views.montant_cantine_view import MontantCantineView
 from views.echeancier_view import EcheancierView
+from views.examen_cm2_view import ExamenCM2View
 
 
 class VersementsView(QWidget):
-    """Sous-module VERSEMENTS — Caisse, Scolarité, Transport, Cantine."""
+    """Sous-module VERSEMENTS — Caisse, Scolarité, Transport, Cantine, Échéanciers, Frais Examen CM2."""
 
     def __init__(self, main_window=None):
         super().__init__()
@@ -29,12 +30,14 @@ class VersementsView(QWidget):
         self.view_transport     = MontantTransportView(self.main_window)
         self.view_cantine       = MontantCantineView(self.main_window)
         self.view_echeanciers   = EcheancierView(self.main_window)
+        self.view_examen_cm2    = ExamenCM2View(self.main_window)
 
         self.tabs.addTab(self.view_caisse,       "Caisse")
         self.tabs.addTab(self.view_scolarite,    "Scolarité")
         self.tabs.addTab(self.view_transport,    "Transport")
         self.tabs.addTab(self.view_cantine,      "Cantine")
         self.tabs.addTab(self.view_echeanciers,  "Échéanciers")
+        self.tabs.addTab(self.view_examen_cm2,   "Frais Examen CM2")
 
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
@@ -50,6 +53,8 @@ class VersementsView(QWidget):
             self.view_cantine.load_montants()
         elif index == 4:
             self.view_echeanciers.load_data()
+        elif index == 5:
+            self.view_examen_cm2.load_data()
 
     def refresh_data(self):
         self.on_tab_changed(self.tabs.currentIndex())

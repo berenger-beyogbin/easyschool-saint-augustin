@@ -25,7 +25,6 @@ PERMISSIONS_CATALOG = [
     ("UTILISATEURS_MODIFIER",   "Modification des utilisateurs/profils", "Utilisateurs",     81),
     ("PRESTATIONS_VIEW",        "Accès aux rapports prestataires",       "Prestations",      90),
     ("PRESTATIONS_MODIFIER",    "Paramétrage des prestations annexes",   "Prestations",      91),
-    ("EXAMEN_CM2_VIEW",         "Accès au module Frais d'examen CM2",    "Frais Examen CM2", 95),
 ]
 
 
