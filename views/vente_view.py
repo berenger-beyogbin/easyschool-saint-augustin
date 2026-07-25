@@ -181,8 +181,7 @@ class VenteView(QWidget):
         art = ArticleService.get_article_by_id(id_art)
 
         if art:
-            sc = StockService.get_stock_by_article(id_art)
-            stock_qte = sc.QuantiteCour if sc else 0
+            stock_qte = StockService.get_stock_disponible(id_art)
             self.lbl_stock_dispo.setText(f"Stock disponible : {stock_qte} unités")
             self.txt_pu.setText(str(int(art.PU)))
 
@@ -222,8 +221,7 @@ class VenteView(QWidget):
         if not art:
             return
 
-        sc = StockService.get_stock_by_article(id_art)
-        stock_qte = sc.QuantiteCour if sc else 0
+        stock_qte = StockService.get_stock_disponible(id_art)
 
         deja_dans_panier_qte = self.panier.get(id_art, {}).get("qte", 0)
         total_qte_demandee = qte + deja_dans_panier_qte

@@ -3,6 +3,9 @@ import uuid
 from decimal import Decimal
 from typing import Optional, Tuple
 
+from sqlalchemy.orm import joinedload
+from models.article import Article
+from models.kit_article import KitArticle
 from models.stock_cour import StockCour
 from models.vente import Vente, VenteLigne
 from app.database import get_session
@@ -18,10 +21,17 @@ class VenteService:
         Enregistre une vente multi-articles en une seule transaction : verrouille
         (SELECT ... FOR UPDATE) les lignes de stock concernees, verifie toutes les
         quantites, puis debite tous les stocks et cree la Vente (entete) + une
-        VenteLigne par article en un seul commit. Aucune ecriture partielle en
-        cas d'echec, et le verrouillage empeche deux ventes concurrentes de
+        VenteLigne par article/KIT en un seul commit. Aucune ecriture partielle
+        en cas d'echec, et le verrouillage empeche deux ventes concurrentes de
         survendre le meme stock (comportement herite de l'ancien
         StockService.process_sale, garanties B2/B3 preservees).
+
+        Un KIT (D3) n'a plus sa propre ligne de stock : sa vente decompte le
+        stock de ses composants (KitArticle), multiplie par la quantite de
+        KITs vendus. Les besoins de tous les KITs et articles simples du
+        panier sont fusionnes en un seul total par composant reellement
+        stocke avant verrouillage, pour que le meme composant vendu a la
+        fois seul et via un ou plusieurs KITs ne soit decompte qu'une fois.
 
         cart : {id_article: {"qte": int, "pu": float, "nom": str (optionnel, pour les messages)}}
 
@@ -36,25 +46,51 @@ class VenteService:
 
         session = get_session()
         try:
-            id_articles = list(cart.keys())
+            erreurs_qte = []
+            for id_art, info in cart.items():
+                if info["qte"] <= 0:
+                    nom = info.get("nom", f"Article #{id_art}")
+                    erreurs_qte.append(f"- {nom} : quantite invalide.")
+            if erreurs_qte:
+                session.rollback()
+                return False, "Vente annulee, stock insuffisant :\n" + "\n".join(erreurs_qte), None
+
+            articles = session.query(Article).filter(Article.IDTArticle.in_(cart.keys())).all()
+            articles_par_id = {a.IDTArticle: a for a in articles}
+
+            # Fusionne les besoins reels (composants de KITs + articles simples
+            # vendus tels quels) en un seul total par article reellement stocke.
+            besoins: dict[int, dict] = {}
+            for id_art, info in cart.items():
+                art = articles_par_id.get(id_art)
+                if art and art.KIT:
+                    lignes_kit = session.query(KitArticle).options(
+                        joinedload(KitArticle.composant)
+                    ).filter_by(IDKit=id_art).all()
+                    for ligne in lignes_kit:
+                        besoin = besoins.setdefault(ligne.IDArticleComposant, {"qte": 0, "libelles": set()})
+                        besoin["qte"] += ligne.Quantite * info["qte"]
+                        besoin["libelles"].add(ligne.composant.Libelle if ligne.composant else f"Article #{ligne.IDArticleComposant}")
+                else:
+                    besoin = besoins.setdefault(id_art, {"qte": 0, "libelles": set()})
+                    besoin["qte"] += info["qte"]
+                    besoin["libelles"].add(info.get("nom", f"Article #{id_art}"))
+
             stocks = (
                 session.query(StockCour)
-                .filter(StockCour.IDTArticle.in_(id_articles))
+                .filter(StockCour.IDTArticle.in_(besoins.keys()))
                 .with_for_update()
                 .all()
             )
             stock_par_article = {s.IDTArticle: s for s in stocks}
 
             erreurs = []
-            for id_art, info in cart.items():
-                qte = info["qte"]
-                nom = info.get("nom", f"Article #{id_art}")
-                sc = stock_par_article.get(id_art)
+            for id_composant, besoin in besoins.items():
+                sc = stock_par_article.get(id_composant)
                 dispo = sc.QuantiteCour if sc else 0
-                if qte <= 0:
-                    erreurs.append(f"- {nom} : quantite invalide.")
-                elif qte > dispo:
-                    erreurs.append(f"- {nom} : demande {qte}, disponible {dispo}.")
+                if besoin["qte"] > dispo:
+                    nom = " / ".join(sorted(besoin["libelles"]))
+                    erreurs.append(f"- {nom} : demande {besoin['qte']}, disponible {dispo}.")
 
             if erreurs:
                 session.rollback()
@@ -79,10 +115,15 @@ class VenteService:
             session.flush()
             vente.NumeroRecu = f"V-{vente.IDVente:06d}"
 
+            # Debit des composants reellement stockes.
+            for id_composant, besoin in besoins.items():
+                stock_par_article[id_composant].QuantiteCour -= besoin["qte"]
+
+            # Une VenteLigne par entree du panier d'origine (KIT ou article
+            # simple), jamais une ligne par composant : le recu montre
+            # "1 x Kit Rentree", pas le detail interne de ses composants.
             lignes_recu = []
             for id_art, info in cart.items():
-                sc = stock_par_article[id_art]
-                sc.QuantiteCour -= info["qte"]
                 pu = Decimal(str(info["pu"]))
                 qte = info["qte"]
                 ligne_total = pu * qte

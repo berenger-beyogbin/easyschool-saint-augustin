@@ -179,15 +179,7 @@ class KitFormView(QDialog):
         self.txt_pu.setText(str(int(art.PU)))
         self.txt_seuil.setText(str(art.QTESeuil))
 
-        if art.ContenuKit and art.QteKit:
-            ids_str = art.ContenuKit.split(';')
-            qtes_str = art.QteKit.split(';')
-            for i, qte in zip(ids_str, qtes_str):
-                if i.strip() and qte.strip():
-                    try:
-                        self.composition[int(i)] = int(qte)
-                    except ValueError:
-                        pass
+        self.composition = ArticleService.get_kit_composition(self.id_kit)
 
         self.update_table_composition()
 
@@ -299,23 +291,12 @@ class KitFormView(QDialog):
             QMessageBox.warning(self, "Composition vide", "Un KIT doit contenir au moins un article simple.")
             return
 
-        ids_list = []
-        qtes_list = []
-        for id_art, qte in self.composition.items():
-            ids_list.append(str(id_art))
-            qtes_list.append(str(qte))
-
-        contenu_kit = ";".join(ids_list)
-        qte_kit = ";".join(qtes_list)
-
         if self.id_kit:
             success, msg = ArticleService.update_article(
-                self.id_kit, libelle, pu, seuil, contenu_kit=contenu_kit, qte_kit=qte_kit, is_kit=True
+                self.id_kit, libelle, pu, seuil, composition=self.composition, is_kit=True
             )
         else:
-            success, msg = ArticleService.create_kit(
-                libelle, pu, seuil, contenu_kit, qte_kit
-            )
+            success, msg = ArticleService.create_kit(libelle, pu, seuil, self.composition)
 
         if success:
             QMessageBox.information(self, "Succes", "KIT enregistre avec succes !")

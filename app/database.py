@@ -88,6 +88,7 @@ def create_tables():
     import models.versement_scol  # noqa: F401
     import models.versement_autres_frais  # noqa: F401
     import models.article  # noqa: F401
+    import models.kit_article  # noqa: F401
     import models.stock_cour  # noqa: F401
     import models.stock_entree  # noqa: F401
     import models.stock_sortie  # noqa: F401

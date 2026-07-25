@@ -41,7 +41,7 @@ class ApprovisionnementView(QWidget):
         layout_form = QVBoxLayout(group_form)
         layout_form.setSpacing(10)
 
-        layout_form.addWidget(QLabel("Sélectionner un article ou KIT :"))
+        layout_form.addWidget(QLabel("Sélectionner un article :"))
         self.cmb_articles = QComboBox()
         self.cmb_articles.setStyleSheet(COMBO_STYLE)
         layout_form.addWidget(self.cmb_articles)
@@ -134,12 +134,16 @@ class ApprovisionnementView(QWidget):
         layout_principal.addWidget(pane_droit, 2)
 
     def load_combos(self):
-        """Remplit le ComboBox des articles/kits."""
+        """Remplit le ComboBox des articles simples.
+
+        Les KITs (D3) n'ont plus de ligne de stock propre : leur quantite
+        vendable est deduite du stock de leurs composants, donc ils ne sont
+        plus reapprovisionnables directement ici — il faut reapprovisionner
+        les articles simples qui les composent."""
         self.cmb_articles.clear()
-        articles = ArticleService.get_all_articles()
+        articles = ArticleService.get_articles_simples()
         for a in articles:
-            suffix = " (KIT)" if a.KIT else ""
-            self.cmb_articles.addItem(f"{a.Libelle}{suffix}", a.IDTArticle)
+            self.cmb_articles.addItem(a.Libelle, a.IDTArticle)
 
     def load_historique(self):
         """Récupère l'historique des entrées selon la plage de dates."""
@@ -194,7 +198,7 @@ class ApprovisionnementView(QWidget):
             return
 
         if self.cmb_articles.currentIndex() == -1:
-            QMessageBox.warning(self, "Sélection Requise", "Veuillez d'abord créer des articles simples ou des kits.")
+            QMessageBox.warning(self, "Sélection Requise", "Veuillez d'abord créer des articles simples.")
             return
 
         id_art = self.cmb_articles.currentData()

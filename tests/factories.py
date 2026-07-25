@@ -14,6 +14,7 @@ from models.montant_cantine import MontantCantine
 from models.autres_frais import AutresFrais
 from models.inscription_autres_frais import InscriptionAutresFrais
 from models.article import Article
+from models.kit_article import KitArticle
 from models.stock_cour import StockCour
 
 
@@ -120,6 +121,21 @@ def make_article_avec_stock(session, libelle="Cahier", pu=500, quantite=10, kit=
     session.add(sc)
     session.commit()
     return art, sc
+
+
+def make_kit(session, libelle="Trousseau", pu=2000, seuil=0, composition=None):
+    """Cree un KIT et sa composition. composition : {id_article_composant: quantite}.
+    Un KIT n'a pas de StockCour propre (D3) : sa quantite vendable est deduite
+    du stock de ses composants."""
+    kit = Article(Libelle=libelle, PU=pu, KIT=True, QTESeuil=seuil)
+    session.add(kit)
+    session.commit()
+
+    for id_comp, qte in (composition or {}).items():
+        session.add(KitArticle(IDKit=kit.IDTArticle, IDArticleComposant=id_comp, Quantite=qte))
+    if composition:
+        session.commit()
+    return kit
 
 
 def make_inscription_autres_frais(session, inscription, code="TENUE", libelle="Tenue", montant=6000):

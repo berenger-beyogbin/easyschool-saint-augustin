@@ -3,6 +3,7 @@ from typing import List, Tuple, Optional
 from decimal import Decimal
 from sqlalchemy.orm import joinedload
 from models.article import Article
+from models.kit_article import KitArticle
 from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
 from models.stock_sortie import StockSortie
@@ -33,6 +34,43 @@ class StockService:
         except Exception:
             logger.exception("Erreur get_stock_by_article")
             return None
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_stock_disponible(id_art: int) -> int:
+        """Quantite reellement vendable d'un article ou d'un KIT (D3).
+
+        Article simple : lit directement StockCour.
+        KIT : n'a plus de ligne de stock propre depuis D3 - sa quantite
+        vendable est deduite en temps reel du stock de ses composants (le
+        nombre de KITs qu'on peut assembler avec le stock actuel de chacun,
+        c-a-d le minimum, composant par composant, de stock_composant //
+        quantite_necessaire)."""
+        session = get_session()
+        try:
+            art = session.get(Article, id_art)
+            if not art:
+                return 0
+            if not art.KIT:
+                sc = session.query(StockCour).filter_by(IDTArticle=id_art).first()
+                return sc.QuantiteCour if sc else 0
+
+            lignes = session.query(KitArticle).filter_by(IDKit=id_art).all()
+            if not lignes:
+                return 0
+
+            dispo_min = None
+            for ligne in lignes:
+                sc = session.query(StockCour).filter_by(IDTArticle=ligne.IDArticleComposant).first()
+                stock_composant = sc.QuantiteCour if sc else 0
+                dispo_pour_ligne = stock_composant // ligne.Quantite
+                if dispo_min is None or dispo_pour_ligne < dispo_min:
+                    dispo_min = dispo_pour_ligne
+            return max(0, dispo_min or 0)
+        except Exception:
+            logger.exception("Erreur get_stock_disponible")
+            return 0
         finally:
             session.close()
 

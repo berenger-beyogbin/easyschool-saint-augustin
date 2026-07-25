@@ -11,6 +11,7 @@ from models.versement_scol import VersementScol
 from models.montant_scol import MontantScol
 from models.vente import Vente, VenteLigne
 from models.article import Article
+from models.kit_article import KitArticle
 from models.stock_cour import StockCour
 from models.sortie_fin import SortieFin
 from services.tarification_service import TarificationService
@@ -282,13 +283,14 @@ class DashboardService:
     def get_stock_alerts(limit=10) -> list:
         session = get_session()
         try:
+            result = []
+
             rows = session.query(StockCour).options(
                 joinedload(StockCour.article),
             ).join(StockCour.article).filter(
-                StockCour.QuantiteCour <= Article.QTESeuil
+                Article.KIT == False,
+                StockCour.QuantiteCour <= Article.QTESeuil,
             ).limit(limit).all()
-
-            result = []
             for sc in rows:
                 article_nom = sc.article.Libelle if sc.article else ""
                 seuil = sc.article.QTESeuil if sc.article else 0
@@ -297,6 +299,25 @@ class DashboardService:
                     "stock": sc.QuantiteCour,
                     "seuil": seuil,
                 })
+
+            # Un KIT n'a plus de ligne de stock propre depuis D3 : son alerte
+            # se calcule a partir du stock deduit de ses composants.
+            if len(result) < limit:
+                kits = session.query(Article).filter(Article.KIT == True).all()
+                stocks_simples = {s.IDTArticle: s.QuantiteCour for s in session.query(StockCour).all()}
+                for kit in kits:
+                    lignes = session.query(KitArticle).filter_by(IDKit=kit.IDTArticle).all()
+                    if not lignes:
+                        continue
+                    dispo = max(0, min(
+                        stocks_simples.get(ligne.IDArticleComposant, 0) // ligne.Quantite
+                        for ligne in lignes
+                    ))
+                    if dispo <= kit.QTESeuil:
+                        result.append({"article": kit.Libelle, "stock": dispo, "seuil": kit.QTESeuil})
+                        if len(result) >= limit:
+                            break
+
             return result
         except Exception:
             logger.exception("Erreur get_stock_alerts")

@@ -105,8 +105,7 @@ class ArticleListView(QWidget):
         self.table.setRowCount(len(articles))
 
         for idx, art in enumerate(articles):
-            sc = StockService.get_stock_by_article(art.IDTArticle)
-            stock_qte = sc.QuantiteCour if sc else 0
+            stock_qte = StockService.get_stock_disponible(art.IDTArticle)
 
             est_kit = "OUI" if art.KIT else "NON"
 

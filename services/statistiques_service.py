@@ -392,15 +392,27 @@ class StatistiquesService:
         session = get_session()
         try:
             from models.article import Article
+            from models.kit_article import KitArticle
             from models.stock_cour import StockCour
 
-            results = session.query(Article, StockCour.QuantiteCour).outerjoin(
-                StockCour, Article.IDTArticle == StockCour.IDTArticle
-            ).order_by(Article.Libelle.asc()).all()
+            articles = session.query(Article).order_by(Article.Libelle.asc()).all()
+            stocks_simples = {s.IDTArticle: s.QuantiteCour for s in session.query(StockCour).all()}
 
             lst = []
-            for art, qte_cour in results:
-                qty = qte_cour if qte_cour is not None else 0
+            for art in articles:
+                if art.KIT:
+                    # Un KIT n'a plus de ligne de stock propre depuis D3 : sa
+                    # quantite vendable est deduite du stock de ses composants.
+                    lignes = session.query(KitArticle).filter_by(IDKit=art.IDTArticle).all()
+                    if not lignes:
+                        qty = 0
+                    else:
+                        qty = max(0, min(
+                            stocks_simples.get(ligne.IDArticleComposant, 0) // ligne.Quantite
+                            for ligne in lignes
+                        ))
+                else:
+                    qty = stocks_simples.get(art.IDTArticle, 0)
                 pu = float(art.PU)
                 seuil = int(art.QTESeuil) if art.QTESeuil is not None else 0
                 val_stock = qty * pu

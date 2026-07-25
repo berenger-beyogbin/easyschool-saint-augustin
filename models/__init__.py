@@ -15,6 +15,7 @@ from .montant_cantine import MontantCantine
 from .montant_transport import MontantTransport
 from .versement_scol import VersementScol
 from .article import Article
+from .kit_article import KitArticle
 from .stock_cour import StockCour
 from .stock_entree import StockEntree
 from .stock_sortie import StockSortie
@@ -42,6 +43,7 @@ __all__ = [
     "MontantTransport",
     "VersementScol",
     "Article",
+    "KitArticle",
     "StockCour",
     "StockEntree",
     "StockSortie",
