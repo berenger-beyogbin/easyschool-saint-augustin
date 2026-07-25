@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from services.article_service import ArticleService
 from services.stock_service import StockService
+from services.vente_service import VenteService
+from utils.receipt_printer import ReceiptPrinter
 from app.session import AppSession
 from app.styles import (
     COLORS, INPUT_STYLE, COMBO_STYLE, SECTION_TITLE_STYLE,
@@ -313,7 +315,7 @@ class VenteView(QWidget):
 
         # Vente atomique : une seule transaction verrouille les stocks concernes,
         # verifie toutes les quantites puis debite tout, ou n'ecrit rien du tout.
-        success, msg = StockService.process_sale(self.panier, active_annee_id, login_util)
+        success, msg, recu = VenteService.process_sale(self.panier, active_annee_id, login_util)
 
         if success:
             QMessageBox.information(self, "Vente Validée", msg)
@@ -324,6 +326,9 @@ class VenteView(QWidget):
                     self.main_window.load_data()
                 except Exception:
                     pass
+
+            if recu:
+                ReceiptPrinter.print_vente_receipt(self, recu)
         else:
             QMessageBox.critical(self, "Vente Avortée", msg)
             self.update_table_panier()

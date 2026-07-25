@@ -346,30 +346,38 @@ class StatistiquesService:
 
         session = get_session()
         try:
-            from models.stock_sortie import StockSortie
-            from models.article import Article
+            from sqlalchemy.orm import joinedload
+            from models.vente import Vente, VenteLigne
 
-            q = session.query(StockSortie).join(Article, StockSortie.IDTArticle == Article.IDTArticle)\
-                                          .filter(StockSortie.IDTAnneeScolaire == id_annee)
+            q = session.query(VenteLigne).options(
+                joinedload(VenteLigne.vente), joinedload(VenteLigne.article)
+            ).join(Vente, VenteLigne.IDVente == Vente.IDVente).filter(
+                Vente.IDTAnneeScolaire == id_annee
+            )
             if date_debut:
-                q = q.filter(StockSortie.DateSort >= date_debut)
+                q = q.filter(Vente.DateVente >= date_debut)
             if date_fin:
-                q = q.filter(StockSortie.DateSort <= date_fin)
+                q = q.filter(Vente.DateVente <= date_fin)
 
-            q = q.order_by(StockSortie.DateSort.desc(), StockSortie.HeureSortie.desc())
+            q = q.order_by(Vente.DateVente.desc(), Vente.HeureVente.desc(), VenteLigne.IDVenteLigne.desc())
             results = q.all()
 
             lst = []
-            for item in results:
-                total_val = float(item.QuantiteSort) * float(item.Prix_vente)
+            for ligne in results:
                 lst.append({
-                    "DateSort": item.DateSort,
-                    "HeureSortie": item.HeureSortie,
-                    "Article": item.article.Libelle,
-                    "QuantiteSort": item.QuantiteSort,
-                    "Prix_vente": float(item.Prix_vente),
-                    "Total": total_val,
-                    "Login": item.Login
+                    "DateSort": ligne.vente.DateVente,
+                    "HeureSortie": ligne.vente.HeureVente,
+                    "Article": ligne.article.Libelle,
+                    "QuantiteSort": ligne.Quantite,
+                    "Prix_vente": float(ligne.PrixUnitaire),
+                    "Total": float(ligne.Total),
+                    "Login": ligne.vente.Login,
+                    # Champs additionnels (D2), utilises par stat_vente_view.py
+                    # pour l'annulation et l'affichage du recu :
+                    "IDVente": ligne.IDVente,
+                    "NumeroRecu": ligne.vente.NumeroRecu,
+                    "ModePaiement": ligne.vente.ModePaiement,
+                    "Annule": ligne.vente.Annule,
                 })
             return lst
         except Exception as e:

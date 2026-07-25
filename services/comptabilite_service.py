@@ -11,7 +11,7 @@ from models.compte import Compte
 from models.sortie_fin import SortieFin
 from models.annee_scolaire import TAnneeScolaire
 from models.versement_scol import VersementScol
-from models.stock_sortie import StockSortie
+from models.vente import Vente
 import logging
 logger = logging.getLogger(__name__)
 
@@ -360,7 +360,7 @@ class ComptabiliteService:
                     "Solde": float(cred - deb)
                 })
 
-            # Injecter les entrées (VersementScol + StockSortie) dans les comptes SYSCOA 7041-7044
+            # Injecter les entrées (VersementScol + Vente) dans les comptes SYSCOA 7041-7044
             entrees = ComptabiliteService.get_totaux_entrees_rubriques(id_annee, date_debut, date_fin)
             for item in balance_list:
                 rubrique = _SYSCOA_RUBRIQUE.get(item["NumCompte"])
@@ -402,12 +402,15 @@ class ComptabiliteService:
             autres = float(row[3]) if row else 0.0
 
             q_vente = session.query(
-                func.coalesce(func.sum(StockSortie.QuantiteSort * StockSortie.Prix_vente), 0)
-            ).filter(StockSortie.IDTAnneeScolaire == id_annee)
+                func.coalesce(func.sum(Vente.MontantTotal), 0)
+            ).filter(
+                Vente.IDTAnneeScolaire == id_annee,
+                Vente.Annule == False,
+            )
             if date_debut:
-                q_vente = q_vente.filter(StockSortie.DateSort >= date_debut)
+                q_vente = q_vente.filter(Vente.DateVente >= date_debut)
             if date_fin:
-                q_vente = q_vente.filter(StockSortie.DateSort <= date_fin)
+                q_vente = q_vente.filter(Vente.DateVente <= date_fin)
             vente_row = q_vente.first()
             vente = float(vente_row[0]) if vente_row else 0.0
 

@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 
 from app.session import AppSession
 from models.compte import Compte
 from models.sortie_fin import SortieFin
 from models.versement_scol import VersementScol
+from models.vente import Vente
 from services.dashboard_service import DashboardService
 from services.statistiques_service import StatistiquesService
 from tests.factories import (
@@ -88,6 +89,21 @@ def _add_depense(db_session, annee, montant, *, annule=False):
     db_session.commit()
 
 
+def _add_vente(db_session, annee, montant, *, annule=False, numero_recu=None):
+    vente = Vente(
+        IDTAnneeScolaire=annee.IDTAnneeScolaire,
+        NumeroRecu=numero_recu or f"V-TEST-{montant}-{annule}",
+        DateVente=date.today(),
+        HeureVente=time(12, 0, 0),
+        ModePaiement="Espèce",
+        MontantTotal=montant,
+        Annule=annule,
+    )
+    db_session.add(vente)
+    db_session.commit()
+    return vente
+
+
 def test_dashboard_totals_exclude_cancelled_payments(db_session):
     annee, _, famille, eleve = _setup_reporting(db_session)
     _add_versement(db_session, annee, famille, eleve, scol=10_000)
@@ -116,6 +132,17 @@ def test_dashboard_total_recettes_includes_other_fees(db_session):
     summary = DashboardService.get_dashboard_summary()
 
     assert summary["total_recettes"] == Decimal("4000.00")
+
+
+def test_dashboard_total_ventes_kiosque_excludes_cancelled_sales(db_session):
+    annee, _, _, _ = _setup_reporting(db_session)
+    _add_vente(db_session, annee, 3_000, numero_recu="V-A")
+    _add_vente(db_session, annee, 9_000, annule=True, numero_recu="V-B")
+
+    summary = DashboardService.get_dashboard_summary()
+
+    assert summary["total_ventes_kiosque"] == Decimal("3000.00")
+    assert summary["total_recettes"] == Decimal("3000.00")
 
 
 def test_impayes_ignore_cancelled_payments_and_reductions(db_session):

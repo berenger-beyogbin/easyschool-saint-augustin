@@ -158,6 +158,217 @@ class ReceiptPrinter:
         preview.exec()
 
     # ─────────────────────────────────────────────────────────────────────────
+    # Reçu de vente kiosque (D2) — même format A5 paysage, contenu adapté :
+    # liste d'articles au lieu de la grille de rubriques scolarité/transport/
+    # cantine/autres frais.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def print_vente_receipt(parent, data: dict):
+        """data : dict retourne par VenteService.process_sale (cle "recu") —
+        numero_recu, id_vente, total, date, heure, mode_paiement, login,
+        lignes: [{"nom", "qte", "pu", "total"}, ...]."""
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+
+        from app.session import AppSession
+        preferred = AppSession.get_current_user_imprimante()
+        if preferred:
+            printer.setPrinterName(preferred)
+
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A5))
+        printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        printer.setFullPage(True)
+
+        hdr = ReceiptPrinter._get_etablissement_header()
+
+        preview = QPrintPreviewDialog(printer, parent)
+        preview.setWindowTitle("Aperçu — Reçu de vente")
+        preview.resize(980, 700)
+        preview.paintRequested.connect(lambda p: ReceiptPrinter._render_vente(p, data, hdr))
+        preview.exec()
+
+    @staticmethod
+    def _render_vente(printer: QPrinter, data: dict, hdr: dict = None):
+        if hdr is None:
+            hdr = ReceiptPrinter._get_etablissement_header()
+        painter = QPainter(printer)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+
+        dpi = printer.resolution()
+
+        def mm(v: float) -> float:
+            return v * dpi / 25.4
+
+        vp = painter.viewport()
+        W, H = vp.width(), vp.height()
+
+        ML, MT = mm(10), mm(8)
+        MR, MB = mm(10), mm(8)
+        X, Y = ML, MT
+        CW = W - ML - MR
+        CH = H - MT - MB
+
+        # ── CADRE DOUBLE (identique au reçu de paiement) ───────────────────────
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(C_BLACK, mm(0.45)))
+        painter.drawRect(QRectF(X, Y, CW, CH))
+        painter.setPen(QPen(C_BORDER, mm(0.12)))
+        painter.drawRect(QRectF(X + mm(1.2), Y + mm(1.2), CW - mm(2.4), CH - mm(2.4)))
+
+        mk, gp = mm(4), mm(3)
+        painter.setPen(QPen(C_BLACK, mm(0.28)))
+        for cx, cy, dx, dy in [(0, 0, 1, 1), (W, 0, -1, 1), (0, H, 1, -1), (W, H, -1, -1)]:
+            painter.drawLine(int(cx + dx * gp), int(cy), int(cx + dx * (gp + mk)), int(cy))
+            painter.drawLine(int(cx), int(cy + dy * gp), int(cx), int(cy + dy * (gp + mk)))
+
+        # ── EN-TÊTE ─────────────────────────────────────────────────────────
+        painter.setPen(QPen(C_BLACK))
+
+        hdr_line1 = "  —  ".join(s for s in [hdr.get("type", ""), hdr.get("dren", ""), hdr.get("iep", "")] if s)
+        hdr_line2 = hdr.get("nom") or _HDR_NOM_FALLBACK
+        if hdr.get("sigle"):
+            hdr_line2 = f"{hdr_line2} ({hdr['sigle']})"
+        hdr_line3_parts = [hdr.get("adresse", "")]
+        if hdr.get("telephone"):
+            hdr_line3_parts.append(f"CEL : {hdr['telephone']}")
+        hdr_line3 = "  —  ".join(s for s in hdr_line3_parts if s)
+
+        painter.setFont(_font(9, bold=True))
+        painter.drawText(
+            QRectF(X, Y + mm(2.5), CW, mm(7)),
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+            hdr_line1,
+        )
+        _draw_centered_fit_text(
+            painter, QRectF(X + mm(2), Y + mm(8), CW - mm(4), mm(12)),
+            hdr_line2, base_size=20, bold=True, min_size=11,
+        )
+        _draw_centered_fit_text(
+            painter, QRectF(X + mm(2), Y + mm(19), CW - mm(4), mm(6)),
+            hdr_line3, base_size=8, bold=True, min_size=5.5,
+        )
+
+        y_sep1 = Y + mm(26)
+        label_recu = "REÇU DE VENTE"
+        painter.setFont(_font(9, bold=True))
+        label_w = painter.fontMetrics().horizontalAdvance(label_recu) + mm(4)
+        mid_x = X + CW / 2
+
+        painter.setPen(QPen(C_BLACK, mm(0.22)))
+        painter.drawLine(int(X + mm(1.5)), int(y_sep1), int(mid_x - label_w / 2), int(y_sep1))
+        painter.drawLine(int(mid_x + label_w / 2), int(y_sep1), int(X + CW - mm(1.5)), int(y_sep1))
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(mid_x - label_w / 2, y_sep1 - mm(3), label_w, mm(6)),
+            Qt.AlignmentFlag.AlignCenter, label_recu,
+        )
+
+        # ── INFOS VENTE ────────────────────────────────────────────────────────
+        y_info = y_sep1 + mm(2)
+        row_h = mm(5)
+        painter.setFont(_font(9, bold=True))
+        painter.setPen(QPen(C_BLACK))
+
+        date_str = data.get("date")
+        date_str = date_str.strftime("%d/%m/%Y") if hasattr(date_str, "strftime") else (date_str or "")
+        heure_str = data.get("heure")
+        heure_str = heure_str.strftime("%H:%M:%S") if hasattr(heure_str, "strftime") else (heure_str or "")
+
+        painter.drawText(QRectF(X + mm(3), y_info, CW * 0.43, row_h),
+                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         f"Date :  {date_str}   {heure_str}")
+        painter.drawText(QRectF(X + CW * 0.47, y_info, CW * 0.5, row_h),
+                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         f"N° Reçu :  {data.get('numero_recu', '')}")
+
+        y_info += row_h
+        painter.drawText(QRectF(X + mm(3), y_info, CW * 0.43, row_h),
+                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         f"Mode de paiement :  {data.get('mode_paiement', 'Espèce')}")
+        painter.drawText(QRectF(X + CW * 0.47, y_info, CW * 0.5, row_h),
+                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         f"Caissier :  {data.get('login', '')}")
+
+        y_dot_h = y_info + row_h + mm(1.5)
+        pen_dot = QPen(C_BLACK, mm(0.28))
+        pen_dot.setStyle(Qt.PenStyle.DotLine)
+        painter.setPen(pen_dot)
+        painter.drawLine(int(X), int(y_dot_h), int(X + CW), int(y_dot_h))
+
+        # ── TABLEAU DES ARTICLES ─────────────────────────────────────────────
+        lignes = data.get("lignes") or []
+        y_footer_top = Y + CH - mm(28)
+        table_h = y_footer_top - y_dot_h - mm(2)
+        row_h_art = min(mm(8), table_h / max(1, len(lignes) + 1))
+
+        col_x = [X, X + CW * 0.55, X + CW * 0.70, X + CW * 0.85]
+        col_w = [CW * 0.55, CW * 0.15, CW * 0.15, CW * 0.15]
+        headers = ["Article", "Qté", "P.U.", "Total"]
+
+        y_tbl = y_dot_h + mm(2)
+        painter.setFont(_font(8, bold=True))
+        painter.setPen(QPen(C_BLACK))
+        for lbl, cx, cw in zip(headers, col_x, col_w):
+            align = Qt.AlignmentFlag.AlignLeft if lbl == "Article" else Qt.AlignmentFlag.AlignRight
+            painter.drawText(QRectF(cx + mm(1), y_tbl, cw - mm(2), row_h_art),
+                             Qt.AlignmentFlag.AlignVCenter | align, lbl)
+        y_tbl += row_h_art
+        painter.setPen(QPen(C_BORDER, mm(0.2)))
+        painter.drawLine(int(X), int(y_tbl), int(X + CW), int(y_tbl))
+
+        painter.setFont(_font(8))
+        for ligne in lignes:
+            y_tbl += row_h_art
+            painter.setPen(QPen(C_BLACK))
+            vals = [ligne.get("nom", ""), str(ligne.get("qte", "")), _fmt(ligne.get("pu")), _fmt(ligne.get("total"))]
+            for val, cx, cw, lbl in zip(vals, col_x, col_w, headers):
+                align = Qt.AlignmentFlag.AlignLeft if lbl == "Article" else Qt.AlignmentFlag.AlignRight
+                painter.drawText(QRectF(cx + mm(1), y_tbl - row_h_art, cw - mm(2), row_h_art),
+                                 Qt.AlignmentFlag.AlignVCenter | align, val)
+
+        painter.setPen(QPen(C_BLACK, mm(0.22)))
+        painter.drawLine(int(X), int(y_footer_top), int(X + CW), int(y_footer_top))
+
+        # ── PIED DE PAGE : TOTAL + SIGNATURE ─────────────────────────────────
+        total = data.get("total", 0)
+        nb_y = y_footer_top + mm(2)
+        total_line = f"Montant total :  {_fmt(total)}  —  {_montant_en_lettres(total)}"
+        painter.setFont(_font(9, bold=True))
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(X + mm(2), nb_y, CW - mm(4), mm(6)),
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
+            total_line,
+        )
+
+        cx = X + CW / 2
+        y_sig = nb_y + mm(10)
+        painter.setPen(QPen(C_BLACK, mm(0.28)))
+        painter.drawLine(int(cx - mm(30)), int(y_sig), int(cx + mm(30)), int(y_sig))
+        f_sig = _font(9, bold=True)
+        f_sig.setUnderline(True)
+        painter.setFont(f_sig)
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(cx - mm(32), y_sig + mm(1.5), mm(64), mm(7)),
+            Qt.AlignmentFlag.AlignCenter, "Signature et cachet",
+        )
+
+        # ── BANDEROLE BAS ─────────────────────────────────────────────────────
+        y_bot = Y + CH - mm(9)
+        painter.setPen(QPen(C_BLACK, mm(0.28)))
+        painter.drawLine(int(X + mm(1.5)), int(y_bot), int(X + CW - mm(1.5)), int(y_bot))
+        painter.setFont(_font(9, bold=True))
+        painter.setPen(QPen(C_BLACK))
+        painter.drawText(
+            QRectF(X, y_bot + mm(0.8), CW, mm(8)),
+            Qt.AlignmentFlag.AlignCenter, "MERCI DE VOTRE ACHAT",
+        )
+
+        painter.end()
+
+    # ─────────────────────────────────────────────────────────────────────────
 
     @staticmethod
     def _get_etablissement_header() -> dict:

@@ -18,6 +18,7 @@ from .article import Article
 from .stock_cour import StockCour
 from .stock_entree import StockEntree
 from .stock_sortie import StockSortie
+from .vente import Vente, VenteLigne
 from .compte import Compte
 from .type_sortie import TypeSortie
 from .sortie_fin import SortieFin
@@ -44,6 +45,8 @@ __all__ = [
     "StockCour",
     "StockEntree",
     "StockSortie",
+    "Vente",
+    "VenteLigne",
     "Compte",
     "TypeSortie",
     "SortieFin"

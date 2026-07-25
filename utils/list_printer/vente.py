@@ -34,8 +34,15 @@ class VenteStatPrinter:
             art = item.get("Article") or ""
             qty = str(item.get("QuantiteSort", ""))
             tot = item.get("Total", 0.0)
+            annule = bool(item.get("Annule"))
 
-            sum_total += tot
+            if annule:
+                art += " (ANNULÉ)"
+            else:
+                # Une vente annulee reste listee pour la tracabilite, mais son
+                # montant est exclu du total imprime (meme regle que pour les
+                # versements/mouvements comptables annules).
+                sum_total += tot
 
             formatted.append({
                 "cells": [d, art, qty, _fmt_f(tot)],

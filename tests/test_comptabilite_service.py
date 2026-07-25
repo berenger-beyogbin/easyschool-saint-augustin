@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
@@ -6,6 +6,7 @@ from app.session import AppSession
 from models.compte import Compte
 from models.sortie_fin import SortieFin
 from models.versement_scol import VersementScol
+from models.vente import Vente
 from services.comptabilite_service import ComptabiliteService, _SYSCOA_RUBRIQUE
 from services.compte_service import SYSCOA_INCOME_ACCOUNTS
 from tests.factories import make_annee, make_famille, make_eleve
@@ -21,6 +22,21 @@ def _make_versement(session, annee, famille, eleve, m_scol=0, m_trans=0, m_cant=
         MontantVersTrans=m_trans,
         MontantCantine=m_cant,
         MontantVersAutres=m_autres,
+    )
+    session.add(v)
+    session.commit()
+    return v
+
+
+def _make_vente(session, annee, montant, *, annule=False, numero_recu=None):
+    v = Vente(
+        IDTAnneeScolaire=annee.IDTAnneeScolaire,
+        NumeroRecu=numero_recu or f"V-TEST-{montant}-{annule}",
+        DateVente=date.today(),
+        HeureVente=time(12, 0, 0),
+        ModePaiement="Espèce",
+        MontantTotal=montant,
+        Annule=annule,
     )
     session.add(v)
     session.commit()
@@ -48,6 +64,18 @@ def test_get_totaux_entrees_rubriques_includes_autres(db_session):
 
     assert totaux["autres"] == 6000.0
     assert totaux["scolarite"] == 10000.0
+
+
+def test_get_totaux_entrees_rubriques_vente_excludes_cancelled(db_session):
+    """Une vente kiosque annulee ne doit jamais gonfler la balance comptable
+    (meme regle que pour les versements/mouvements annules, D2)."""
+    annee = make_annee(db_session)
+    _make_vente(db_session, annee, 5000, numero_recu="V-TEST-1")
+    _make_vente(db_session, annee, 8000, annule=True, numero_recu="V-TEST-2")
+
+    totaux = ComptabiliteService.get_totaux_entrees_rubriques(annee.IDTAnneeScolaire)
+
+    assert totaux["vente"] == 5000.0
 
 
 def test_balance_comptes_credits_autres_frais_exactly_once(db_session):

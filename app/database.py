@@ -91,6 +91,7 @@ def create_tables():
     import models.stock_cour  # noqa: F401
     import models.stock_entree  # noqa: F401
     import models.stock_sortie  # noqa: F401
+    import models.vente  # noqa: F401
     import models.compte  # noqa: F401
     import models.type_sortie  # noqa: F401
     import models.sortie_fin  # noqa: F401

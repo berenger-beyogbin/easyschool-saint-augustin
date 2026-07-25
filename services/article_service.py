@@ -3,7 +3,7 @@ from decimal import Decimal
 from models.article import Article
 from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
-from models.stock_sortie import StockSortie
+from models.vente import VenteLigne
 from app.database import get_session
 import logging
 logger = logging.getLogger(__name__)
@@ -225,10 +225,11 @@ class ArticleService:
             if entrees > 0:
                 return False, "Impossible de supprimer cet article car il contient des historiques d'approvisionnement (StockEnt)."
 
-            # 3. Verifier si l'article est associe a des sorties (ventes) de stock
-            sorties = session.query(StockSortie).filter_by(IDTArticle=id_art).count()
+            # 3. Verifier si l'article est associe a des ventes (couvre l'historique
+            # backfille depuis StockSortie ainsi que les ventes enregistrees depuis D2)
+            sorties = session.query(VenteLigne).filter_by(IDTArticle=id_art).count()
             if sorties > 0:
-                return False, "Impossible de supprimer cet article car il contient des historiques de vente (StockSortie)."
+                return False, "Impossible de supprimer cet article car il contient des historiques de vente."
 
             # Tout est propre, on supprime le stock_cour lie puis l'article
             if sc:

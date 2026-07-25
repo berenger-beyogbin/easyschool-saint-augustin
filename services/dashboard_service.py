@@ -9,7 +9,7 @@ from models.famille import TFamille
 from models.classe import TClasse
 from models.versement_scol import VersementScol
 from models.montant_scol import MontantScol
-from models.stock_sortie import StockSortie
+from models.vente import Vente, VenteLigne
 from models.article import Article
 from models.stock_cour import StockCour
 from models.sortie_fin import SortieFin
@@ -131,8 +131,11 @@ class DashboardService:
             ).scalar() or Decimal("0")
 
             total_ventes_kiosque = session.query(
-                func.sum(StockSortie.QuantiteSort * StockSortie.Prix_vente)
-            ).filter(StockSortie.IDTAnneeScolaire == id_annee).scalar() or Decimal("0")
+                func.sum(Vente.MontantTotal)
+            ).filter(
+                Vente.IDTAnneeScolaire == id_annee,
+                Vente.Annule == False,
+            ).scalar() or Decimal("0")
 
             total_depenses = session.query(
                 func.sum(SortieFin.Montant)
@@ -247,25 +250,26 @@ class DashboardService:
             return []
         session = get_session()
         try:
-            rows = session.query(StockSortie).options(
-                joinedload(StockSortie.article),
-            ).filter(
-                StockSortie.IDTAnneeScolaire == id_annee
+            rows = session.query(VenteLigne).options(
+                joinedload(VenteLigne.article),
+                joinedload(VenteLigne.vente),
+            ).join(Vente, VenteLigne.IDVente == Vente.IDVente).filter(
+                Vente.IDTAnneeScolaire == id_annee
             ).order_by(
-                StockSortie.DateSort.desc(),
-                StockSortie.HeureSortie.desc()
+                Vente.DateVente.desc(),
+                Vente.HeureVente.desc(),
+                VenteLigne.IDVenteLigne.desc(),
             ).limit(limit).all()
 
             result = []
-            for v in rows:
-                date_str = v.DateSort.strftime("%d/%m/%Y") if v.DateSort else ""
-                article = v.article.Libelle if v.article else ""
-                montant = float(v.QuantiteSort or 0) * float(v.Prix_vente or 0)
+            for ligne in rows:
+                date_str = ligne.vente.DateVente.strftime("%d/%m/%Y") if ligne.vente and ligne.vente.DateVente else ""
+                article = ligne.article.Libelle if ligne.article else ""
                 result.append({
                     "date": date_str,
                     "article": article,
-                    "quantite": str(v.QuantiteSort or 0),
-                    "montant": DashboardService.format_fcfa(montant),
+                    "quantite": str(ligne.Quantite or 0),
+                    "montant": DashboardService.format_fcfa(float(ligne.Total or 0)),
                 })
             return result
         except Exception:
