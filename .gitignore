@@ -42,6 +42,11 @@ logs/
 *.sqlite3
 *.db
 
+# === DONNÉES PERSONNELLES (imports/exports élèves-familles) ===
+# Ne jamais versionner : contiennent noms, téléphones, matricules réels
+eleves_*.csv
+familles_*.csv
+
 # === TESTS ===
 .pytest_cache/
 .coverage
