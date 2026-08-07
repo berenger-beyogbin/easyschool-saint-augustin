@@ -105,6 +105,14 @@ def create_tables():
     except Exception as e:
         print(f"Avertissement migration 'VersementScol': {e}")
 
+    # Idempotent upgrade of TInscription to add AutresFrais field if it already existed
+    try:
+        with _engine.begin() as conn:
+            conn.execute(text('ALTER TABLE IF EXISTS "TInscription" ADD COLUMN IF NOT EXISTS "AutresFrais" BOOLEAN DEFAULT FALSE;'))
+            print("Mise a jour de table 'TInscription' (ajout colonne AutresFrais) terminee avec succes.")
+    except Exception as e:
+        print(f"Avertissement migration 'TInscription': {e}")
+
     # Idempotent upgrade: imprimante par défaut par utilisateur
     try:
         with _engine.begin() as conn:

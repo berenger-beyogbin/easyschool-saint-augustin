@@ -424,6 +424,55 @@ class StatistiquesService:
             session.close()
 
     @staticmethod
+    def get_etat_periodique_versements(
+        date_debut: Optional[datetime.date] = None, date_fin: Optional[datetime.date] = None
+    ) -> List[dict]:
+        """Retourne, par jour, les totaux versés en scolarité / cantine / transport sur une période."""
+        id_annee = AppSession.get_active_annee_id()
+        if not id_annee:
+            return []
+
+        session = get_session()
+        try:
+            from models.versement_scol import VersementScol
+
+            q = session.query(
+                VersementScol.DateVers,
+                func.sum(VersementScol.MontantVersSco).label("scolarite"),
+                func.sum(VersementScol.MontantCantine).label("cantine"),
+                func.sum(VersementScol.MontantVersTrans).label("transport"),
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == False,
+            )
+            if date_debut:
+                q = q.filter(VersementScol.DateVers >= date_debut)
+            if date_fin:
+                q = q.filter(VersementScol.DateVers <= date_fin)
+
+            q = q.group_by(VersementScol.DateVers).order_by(VersementScol.DateVers.asc())
+            results = q.all()
+
+            lst = []
+            for date_vers, scol, cant, trans in results:
+                scol = float(scol or 0)
+                cant = float(cant or 0)
+                trans = float(trans or 0)
+                lst.append({
+                    "DateVers": date_vers,
+                    "Scolarite": scol,
+                    "Cantine": cant,
+                    "Transport": trans,
+                    "Total": scol + cant + trans,
+                })
+            return lst
+        except Exception as e:
+            print(f"Error in get_etat_periodique_versements: {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
     def get_etat_stock() -> List[dict]:
         """Retourne l'état du stock courant."""
         session = get_session()

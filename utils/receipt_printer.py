@@ -433,12 +433,13 @@ class ReceiptPrinter:
         x_lbl = X
         x_val = X + lbl_w
 
-        # Séparateur vertical libellés / valeur
-        painter.setPen(QPen(C_BORDER, mm(0.25)))
-        painter.drawLine(int(x_val), int(y_body_top), int(x_val), int(y_footer_top))
-
         # ── Titre de la rubrique ────────────────────────────────────────────
         TITLE_H = mm(13)
+
+        # Séparateur vertical libellés / valeur (sous le titre uniquement)
+        painter.setPen(QPen(C_BORDER, mm(0.25)))
+        painter.drawLine(int(x_val), int(y_body_top + TITLE_H), int(x_val), int(y_footer_top))
+
         painter.setFont(_font(12, bold=True))
         painter.setPen(QPen(C_BLACK))
         painter.drawText(

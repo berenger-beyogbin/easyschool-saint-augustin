@@ -47,7 +47,6 @@ def _make_panel(accent_color: str) -> tuple:
         QFrame {{
             background-color: {COLORS['card']};
             border: 1px solid {COLORS['border']};
-            border-top: 3px solid {accent_color};
             border-radius: 10px;
         }}
     """)

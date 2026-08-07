@@ -95,7 +95,6 @@ class PrestationConfigView(QWidget):
             QFrame {{
                 background-color: {COLORS['card']};
                 border: 1px solid {COLORS['border']};
-                border-top: 3px solid {COLORS['primary']};
                 border-radius: 10px;
             }}
         """)
@@ -112,22 +111,30 @@ class PrestationConfigView(QWidget):
         layout_gauche.addWidget(lbl_gauche)
         layout_gauche.addWidget(make_separator())
 
-        layout_gauche.addWidget(QLabel("Prestation :"))
+        def field_lbl(text):
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"font-size: 12px; font-weight: 600; color: {COLORS['muted']};"
+                "background: transparent; border: none;"
+            )
+            return lbl
+
+        layout_gauche.addWidget(field_lbl("Prestation :"))
         self.cmb_tarif_prestation = QComboBox()
         self.cmb_tarif_prestation.setStyleSheet(COMBO_STYLE)
         layout_gauche.addWidget(self.cmb_tarif_prestation)
 
-        layout_gauche.addWidget(QLabel("Montant annuel (F CFA) :"))
+        layout_gauche.addWidget(field_lbl("Montant annuel (F CFA) :"))
         self.txt_tarif_montant = QLineEdit("0")
         self.txt_tarif_montant.setStyleSheet(INPUT_STYLE)
         layout_gauche.addWidget(self.txt_tarif_montant)
 
-        layout_gauche.addWidget(QLabel("Niveaux concernés (décocher ceux non concernés) :"))
+        layout_gauche.addWidget(field_lbl("Niveaux concernés (décocher ceux non concernés) :"))
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setMinimumHeight(180)
-        scroll.setStyleSheet("QScrollArea { border: 1px solid #ddd; border-radius: 4px; background: white; }")
+        scroll.setStyleSheet(f"QScrollArea {{ border: 1px solid {COLORS['border']}; border-radius: 4px; background: white; }}")
 
         self._niveaux_container = QWidget()
         self._niveaux_layout = QGridLayout(self._niveaux_container)
@@ -151,7 +158,6 @@ class PrestationConfigView(QWidget):
             QFrame {{
                 background-color: {COLORS['card']};
                 border: 1px solid {COLORS['border']};
-                border-top: 3px solid {COLORS['success']};
                 border-radius: 10px;
             }}
         """)
@@ -201,7 +207,6 @@ class PrestationConfigView(QWidget):
             QFrame {{
                 background-color: {COLORS['card']};
                 border: 1px solid {COLORS['border']};
-                border-top: 3px solid {COLORS['primary']};
                 border-radius: 10px;
             }}
         """)
@@ -283,7 +288,6 @@ class PrestationConfigView(QWidget):
             QFrame {{
                 background-color: {COLORS['card']};
                 border: 1px solid {COLORS['border']};
-                border-top: 3px solid {COLORS['success']};
                 border-radius: 10px;
             }}
         """)
@@ -305,7 +309,7 @@ class PrestationConfigView(QWidget):
         form.setLabelAlignment(Qt.AlignRight)
 
         def lbl_style():
-            return f"font-size: 12px; font-weight: 600; color: {COLORS['muted']}; background: transparent;"
+            return f"font-size: 12px; font-weight: 600; color: {COLORS['muted']}; background: transparent; border: none;"
 
         # Code
         lbl_code = QLabel("Code :")

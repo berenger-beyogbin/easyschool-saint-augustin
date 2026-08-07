@@ -252,8 +252,15 @@ class DashboardV2View(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
         self.main_window = main_window
+        self._refresh_permissions()
         self._build()
         self.refresh_data()
+
+    def _refresh_permissions(self):
+        self.show_scolarite = AppSession.has_permission("SCOLARITE_VIEW")
+        self.show_versements = AppSession.has_permission("SCOLARITE_VERSEMENTS")
+        self.show_kiosque = AppSession.has_permission("KIOSQUE_VIEW")
+        self.show_comptabilite = AppSession.has_permission("COMPTABILITE_VIEW")
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -353,10 +360,12 @@ class DashboardV2View(QWidget):
         self.layout.addWidget(panel)
 
     def _build_recovery(self):
-        title = QLabel("RECOUVREMENT DES FRAIS · ANNÉE SCOLAIRE")
-        title.setStyleSheet("font-size:11px;font-weight:800;color:#64748B;letter-spacing:1px;")
-        self.layout.addWidget(title)
-        row = QHBoxLayout()
+        self.recovery_title = QLabel("RECOUVREMENT DES FRAIS · ANNÉE SCOLAIRE")
+        self.recovery_title.setStyleSheet("font-size:11px;font-weight:800;color:#64748B;letter-spacing:1px;")
+        self.layout.addWidget(self.recovery_title)
+        self.recovery_row = QWidget()
+        row = QHBoxLayout(self.recovery_row)
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(12)
         self.recovery_cards = {
             "scolarite": RecoveryCard("Scolarité", "#2563EB", "school"),
@@ -366,7 +375,10 @@ class DashboardV2View(QWidget):
         for card in self.recovery_cards.values():
             card.clicked.connect(lambda: self._goto_module(4))
             row.addWidget(card)
-        self.layout.addLayout(row)
+        self.layout.addWidget(self.recovery_row)
+        visible = self.show_scolarite and self.show_versements
+        self.recovery_title.setVisible(visible)
+        self.recovery_row.setVisible(visible)
 
     def _build_metrics(self):
         self.activity_title = QLabel("INDICATEURS CLÉS · ANNÉE SCOLAIRE")
@@ -376,34 +388,39 @@ class DashboardV2View(QWidget):
         primary_grid = QGridLayout()
         primary_grid.setHorizontalSpacing(12)
         primary_specs = [
-            ("inscrits", "Élèves inscrits", "#2563EB", "students"),
-            ("recettes", "Encaissements", "#059669", "income"),
-            ("depenses", "Dépenses", "#DC2626", "expense"),
-            ("solde", "Solde net", "#16A34A", "balance"),
+            ("inscrits", "Élèves inscrits", "#2563EB", "students", self.show_scolarite),
+            ("recettes", "Encaissements", "#059669", "income", self.show_comptabilite),
+            ("depenses", "Dépenses", "#DC2626", "expense", self.show_comptabilite),
+            ("solde", "Solde net", "#16A34A", "balance", self.show_comptabilite),
         ]
         self.metrics = {}
-        for i, (key, label, color, icon) in enumerate(primary_specs):
+        for i, (key, label, color, icon, visible) in enumerate(primary_specs):
             card = MetricCard(label, color, icon)
+            card.setVisible(visible)
             self.metrics[key] = card
             primary_grid.addWidget(card, 0, i)
         self.layout.addLayout(primary_grid)
 
-        secondary_title = QLabel("ACTIVITÉ COMPLÉMENTAIRE")
-        secondary_title.setStyleSheet("font-size:11px;font-weight:800;color:#64748B;letter-spacing:1px;")
-        self.layout.addWidget(secondary_title)
+        self.secondary_title = QLabel("ACTIVITÉ COMPLÉMENTAIRE")
+        self.secondary_title.setStyleSheet("font-size:11px;font-weight:800;color:#64748B;letter-spacing:1px;")
+        self.layout.addWidget(self.secondary_title)
         secondary_grid = QGridLayout()
         secondary_grid.setHorizontalSpacing(12)
         secondary_specs = [
-            ("kiosque", "Ventes kiosque", "#7C3AED", "cart"),
-            ("stock", "Valeur du stock", "#0369A1", "stock"),
-            ("autres", "Autres frais", "#0F766E", "receipt"),
-            ("reductions", "Réductions", "#D97706", "discount"),
+            ("kiosque", "Ventes kiosque", "#7C3AED", "cart", self.show_kiosque),
+            ("stock", "Valeur du stock", "#0369A1", "stock", self.show_kiosque),
+            ("autres", "Autres frais", "#0F766E", "receipt", self.show_versements),
+            ("reductions", "Réductions", "#D97706", "discount", self.show_versements),
         ]
-        for i, (key, label, color, icon) in enumerate(secondary_specs):
+        any_secondary_visible = False
+        for i, (key, label, color, icon, visible) in enumerate(secondary_specs):
             card = MetricCard(label, color, icon, compact=True)
+            card.setVisible(visible)
+            any_secondary_visible = any_secondary_visible or visible
             self.metrics[key] = card
             secondary_grid.addWidget(card, 0, i)
         self.layout.addLayout(secondary_grid)
+        self.secondary_title.setVisible(any_secondary_visible)
         self.metrics["inscrits"].clicked.connect(lambda: self._goto_module(1))
         self.metrics["kiosque"].clicked.connect(lambda: self._goto_module(2))
         self.metrics["stock"].clicked.connect(lambda: self._goto_module(4))
@@ -421,17 +438,22 @@ class DashboardV2View(QWidget):
         return panel, layout
 
     def _build_activity(self):
-        row = QHBoxLayout()
+        self.activity_row = QWidget()
+        row = QHBoxLayout(self.activity_row)
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(12)
         p1, l1 = self._panel("Derniers versements")
         self.payments_table = self._table(["Date", "Nom", "Scolarité", "Cantine", "Transport"], stretch_column=1)
         l1.addWidget(self.payments_table)
+        p1.setVisible(self.show_versements)
         row.addWidget(p1, 2)
         p2, l2 = self._panel("Dernières ventes")
         self.sales_table = self._table(["Date", "Article", "Qté", "Montant"], stretch_column=1)
         l2.addWidget(self.sales_table)
+        p2.setVisible(self.show_kiosque)
         row.addWidget(p2, 1)
-        self.layout.addLayout(row)
+        self.layout.addWidget(self.activity_row)
+        self.activity_row.setVisible(self.show_versements or self.show_kiosque)
 
     def _table(self, headers, stretch_column: int):
         table = QTableWidget(0, len(headers))
@@ -450,6 +472,9 @@ class DashboardV2View(QWidget):
         return table
 
     def refresh_data(self, *_):
+        self._refresh_permissions()
+        self._apply_permissions()
+
         period_key = self.PERIODS.get(self.period.currentText(), "year")
         data = DashboardV2Service.get_pilotage(period_key)
         self.activity_title.setText(f"INDICATEURS CLÉS · {self.period.currentText().upper()}")
@@ -457,25 +482,52 @@ class DashboardV2View(QWidget):
             f"Année scolaire {DashboardService.get_active_school_year_label()}  ·  "
             f"{AppSession.get_logged_in_username()}  ·  dernière actualisation {datetime.now():%H:%M}"
         )
-        for key in ("scolarite", "cantine", "transport"):
-            self.recovery_cards[key].set_data(data[key])
+        if self.show_scolarite and self.show_versements:
+            for key in ("scolarite", "cantine", "transport"):
+                self.recovery_cards[key].set_data(data[key])
         period_note = self.period.currentText().lower()
-        new_label = "nouvel élève" if data["nouveaux"] == 1 else "nouveaux élèves"
-        class_label = "classe" if data["classes"] == 1 else "classes"
-        self.metrics["inscrits"].set_data(
-            str(data["inscrits"]),
-            f"{data['nouveaux']} {new_label} · {data['classes']} {class_label}",
-        )
-        solde_note = "Situation positive" if data["solde"] >= 0 else "Dépenses supérieures aux recettes"
-        self.metrics["solde"].set_data(_money(data["solde"]), solde_note)
-        self.metrics["recettes"].set_data(_money(data["recettes"]), f"Sur {period_note} · {data['operations']} opérations")
-        self.metrics["depenses"].set_data(_money(data["depenses"]), f"Sur {period_note}")
-        self.metrics["kiosque"].set_data(_money(data["kiosque"]), f"Sur {period_note}")
-        self.metrics["stock"].set_data(_money(data["stock_value"]), f"{data['ruptures']} article(s) en rupture")
-        self.metrics["autres"].set_data(_money(data["autres"]), f"Sur {period_note}")
-        self.metrics["reductions"].set_data(_money(data["reductions"]), f"Sur {period_note}")
-        self._fill_table(self.payments_table, DashboardService.get_latest_versements(), ["date", "eleve", "scolarite", "cantine", "transport"])
-        self._fill_table(self.sales_table, DashboardService.get_latest_ventes(), ["date", "article", "quantite", "montant"])
+        if self.show_scolarite:
+            new_label = "nouvel élève" if data["nouveaux"] == 1 else "nouveaux élèves"
+            class_label = "classe" if data["classes"] == 1 else "classes"
+            self.metrics["inscrits"].set_data(
+                str(data["inscrits"]),
+                f"{data['nouveaux']} {new_label} · {data['classes']} {class_label}",
+            )
+        if self.show_comptabilite:
+            solde_note = "Situation positive" if data["solde"] >= 0 else "Dépenses supérieures aux recettes"
+            self.metrics["solde"].set_data(_money(data["solde"]), solde_note)
+            self.metrics["recettes"].set_data(_money(data["recettes"]), f"Sur {period_note} · {data['operations']} opérations")
+            self.metrics["depenses"].set_data(_money(data["depenses"]), f"Sur {period_note}")
+        if self.show_kiosque:
+            self.metrics["kiosque"].set_data(_money(data["kiosque"]), f"Sur {period_note}")
+            self.metrics["stock"].set_data(_money(data["stock_value"]), f"{data['ruptures']} article(s) en rupture")
+        if self.show_versements:
+            self.metrics["autres"].set_data(_money(data["autres"]), f"Sur {period_note}")
+            self.metrics["reductions"].set_data(_money(data["reductions"]), f"Sur {period_note}")
+            self._fill_table(self.payments_table, DashboardService.get_latest_versements(), ["date", "eleve", "scolarite", "cantine", "transport"])
+        if self.show_kiosque:
+            self._fill_table(self.sales_table, DashboardService.get_latest_ventes(), ["date", "article", "quantite", "montant"])
+
+    def _apply_permissions(self):
+        recovery_visible = self.show_scolarite and self.show_versements
+        self.recovery_title.setVisible(recovery_visible)
+        self.recovery_row.setVisible(recovery_visible)
+
+        self.metrics["inscrits"].setVisible(self.show_scolarite)
+        self.metrics["recettes"].setVisible(self.show_comptabilite)
+        self.metrics["depenses"].setVisible(self.show_comptabilite)
+        self.metrics["solde"].setVisible(self.show_comptabilite)
+        self.metrics["kiosque"].setVisible(self.show_kiosque)
+        self.metrics["stock"].setVisible(self.show_kiosque)
+        self.metrics["autres"].setVisible(self.show_versements)
+        self.metrics["reductions"].setVisible(self.show_versements)
+        self.secondary_title.setVisible(self.show_kiosque or self.show_versements)
+
+        payments_panel = self.payments_table.parentWidget()
+        sales_panel = self.sales_table.parentWidget()
+        payments_panel.setVisible(self.show_versements)
+        sales_panel.setVisible(self.show_kiosque)
+        self.activity_row.setVisible(self.show_versements or self.show_kiosque)
 
     def _fill_table(self, table, rows, keys):
         table.setRowCount(len(rows))

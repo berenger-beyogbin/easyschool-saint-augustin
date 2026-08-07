@@ -390,6 +390,45 @@ QDateEdit::down-arrow {{
     width: 12px;
     height: 8px;
 }}
+QCalendarWidget QWidget {{
+    background-color: {COLORS['card']};
+    color: {COLORS['text']};
+}}
+QCalendarWidget QToolButton {{
+    background-color: {COLORS['card']};
+    color: {COLORS['text']};
+    font-weight: bold;
+    font-size: 13px;
+    icon-size: 16px, 16px;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+}}
+QCalendarWidget QToolButton:hover {{
+    background-color: {COLORS['surface_soft']};
+}}
+QCalendarWidget QToolButton::menu-indicator {{
+    image: none;
+}}
+QCalendarWidget QMenu {{
+    background-color: {COLORS['card']};
+    color: {COLORS['text']};
+}}
+QCalendarWidget QSpinBox {{
+    background-color: {COLORS['card']};
+    color: {COLORS['text']};
+    selection-background-color: {COLORS['primary']};
+    selection-color: white;
+}}
+QCalendarWidget QAbstractItemView:enabled {{
+    background-color: {COLORS['card']};
+    color: {COLORS['text']};
+    selection-background-color: {COLORS['primary']};
+    selection-color: white;
+}}
+QCalendarWidget QAbstractItemView:disabled {{
+    color: #C0C0C0;
+}}
 """
 
 # ---------------------------------------------------------------------------

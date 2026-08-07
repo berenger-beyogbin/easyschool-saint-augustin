@@ -107,13 +107,12 @@ def _make_field_group(label_text: str, widget) -> QVBoxLayout:
 
 
 def _make_panel(accent_color: str) -> tuple:
-    """Retourne (QFrame card, QVBoxLayout content) avec top-accent + ombre."""
+    """Retourne (QFrame card, QVBoxLayout content) avec ombre."""
     card = QFrame()
     card.setStyleSheet(f"""
         QFrame {{
             background-color: {COLORS['card']};
             border: 1px solid {COLORS['border']};
-            border-top: 3px solid {accent_color};
             border-radius: 10px;
         }}
     """)

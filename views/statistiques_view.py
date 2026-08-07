@@ -7,6 +7,7 @@ from views.stat_nouveaux_view import StatNouveauxView
 from views.stat_scolarite_view import StatScolariteView
 from views.stat_cantine_view import StatCantineView
 from views.stat_transport_view import StatTransportView
+from views.stat_versements_periode_view import StatVersementsPeriodeView
 from views.stat_vente_view import StatVenteView
 from views.stat_stock_view import StatStockView
 from views.stat_prestataire_view import StatPrestatairesView
@@ -35,6 +36,7 @@ class StatistiquesView(QWidget):
         self.view_scolarite    = StatScolariteView(self.main_window)
         self.view_cantine      = StatCantineView(self.main_window)
         self.view_transport    = StatTransportView(self.main_window)
+        self.view_versements_periode = StatVersementsPeriodeView(self.main_window)
         self.view_vente        = StatVenteView(self.main_window)
         self.view_stock        = StatStockView(self.main_window)
         self.view_prestataires = StatPrestatairesView(self.main_window)
@@ -45,6 +47,7 @@ class StatistiquesView(QWidget):
         self.tabs.addTab(self.view_scolarite,    "Scolarité")
         self.tabs.addTab(self.view_cantine,      "Cantine")
         self.tabs.addTab(self.view_transport,    "Transport")
+        self.tabs.addTab(self.view_versements_periode, "État Périodique")
         self.tabs.addTab(self.view_vente,        "Vente")
         self.tabs.addTab(self.view_stock,        "Stock")
         self.tabs.addTab(self.view_prestataires, "Prestataires")
@@ -52,7 +55,7 @@ class StatistiquesView(QWidget):
 
         from app.session import AppSession
         self.tabs.setTabVisible(
-            7,
+            8,
             AppSession.has_permission("PRESTATIONS_VIEW")
             or AppSession.has_permission("PRESTATIONS_MODIFIER")
         )
