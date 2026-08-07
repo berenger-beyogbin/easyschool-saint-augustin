@@ -90,7 +90,17 @@ def test_authenticate_wrong_password(db_session):
 def test_authenticate_unknown_login(db_session):
     ok, msg, user_data = UtilisateurService.authenticate("inconnu", "secret123")
     assert ok is False
-    assert "inconnu" in msg.lower()
+    assert "incorrect" in msg.lower()
+
+
+def test_authenticate_unknown_login_and_wrong_password_give_same_message(db_session):
+    id_profil = _make_profil(db_session)
+    UtilisateurService.create({
+        "Login": "jdupont", "Nom": "Dupont", "Password": "secret123", "IDProfil": id_profil,
+    })
+    _, msg_unknown, _ = UtilisateurService.authenticate("inconnu", "secret123")
+    _, msg_wrong, _ = UtilisateurService.authenticate("jdupont", "wrong")
+    assert msg_unknown == msg_wrong
 
 
 def test_authenticate_inactive_account_is_rejected(db_session):
@@ -119,22 +129,36 @@ def test_create_user_rejects_password_without_digit(db_session):
     assert "lettre et un chiffre" in msg
 
 
-def test_seed_default_admin_requires_password_change_without_exposing_password(db_session, capsys):
+def test_seed_default_admin_requires_password_change_without_exposing_password(db_session, capsys, monkeypatch):
+    monkeypatch.setenv("EASY_SCHOOL_DEFAULT_ADMIN_PASSWORD", "InitTemp2026!")
     _make_profil(db_session, code="ADMIN", is_admin=True)
 
     UtilisateurService.seed_default_admin()
 
     captured = capsys.readouterr()
-    assert "admin123" not in captured.out
+    assert "InitTemp2026!" not in captured.out
 
     db_session.expire_all()
     admin = db_session.query(Utilisateur).filter_by(Login="admin").first()
     assert admin is not None
     assert admin.MustChangePassword is True
 
-    ok, msg, user_data = UtilisateurService.authenticate("admin", "admin123")
+    ok, msg, user_data = UtilisateurService.authenticate("admin", "InitTemp2026!")
     assert ok is True
     assert user_data["MustChangePassword"] is True
+
+
+def test_seed_default_admin_without_env_var_generates_random_password_and_prints_it(db_session, capsys, monkeypatch):
+    monkeypatch.delenv("EASY_SCHOOL_DEFAULT_ADMIN_PASSWORD", raising=False)
+    _make_profil(db_session, code="ADMIN", is_admin=True)
+
+    UtilisateurService.seed_default_admin()
+
+    captured = capsys.readouterr()
+    assert "genere aleatoirement" in captured.out
+
+    ok, msg, user_data = UtilisateurService.authenticate("admin", "admin123")
+    assert ok is False
 
 
 def test_change_password_clears_required_change_flag(db_session):

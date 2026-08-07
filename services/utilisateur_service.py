@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import os
+import secrets
 from datetime import datetime
 from app.database import get_session
 from app.session import AppSession
@@ -55,9 +56,17 @@ class UtilisateurService:
             admin_profil = session.query(Profil).filter_by(Code="ADMIN").first()
             if not admin_profil:
                 return
+            default_password = os.environ.get("EASY_SCHOOL_DEFAULT_ADMIN_PASSWORD")
+            if not default_password:
+                default_password = secrets.token_urlsafe(12)
+                print(
+                    f"ATTENTION : EASY_SCHOOL_DEFAULT_ADMIN_PASSWORD non defini. "
+                    f"Mot de passe admin genere aleatoirement : {default_password} "
+                    f"(a noter immediatement, changement obligatoire a la premiere connexion)."
+                )
             admin = Utilisateur(
                 Login="admin",
-                MotDePasseHash=_hash_password(os.environ.get("EASY_SCHOOL_DEFAULT_ADMIN_PASSWORD", "admin123")),
+                MotDePasseHash=_hash_password(default_password),
                 Nom="Administrateur",
                 Prenoms="Système",
                 IDProfil=admin_profil.IDProfil,
@@ -89,11 +98,11 @@ class UtilisateurService:
                 .first()
             )
             if not user:
-                return False, "Identifiant inconnu.", None
+                return False, "Identifiant ou mot de passe incorrect.", None
             if not user.IsActive:
                 return False, "Ce compte est désactivé. Contactez l'administrateur.", None
             if not _verify_password(password, user.MotDePasseHash):
-                return False, "Mot de passe incorrect.", None
+                return False, "Identifiant ou mot de passe incorrect.", None
 
             user.DernierAcces = datetime.now()
             session.commit()

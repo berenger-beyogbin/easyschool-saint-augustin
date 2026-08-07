@@ -185,7 +185,7 @@ def test_delete_inscription_blocked_when_versement_exists(db_session):
     _set_versements_permission_user()
     ok, msg, versement_id = VersementService.create_versement(
         annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
-        date.today(), m_scol=10000, m_trans=0, m_cant=0,
+        date.today(), m_scol=10000, m_trans=0, m_cant=0, m_autres=0,
     )
     assert ok is True, msg
 
@@ -244,7 +244,7 @@ def test_update_inscription_recalculates_ventilation_after_niveau_change(db_sess
     _set_versements_permission_user()
     ok, msg, _ = VersementService.create_versement(
         annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
-        date.today(), m_scol=100000, m_trans=0, m_cant=0,
+        date.today(), m_scol=100000, m_trans=0, m_cant=0, m_autres=0,
     )
     assert ok is True, msg
 
@@ -283,7 +283,7 @@ def test_update_inscription_warns_on_trop_percu_after_niveau_change(db_session):
     _set_versements_permission_user()
     ok, msg, _ = VersementService.create_versement(
         annee.IDTAnneeScolaire, eleve.IDEleve, famille.IdTFamille,
-        date.today(), m_scol=100000, m_trans=0, m_cant=0,
+        date.today(), m_scol=100000, m_trans=0, m_cant=0, m_autres=0,
     )
     assert ok is True, msg
 
