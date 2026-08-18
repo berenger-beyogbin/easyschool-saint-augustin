@@ -14,6 +14,7 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
@@ -22,6 +23,7 @@ class StatistiquesService:
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
                                           .join(TNiveau, TInscription.IDNiveau == TNiveau.IDT_Niveau)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe), joinedload(TInscription.niveau))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -58,12 +60,14 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee, TInscription.Nouveau == True)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -102,6 +106,7 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
@@ -141,6 +146,7 @@ class StatistiquesService:
             # 3. Récupérer les inscriptions
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe), joinedload(TInscription.famille))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -208,6 +214,7 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
@@ -229,6 +236,7 @@ class StatistiquesService:
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee, TInscription.Cantine == True)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -277,6 +285,7 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
@@ -298,6 +307,7 @@ class StatistiquesService:
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee, TInscription.Transport == True)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -449,12 +459,14 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe), joinedload(TInscription.famille))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)

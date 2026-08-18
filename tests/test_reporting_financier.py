@@ -184,3 +184,53 @@ def test_statistics_ignore_cancelled_payments_in_all_payment_reports(db_session)
     assert cantine["Reste"] == 18_000
     assert transport["MontantVerse"] == 3_000
     assert transport["Reste"] == 12_000
+
+
+def test_get_inscrits_returns_eleve_classe_niveau_details(db_session):
+    annee, niveau, famille, eleve = _setup_reporting(db_session)
+
+    inscrits = StatistiquesService.get_inscrits()
+
+    assert inscrits == [{
+        "DateInscription": date.today(),
+        "Matricule": "REPORT1",
+        "Nom": "Kouassi",
+        "Prenoms": "Jean",
+        "DateNaissance": date(2015, 1, 1),
+        "LibClasse": "CM2 A",
+        "LibNiveau": "CM2",
+    }]
+
+
+def test_get_nouveaux_inscrits_filters_on_nouveau_flag(db_session):
+    annee = make_annee(db_session)
+    niveau, classe = make_niveau_classe(db_session, annee)
+    famille = make_famille(db_session)
+    eleve_nouveau = make_eleve(db_session, famille, matricule="NEW1", nom="Nouveau")
+    eleve_ancien = make_eleve(db_session, famille, matricule="OLD1", nom="Ancien")
+    make_inscription(db_session, annee, famille, eleve_nouveau, niveau, classe, nouveau=True)
+    make_inscription(db_session, annee, famille, eleve_ancien, niveau, classe, nouveau=False)
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+
+    nouveaux = StatistiquesService.get_nouveaux_inscrits()
+
+    assert len(nouveaux) == 1
+    assert nouveaux[0]["Matricule"] == "NEW1"
+    assert nouveaux[0]["Nom"] == "Nouveau"
+
+
+def test_get_liste_alphabetique_includes_famille_contact(db_session):
+    annee, niveau, famille, eleve = _setup_reporting(db_session)
+
+    liste = StatistiquesService.get_liste_alphabetique()
+
+    assert liste == [{
+        "Matricule": "REPORT1",
+        "Nom": "Kouassi",
+        "Prenoms": "Jean",
+        "DateNaissance": date(2015, 1, 1),
+        "Sexe": 1,
+        "LibClasse": "CM2 A",
+        "Profession": None,
+        "Telephone": "0700000000",
+    }]
