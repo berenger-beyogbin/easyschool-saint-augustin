@@ -52,6 +52,16 @@ class StatCantineView(QWidget):
         self.cmb_classe.setStyleSheet(COMBO_STYLE)
         self.cmb_classe.setMinimumWidth(150)
 
+        lbl_etat = QLabel("État :")
+        lbl_etat.setStyleSheet(lbl_style)
+        self.cmb_etat = QComboBox()
+        self.cmb_etat.setStyleSheet(COMBO_STYLE)
+        self.cmb_etat.setMinimumWidth(130)
+        self.cmb_etat.addItem("-- Tous les états --", None)
+        self.cmb_etat.addItem("Payé", "Payé")
+        self.cmb_etat.addItem("Partiel", "Partiel")
+        self.cmb_etat.addItem("Impayé", "Impayé")
+
         self.btn_afficher = QPushButton("Afficher")
         self.btn_afficher.setStyleSheet(BUTTON_PRIMARY)
         self.btn_afficher.clicked.connect(self.refresh_data)
@@ -64,6 +74,8 @@ class StatCantineView(QWidget):
         layout_filtres.addWidget(self.cmb_niveau)
         layout_filtres.addWidget(lbl_classe)
         layout_filtres.addWidget(self.cmb_classe)
+        layout_filtres.addWidget(lbl_etat)
+        layout_filtres.addWidget(self.cmb_etat)
         layout_filtres.addWidget(self.btn_afficher)
         layout_filtres.addWidget(self.btn_imprimer)
         layout_filtres.addStretch()
@@ -133,6 +145,9 @@ class StatCantineView(QWidget):
         id_classe = self.cmb_classe.currentData()
 
         data = StatistiquesService.get_etat_versements_cantine(id_niveau, id_classe)
+        etat_filtre = self.cmb_etat.currentData()
+        if etat_filtre:
+            data = [item for item in data if item["Etat"] == etat_filtre]
 
         self.table.setRowCount(0)
         self.table.setRowCount(len(data))
@@ -197,6 +212,9 @@ class StatCantineView(QWidget):
         id_niveau = self.cmb_niveau.currentData()
         id_classe = self.cmb_classe.currentData()
         data = StatistiquesService.get_etat_versements_cantine(id_niveau, id_classe)
+        etat_filtre = self.cmb_etat.currentData()
+        if etat_filtre:
+            data = [item for item in data if item["Etat"] == etat_filtre]
         if not data:
             QMessageBox.information(self, "Impression", "Aucune donnée à imprimer.")
             return

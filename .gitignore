@@ -46,6 +46,12 @@ logs/
 # Ne jamais versionner : contiennent noms, téléphones, matricules réels
 eleves_*.csv
 familles_*.csv
+inscriptions_*.csv
+utilisateurs_*.csv
+versements_*.csv
+
+# === OUTILS TEMPORAIRES CODEX ===
+.codex_tmp/
 
 # === TESTS ===
 .pytest_cache/

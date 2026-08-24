@@ -15,6 +15,16 @@ from openpyxl import Workbook
 
 from scripts.import_eleves import as_date, _valid_birthdate
 from scripts.import_familles import EXPECTED_HEADERS, main as import_familles_main
+from scripts.import_inscriptions import (
+    INSCRIPTION_HEADERS,
+    NIVEAU_CLASSE_HEADERS,
+    main as import_inscriptions_main,
+)
+from scripts.import_versements import (
+    VERSEMENTCANT_HEADERS,
+    VERSEMENTSCOL_HEADERS,
+    main as import_versements_main,
+)
 
 
 # ─── import_eleves.py : date de naissance future rejetee ──────────────────────
@@ -112,3 +122,59 @@ def test_import_familles_no_warning_when_email_valid(tmp_path):
     assert rc == 0
     content = warnings_path.read_text(encoding="utf-8-sig")
     assert "Yao Marie" not in content
+
+
+def _build_xlsx(path, headers, rows):
+    wb = Workbook()
+    ws = wb.active
+    ws.append(headers)
+    for row in rows:
+        ws.append([row.get(header, "") for header in headers])
+    wb.save(path)
+
+
+def _run_main(main, argv):
+    old_argv = sys.argv
+    sys.argv = argv
+    try:
+        return main()
+    finally:
+        sys.argv = old_argv
+
+
+def test_import_inscriptions_analyze_only_needs_no_database(tmp_path, capsys):
+    inscriptions = tmp_path / "inscriptions.xlsx"
+    classes = tmp_path / "classes.xlsx"
+    _build_xlsx(inscriptions, INSCRIPTION_HEADERS, [{"IDTInscription": 1, "IdClasse": 42}])
+    _build_xlsx(classes, NIVEAU_CLASSE_HEADERS, [{
+        "IDNiveau": 42, "Niv_Libelle": "CM2", "SINiveau": 0,
+    }])
+
+    rc = _run_main(import_inscriptions_main, [
+        "import_inscriptions.py", str(inscriptions), str(classes),
+        "--annee", "2026-2027", "--analyze-only",
+    ])
+
+    assert rc == 0
+    assert "Inscriptions lues : 1" in capsys.readouterr().out
+
+
+def test_import_versements_analyze_only_needs_no_database(tmp_path, capsys):
+    scol = tmp_path / "versements_scol.xlsx"
+    cant = tmp_path / "versements_cant.xlsx"
+    _build_xlsx(scol, VERSEMENTSCOL_HEADERS, [{
+        "IDVersementScol": 1, "DateVers": "01/09/2025",
+    }])
+    _build_xlsx(cant, VERSEMENTCANT_HEADERS, [{
+        "IDVersementCant": 2, "DateVers": "date-invalide",
+    }])
+
+    rc = _run_main(import_versements_main, [
+        "import_versements.py", str(scol), str(cant),
+        "--annee", "2026-2027", "--analyze-only",
+    ])
+
+    assert rc == 0
+    output = capsys.readouterr().out
+    assert "Lignes lues : 2" in output
+    assert "Dates absentes ou invalides : 1" in output

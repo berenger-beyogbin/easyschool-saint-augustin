@@ -237,8 +237,13 @@ class CaisseView(QWidget):
         self.table_eleves.setAlternatingRowColors(True)
         self.table_eleves.setStyleSheet(TABLE_STYLE)
         self.table_eleves.verticalHeader().setVisible(False)
-        self.table_eleves.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table_eleves.horizontalHeader().setHighlightSections(False)
+        eleves_header = self.table_eleves.horizontalHeader()
+        # Interactive (pas ResizeToContents) pendant le remplissage : un recalcul de
+        # largeur unique via resizeColumnsToContents() est bien moins coûteux qu'un
+        # recalcul à chaque setItem() sur des centaines de lignes.
+        eleves_header.setSectionResizeMode(QHeaderView.Interactive)
+        eleves_header.setSectionResizeMode(1, QHeaderView.Stretch)
+        eleves_header.setHighlightSections(False)
         self.table_eleves.setFixedHeight(155)
         self.table_eleves.setFrameShape(QFrame.NoFrame)
         self.table_eleves.setShowGrid(False)
@@ -471,6 +476,7 @@ class CaisseView(QWidget):
         total_layout.addWidget(self.row_tot_reduc)
         total_layout.addWidget(self.row_tot_rem)
         body_layout.addWidget(total_frame)
+        total_frame.setVisible(False)
 
         # Sections par rubrique
         self.fs_scol  = FinancialSection("Scolarité",  COLORS["primary"])
@@ -535,25 +541,30 @@ class CaisseView(QWidget):
         self.display_eleves(results)
 
     def display_eleves(self, items):
-        self.table_eleves.setRowCount(len(items))
-        count = len(items)
-        self.lbl_count.setText(f"{count} élève{'s' if count > 1 else ''}")
+        self.table_eleves.setUpdatesEnabled(False)
+        try:
+            self.table_eleves.setRowCount(len(items))
+            count = len(items)
+            self.lbl_count.setText(f"{count} élève{'s' if count > 1 else ''}")
 
-        for i, qi in enumerate(items):
-            m_mat    = qi.eleve.Matricule if qi.eleve else "—"
-            m_nom    = f"{qi.eleve.Nom if qi.eleve else ''} {qi.eleve.Prenoms if qi.eleve else ''}".strip()
-            m_classe = qi.classe.LibClasse if qi.classe else "Non défini"
-            m_cant   = "Oui" if qi.Cantine else "Non"
-            m_trans  = "Oui" if qi.Transport else "Non"
-            m_nouv   = "Oui" if qi.Nouveau else "Non"
+            for i, qi in enumerate(items):
+                m_mat    = qi.eleve.Matricule if qi.eleve else "—"
+                m_nom    = f"{qi.eleve.Nom if qi.eleve else ''} {qi.eleve.Prenoms if qi.eleve else ''}".strip()
+                m_classe = qi.classe.LibClasse if qi.classe else "Non défini"
+                m_cant   = "Oui" if qi.Cantine else "Non"
+                m_trans  = "Oui" if qi.Transport else "Non"
+                m_nouv   = "Oui" if qi.Nouveau else "Non"
 
-            for col, val in enumerate([m_mat, m_nom, m_classe, m_cant, m_trans, m_nouv]):
-                item = QTableWidgetItem(val)
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                if col == 0:
-                    item.setData(Qt.UserRole, (qi.IDEleve, qi.IDFamille))
-                self.table_eleves.setItem(i, col, item)
+                for col, val in enumerate([m_mat, m_nom, m_classe, m_cant, m_trans, m_nouv]):
+                    item = QTableWidgetItem(val)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if col == 0:
+                        item.setData(Qt.UserRole, (qi.IDEleve, qi.IDFamille))
+                    self.table_eleves.setItem(i, col, item)
                 self.table_eleves.setRowHeight(i, 34)
+            self.table_eleves.resizeColumnsToContents()
+        finally:
+            self.table_eleves.setUpdatesEnabled(True)
 
         self.selected_eleve_id = None
         self.selected_famille_id = None

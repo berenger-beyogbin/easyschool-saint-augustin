@@ -8,7 +8,14 @@ from .religion import TReligion
 from .famille import TFamille
 from .eleve import Eleve
 from .inscription import TInscription
+from .profil import Profil
+from .permission import Permission
+from .profil_permission import ProfilPermission
+from .utilisateur import Utilisateur
+from .prestataire import Prestataire
+from .prestation_annexe import PrestationAnnexe
 from .prestation_tarif_niveau import PrestationTarifNiveau
+from .ventilation_prestation import VentilationPrestation
 from .montant_scol import MontantScol
 from .montant_cantine import MontantCantine
 from .montant_transport import MontantTransport
@@ -38,7 +45,14 @@ __all__ = [
     "TFamille",
     "Eleve",
     "TInscription",
+    "Profil",
+    "Permission",
+    "ProfilPermission",
+    "Utilisateur",
+    "Prestataire",
+    "PrestationAnnexe",
     "PrestationTarifNiveau",
+    "VentilationPrestation",
     "MontantScol",
     "MontantCantine",
     "MontantTransport",

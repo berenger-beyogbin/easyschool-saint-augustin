@@ -150,6 +150,7 @@ def main() -> int:
     from sqlalchemy import select, text
     from sqlalchemy.exc import IntegrityError
     from app.database import get_session
+    import models  # noqa: F401 - enregistre tous les mappers SQLAlchemy avant usage
     from models.eleve import Eleve
     from models.famille import TFamille
     from models.nationalite import TNationalite

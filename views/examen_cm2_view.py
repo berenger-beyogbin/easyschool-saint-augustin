@@ -206,9 +206,11 @@ class ExamenCM2View(QWidget):
         self.table_eleves.setAlternatingRowColors(True)
         self.table_eleves.setStyleSheet(TABLE_STYLE)
         self.table_eleves.verticalHeader().setVisible(False)
-        self.table_eleves.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table_eleves.horizontalHeader().setHighlightSections(False)
-        self.table_eleves.setFixedHeight(280)
+        eleves_header = self.table_eleves.horizontalHeader()
+        eleves_header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        eleves_header.setSectionResizeMode(1, QHeaderView.Stretch)
+        eleves_header.setHighlightSections(False)
+        self.table_eleves.setFixedHeight(150)  # ~3 lignes visibles, defilement pour le reste
         self.table_eleves.setFrameShape(QFrame.NoFrame)
         self.table_eleves.setShowGrid(False)
         self.table_eleves.itemSelectionChanged.connect(self.on_eleve_selected)
@@ -310,24 +312,28 @@ class ExamenCM2View(QWidget):
         self.display_eleves(filtered)
 
     def display_eleves(self, items):
-        self.table_eleves.setRowCount(len(items))
-        count = len(items)
-        self.lbl_count.setText(f"{count} élève{'s' if count > 1 else ''}")
+        self.table_eleves.setUpdatesEnabled(False)
+        try:
+            self.table_eleves.setRowCount(len(items))
+            count = len(items)
+            self.lbl_count.setText(f"{count} élève{'s' if count > 1 else ''}")
 
-        for i, e in enumerate(items):
-            statut = "Payé" if e["paye"] else "Impayé"
-            vals = [e["matricule"], e["nom"], e["classe"], statut]
-            for col, val in enumerate(vals):
-                item = QTableWidgetItem(val)
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                if col == 0:
-                    item.setData(Qt.UserRole, e)
-                if col == 3:
-                    item.setForeground(
-                        Qt.GlobalColor.darkGreen if e["paye"] else Qt.GlobalColor.darkRed
-                    )
-                self.table_eleves.setItem(i, col, item)
-            self.table_eleves.setRowHeight(i, 34)
+            for i, e in enumerate(items):
+                statut = "Payé" if e["paye"] else "Impayé"
+                vals = [e["matricule"], e["nom"], e["classe"], statut]
+                for col, val in enumerate(vals):
+                    item = QTableWidgetItem(val)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if col == 0:
+                        item.setData(Qt.UserRole, e)
+                    if col == 3:
+                        item.setForeground(
+                            Qt.GlobalColor.darkGreen if e["paye"] else Qt.GlobalColor.darkRed
+                        )
+                    self.table_eleves.setItem(i, col, item)
+                self.table_eleves.setRowHeight(i, 34)
+        finally:
+            self.table_eleves.setUpdatesEnabled(True)
 
         # clearSelection() est indispensable : sans elle, la ligne selectionnee
         # avant un rechargement reste "selectionnee" au niveau du modele Qt meme

@@ -14,6 +14,8 @@ import argparse
 import csv
 import re
 import sys
+import tempfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -94,7 +96,25 @@ def choose_phone(row: dict[str, Any]) -> str:
     return father or mother or clean(row.get("ContactUrgence"))
 
 
+def repaired_workbook(source: Path, temp_dir: Path) -> Path:
+    """Corrige dans une copie temporaire la faute XML `biltinId` de l'export."""
+    repaired = temp_dir / "familles_repare.xlsx"
+    with zipfile.ZipFile(source, "r") as incoming, zipfile.ZipFile(repaired, "w") as outgoing:
+        for item in incoming.infolist():
+            data = incoming.read(item.filename)
+            if item.filename == "xl/styles.xml":
+                data = data.replace(b"biltinId", b"builtinId")
+            outgoing.writestr(item, data)
+    return repaired
+
+
 def read_rows(path: Path) -> tuple[list[tuple[int, dict[str, Any]]], list[str]]:
+    with tempfile.TemporaryDirectory(prefix="easy_school_familles_") as folder:
+        repaired = repaired_workbook(path, Path(folder))
+        return _read_rows(repaired)
+
+
+def _read_rows(path: Path) -> tuple[list[tuple[int, dict[str, Any]]], list[str]]:
     workbook = load_workbook(path, read_only=True, data_only=True)
     sheet = workbook.active
     iterator = sheet.iter_rows(values_only=True)
@@ -215,6 +235,7 @@ def main() -> int:
     from sqlalchemy.exc import IntegrityError
 
     from app.database import get_session
+    import models  # noqa: F401 - enregistre tous les mappers SQLAlchemy avant usage
     from models.famille import TFamille
 
     session = get_session()
