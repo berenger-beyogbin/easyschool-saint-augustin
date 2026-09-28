@@ -253,3 +253,10 @@ class TransportStatPrinter(CantineStatPrinter):
     """Impression A4 paysage de l'état des versements de transport."""
 
     TITRE = "ETAT DES VERSEMENTS DU TRANSPORT"
+
+
+class InternatStatPrinter(CantineStatPrinter):
+    """Impression A4 paysage de l'état financier de l'internat."""
+
+    TITRE = "ETAT DES VERSEMENTS DE L'INTERNAT"
+    COL_HEADERS = ["N°", "Matricule", "Pensionnaires", "Classe / origine", "Montant dû", "Versé", "Reste", "État"]

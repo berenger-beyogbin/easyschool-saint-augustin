@@ -69,6 +69,11 @@ QComboBox QAbstractItemView {{
     border-radius: 4px;
     padding: 2px;
 }}
+QComboBox QAbstractItemView::item:hover,
+QComboBox QAbstractItemView::item:selected {{
+    background-color: {COLORS['selection']};
+    color: {COLORS['text']};
+}}
 QComboBox:disabled {{
     background-color: {COLORS['surface_soft']};
     color: #9CA3AF;

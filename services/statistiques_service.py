@@ -37,7 +37,7 @@ class StatistiquesService:
             for ins in results:
                 lst.append({
                     "DateInscription": ins.DateInscription,
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": ins.eleve.Nom,
                     "Prenoms": ins.eleve.Prenoms,
                     "DateNaissance": ins.eleve.DateNaissance,
@@ -83,7 +83,7 @@ class StatistiquesService:
             for ins in results:
                 lst.append({
                     "DateInscription": ins.DateInscription,
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": ins.eleve.Nom,
                     "Prenoms": ins.eleve.Prenoms,
                     "DateNaissance": ins.eleve.DateNaissance,
@@ -156,24 +156,18 @@ class StatistiquesService:
             q = q.order_by(TClasse.LibClasse, Eleve.Nom, Eleve.Prenoms)
             inscriptions = q.all()
 
-            # Rangs par famille pour la regle 3e enfant (centralise : TarificationService)
-            rang_par_eleve = TarificationService.get_rangs_famille_par_eleve(session, id_annee)
-
             lst = []
             for ins in inscriptions:
                 # Calcul montant du (regles centralisees : TarificationService)
                 scol_due = 0.0
                 if ins.Scolarite:
                     m_scol = montants_map.get(ins.IDNiveau)
-                    rang, nb_famille = rang_par_eleve.get(ins.IDEleve, (1, 1))
-                    scol_due = TarificationService.calculer_scolarite_due(
-                        montant_affecte=m_scol.MontantAffecte if m_scol else 0,
-                        montant_non_affecte=m_scol.MontantNonAffecte if m_scol else 0,
-                        statut_affectation=ins.StatutAffectation,
-                        ebrie_abobote=bool(ins.famille and ins.famille.EbrieAbobote),
-                        nouveau=bool(ins.Nouveau),
-                        rang_famille=rang,
-                        nb_enfants_famille=nb_famille,
+                    scol_due = float(ins.MontantScolariteApplique) if ins.MontantScolariteApplique is not None else (
+                        TarificationService.calculer_scolarite_due(
+                            montant_affecte=m_scol.MontantAffecte if m_scol else 0,
+                            montant_non_affecte=m_scol.MontantNonAffecte if m_scol else 0,
+                            statut_affectation=ins.StatutAffectation,
+                        )
                     )
 
                 scol_vers  = versements_map.get(ins.IDEleve, 0.0)
@@ -189,7 +183,7 @@ class StatistiquesService:
                     etat = "Impayé"
 
                 lst.append({
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": f"{ins.eleve.Nom} {ins.eleve.Prenoms}",
                     "LibClasse": ins.classe.LibClasse,
                     "MontantDu": scol_due,
@@ -261,7 +255,7 @@ class StatistiquesService:
                     etat = "Impayé"
 
                 lst.append({
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": f"{ins.eleve.Nom} {ins.eleve.Prenoms}",
                     "LibClasse": ins.classe.LibClasse,
                     "MontantDu": cant_due,
@@ -332,7 +326,7 @@ class StatistiquesService:
                     etat = "Impayé"
 
                 lst.append({
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": f"{ins.eleve.Nom} {ins.eleve.Prenoms}",
                     "LibClasse": ins.classe.LibClasse,
                     "MontantDu": trans_due,
@@ -480,7 +474,7 @@ class StatistiquesService:
             for ins in results:
                 famille = ins.famille
                 lst.append({
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": ins.eleve.Nom,
                     "Prenoms": ins.eleve.Prenoms,
                     "DateNaissance": ins.eleve.DateNaissance,
@@ -548,6 +542,101 @@ class StatistiquesService:
             return []
         finally:
             session.close()
+
+    @staticmethod
+    def get_etat_versements_internat() -> List[dict]:
+        """Retourne l'état financier de chaque pensionnaire de l'année active."""
+        id_annee = AppSession.get_active_annee_id()
+        if not id_annee:
+            return []
+
+        session = get_session()
+        try:
+            from models.classe import TClasse
+            from models.eleve import Eleve
+            from models.inscription import TInscription
+            from models.internat import InscriptionInternat, VersementInternat
+
+            versements = session.query(
+                VersementInternat.IDInscriptionInternat.label("id_internat"),
+                func.sum(VersementInternat.Montant).label("total_verse"),
+            ).filter(
+                VersementInternat.Annule.is_(False)
+            ).group_by(VersementInternat.IDInscriptionInternat).subquery()
+
+            rows = session.query(
+                InscriptionInternat,
+                Eleve,
+                TClasse.LibClasse,
+                func.coalesce(versements.c.total_verse, 0),
+            ).join(
+                Eleve, InscriptionInternat.IDEleve == Eleve.IDEleve
+            ).outerjoin(
+                TInscription,
+                InscriptionInternat.IDTInscription == TInscription.IDTInscription,
+            ).outerjoin(
+                TClasse, TInscription.IDClasse == TClasse.IDTClasse,
+            ).outerjoin(
+                versements,
+                versements.c.id_internat == InscriptionInternat.IDInscriptionInternat,
+            ).filter(
+                InscriptionInternat.IDTAnneeScolaire == id_annee
+            ).order_by(Eleve.Nom, Eleve.Prenoms).all()
+
+            result = []
+            for internat, eleve, classe, total_verse in rows:
+                montant_du = float(internat.MontantAnnuel or 0)
+                montant_verse = float(total_verse or 0)
+                reste = max(0.0, montant_du - montant_verse)
+                etat = "Payé" if montant_du > 0 and reste <= 0 else (
+                    "Partiel" if montant_verse > 0 else "Impayé"
+                )
+                origine = "Collège" if internat.OrigineScolaire == "COLLEGE" else "Externe"
+                lib_classe = classe or internat.ClasseFrequentee or origine
+                result.append({
+                    "Matricule": eleve.Matricule,
+                    "Nom": f"{eleve.Nom} {eleve.Prenoms}",
+                    "LibClasse": lib_classe,
+                    "Origine": origine,
+                    "Type": "Nouvelle" if internat.TypePensionnaire == "NOUVELLE" else "Renouvellement",
+                    "MontantDu": montant_du,
+                    "MontantVerse": montant_verse,
+                    "Reste": reste,
+                    "Etat": etat,
+                })
+            return result
+        except Exception as e:
+            print(f"Error in get_etat_versements_internat: {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_etat_periodique(date_debut: Optional[datetime.date] = None, date_fin: Optional[datetime.date] = None) -> List[dict]:
+        """Retourne le récapitulatif des encaissements par rubrique sur une période donnée."""
+        id_annee = AppSession.get_active_annee_id()
+        if not id_annee:
+            return []
+
+        try:
+            from app.config import Config
+            from services.comptabilite_service import ComptabiliteService
+
+            totaux = ComptabiliteService.get_totaux_entrees_rubriques(id_annee, date_debut, date_fin)
+
+            lignes = [("Scolarité", totaux.get("scolarite", 0.0))]
+            if Config.ENABLE_CANTINE:
+                lignes.append(("Cantine", totaux.get("cantine", 0.0)))
+            if Config.ENABLE_TRANSPORT:
+                lignes.append(("Transport", totaux.get("transport", 0.0)))
+            lignes.append(("Autres frais annexes", totaux.get("autres", 0.0)))
+            lignes.append(("Internat", totaux.get("internat", 0.0)))
+            lignes.append(("Vente Kiosque", totaux.get("vente", 0.0)))
+
+            return [{"Rubrique": lib, "Montant": montant} for lib, montant in lignes]
+        except Exception as e:
+            print(f"Error in get_etat_periodique: {e}")
+            return []
 
     @staticmethod
     def format_fcfa(montant: Any) -> str:
