@@ -12,6 +12,7 @@ from models.sortie_fin import SortieFin
 from models.annee_scolaire import TAnneeScolaire
 from models.versement_scol import VersementScol
 from models.vente import Vente
+from models.internat import InscriptionInternat, VersementInternat
 import logging
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ _SYSCOA_RUBRIQUE = {
     "7043": "cantine",
     "7044": "vente",
     "7045": "autres",
+    "7046": "internat",
 }
 
 class ComptabiliteService:
@@ -360,7 +362,7 @@ class ComptabiliteService:
                     "Solde": float(cred - deb)
                 })
 
-            # Injecter les entrées (VersementScol + Vente) dans les comptes SYSCOA 7041-7044
+            # Injecter les recettes automatiques dans les comptes de produits SYSCOA.
             entrees = ComptabiliteService.get_totaux_entrees_rubriques(id_annee, date_debut, date_fin)
             for item in balance_list:
                 rubrique = _SYSCOA_RUBRIQUE.get(item["NumCompte"])
@@ -414,9 +416,30 @@ class ComptabiliteService:
             vente_row = q_vente.first()
             vente = float(vente_row[0]) if vente_row else 0.0
 
-            return {"scolarite": scol, "transport": trans, "cantine": cant, "vente": vente, "autres": autres}
+            q_internat = session.query(
+                func.coalesce(func.sum(VersementInternat.Montant), 0)
+            ).join(
+                InscriptionInternat,
+                VersementInternat.IDInscriptionInternat == InscriptionInternat.IDInscriptionInternat,
+            ).filter(
+                InscriptionInternat.IDTAnneeScolaire == id_annee,
+                VersementInternat.Annule == False,
+            )
+            if date_debut:
+                q_internat = q_internat.filter(VersementInternat.DateVersement >= date_debut)
+            if date_fin:
+                q_internat = q_internat.filter(VersementInternat.DateVersement <= date_fin)
+            internat = float(q_internat.scalar() or 0)
+
+            return {
+                "scolarite": scol, "transport": trans, "cantine": cant,
+                "vente": vente, "autres": autres, "internat": internat,
+            }
         except Exception:
             logger.exception("Erreur get_totaux_entrees_rubriques")
-            return {"scolarite": 0.0, "transport": 0.0, "cantine": 0.0, "vente": 0.0, "autres": 0.0}
+            return {
+                "scolarite": 0.0, "transport": 0.0, "cantine": 0.0,
+                "vente": 0.0, "autres": 0.0, "internat": 0.0,
+            }
         finally:
             session.close()

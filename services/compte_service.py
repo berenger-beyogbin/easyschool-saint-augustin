@@ -15,6 +15,7 @@ SYSCOA_INCOME_ACCOUNTS = {
     "7043": "CANTINE",
     "7044": "KIOSQUE",
     "7045": "AUTRES FRAIS",
+    "7046": "PENSION INTERNAT",
 }
 
 class CompteService:
@@ -124,7 +125,7 @@ class CompteService:
 
     @staticmethod
     def seed_comptes_syscoa() -> None:
-        """Crée les comptes de produits SYSCOA (7041-7045) s'ils n'existent pas déjà."""
+        """Crée les comptes de produits SYSCOA (7041-7046) s'ils n'existent pas déjà."""
         session = get_session()
         try:
             for num, lib in SYSCOA_INCOME_ACCOUNTS.items():

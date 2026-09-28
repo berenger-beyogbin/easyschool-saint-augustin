@@ -21,6 +21,8 @@ from .comptabilite_view import ComptabiliteView
 from .statistiques_view import StatistiquesView
 from .dashboard_view import DashboardView
 from .utilisateurs_view import UtilisateursView
+from .internat_view import InternatView
+from .cantine_externe_view import CantineExterneView
 
 from app.styles import (
     COLORS, SIDEBAR_MENU_STYLE, TAB_STYLE, COMBO_STYLE, BUTTON_SECONDARY
@@ -32,7 +34,11 @@ from app.version import __version__
 class MainWindow(QMainWindow):
     """Fenêtre principale Easy School 2.0 — Template UI Moderne."""
 
-    # (label, code_permission) — ordre original figé pour les icônes
+    # (label, code_permission) — ordre original figé pour les icônes, titres
+    # de la topbar (navigation_menu_changed) et routage vers self.stack.
+    # Ne pas reordonner cette liste : c'est l'index dans MENU_ITEMS (orig_idx)
+    # qui sert de clé partout ailleurs. Pour changer l'ordre d'AFFICHAGE dans
+    # la sidebar, modifier MENU_DISPLAY_ORDER ci-dessous, pas cette liste.
     MENU_ITEMS = [
         ("Tableau de bord", "DASHBOARD_VIEW"),
         ("Scolarité",       "SCOLARITE_VIEW"),
@@ -42,7 +48,13 @@ class MainWindow(QMainWindow):
         ("SMS",             "SMS_VIEW"),
         ("Paramètres",      "PARAMETRES_VIEW"),
         ("Utilisateurs",    "UTILISATEURS_VIEW"),
+        ("Internat",        "INTERNAT_VIEW"),
+        ("Cantine",         "CANTINE_EXTERNE_VIEW"),
     ]
+
+    # Ordre d'affichage dans la sidebar, par index MENU_ITEMS (orig_idx).
+    # Internat (8) et Cantine externe (9) sont places avant Comptabilite (3).
+    MENU_DISPLAY_ORDER = [0, 1, 2, 8, 9, 3, 4, 5, 6, 7]
 
     def __init__(self):
         super().__init__()
@@ -182,7 +194,8 @@ class MainWindow(QMainWindow):
         self.menu_list.setFocusPolicy(Qt.NoFocus)
         self.menu_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        for orig_idx, (label, perm) in enumerate(self.MENU_ITEMS):
+        for orig_idx in self.MENU_DISPLAY_ORDER:
+            label, perm = self.MENU_ITEMS[orig_idx]
             if AppSession.has_permission(perm):
                 item = QListWidgetItem(label)
                 item.setData(Qt.UserRole, orig_idx)
@@ -325,6 +338,14 @@ class MainWindow(QMainWindow):
         self.widget_utilisateurs = UtilisateursView(self)
         self.stack.addWidget(self.widget_utilisateurs)
 
+        # index 8: Internat
+        self.widget_internat = InternatView(self)
+        self.stack.addWidget(self.widget_internat)
+
+        # index 9: Cantine externe
+        self.widget_cantine_externe = CantineExterneView(self)
+        self.stack.addWidget(self.widget_cantine_externe)
+
         layout.addWidget(self.stack)
         return workspace
 
@@ -401,6 +422,8 @@ class MainWindow(QMainWindow):
             5: "SMS  ·  BIENTÔT",
             6: "PARAMÈTRES",
             7: "GESTION DES UTILISATEURS",
+            8: "INTERNAT FILLES D’ATTINGUIÉ",
+            9: "CANTINE",
         }
         label = titles.get(orig, "")
         primary_color = COLORS["primary"]
@@ -439,6 +462,12 @@ class MainWindow(QMainWindow):
             if hasattr(self.widget_utilisateurs, "refresh_data"):
                 self.widget_utilisateurs.refresh_data()
             self.stack.setCurrentIndex(7)
+        elif orig == 8:
+            self.widget_internat.refresh_data()
+            self.stack.setCurrentIndex(8)
+        elif orig == 9:
+            self.widget_cantine_externe.refresh_data()
+            self.stack.setCurrentIndex(9)
 
     def _open_printer_dialog(self):
         from views.imprimante_dialog import ImprimanteDialog
@@ -526,3 +555,5 @@ class MainWindow(QMainWindow):
             elif curr_idx == 4:
                 if hasattr(self.widget_comptabilite, "load_data"):
                     self.widget_comptabilite.load_data()
+            elif curr_idx == 8:
+                self.widget_internat.refresh_data()

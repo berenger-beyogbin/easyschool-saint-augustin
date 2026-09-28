@@ -262,5 +262,17 @@ class SidebarItemDelegate(QStyledItemDelegate):
             painter.drawEllipse(QRectF(cx - 4.0, cy - r + 1, 8, 8))
             painter.drawArc(QRectF(cx - r + 1, cy + 2, s - 3, r + 2), 0, 180 * 16)
 
+        elif row == 8:  # Internat — lit (pension)
+            painter.drawLine(QPointF(cx - r + 1, cy - r + 2), QPointF(cx - r + 1, cy + r - 1))
+            painter.drawRoundedRect(QRectF(cx - r + 1, cy - 1.0, s - 2, r - 1), 2.0, 2.0)
+            painter.drawRoundedRect(QRectF(cx - r + 3.0, cy - r + 4.0, 6.0, 4.5), 1.5, 1.5)
+            painter.drawLine(QPointF(cx + r - 1, cy + r - 4), QPointF(cx + r - 1, cy + r - 1))
+
+        elif row == 9:  # Cantine externe — plateau repas
+            painter.drawRoundedRect(QRectF(cx - r + 1, cy - r + 3, s - 2, s - 6), 2.0, 2.0)
+            painter.drawEllipse(QRectF(cx - 3.0, cy - 1.5, 6.0, 6.0))
+            painter.drawLine(QPointF(cx - r + 3, cy - r + 3), QPointF(cx - r + 3, cy - r + 1))
+            painter.drawLine(QPointF(cx + r - 3, cy - r + 3), QPointF(cx + r - 3, cy - r + 1))
+
     def sizeHint(self, option, index):
         return QSize(max(option.rect.width(), 200), self.ITEM_H)
