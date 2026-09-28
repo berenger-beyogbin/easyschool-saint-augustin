@@ -3,7 +3,20 @@ import logging.handlers
 import os
 import pathlib
 
-_LOG_DIR = pathlib.Path(__file__).parent.parent / "logs"
+def _get_log_dir() -> pathlib.Path:
+    """Retourne un dossier de logs accessible sans droits administrateur."""
+    if os.name == "nt":
+        base_dir = pathlib.Path(
+            os.environ.get("LOCALAPPDATA") or pathlib.Path.home() / "AppData" / "Local"
+        )
+    else:
+        base_dir = pathlib.Path(
+            os.environ.get("XDG_STATE_HOME") or pathlib.Path.home() / ".local" / "state"
+        )
+    return base_dir / "EasySchool" / "logs"
+
+
+_LOG_DIR = _get_log_dir()
 _LOG_FILE = _LOG_DIR / "easy_school.log"
 
 _configured = False

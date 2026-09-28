@@ -6,4 +6,4 @@ EasySchool.spec) -- les deux doivent rester synchronises a chaque bump de versio
 """
 
 APP_NAME = "Easy School"
-__version__ = "2.0.0"
+__version__ = "2.2.0"

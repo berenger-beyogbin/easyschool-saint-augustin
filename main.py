@@ -1,5 +1,18 @@
 import sys
 import os
+
+# Executable --windowed (console=False) : Windows ne fournit alors aucune
+# console, et sys.stdout/sys.stderr valent None. logging.StreamHandler()
+# (app/logging_config.py) et certains appels internes d'Alembic ecrivent
+# quand meme dessus lors de `EasySchool.exe --migrate` : sans ce
+# redirect, le processus se termine brutalement (pas d'exception Python
+# attrapable), avant meme que le message d'erreur soit journalise -- cause
+# du "la migration de la base a echoue" observe sans trace dans le log.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
+
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtGui import QPalette, QColor, QIcon
 
@@ -17,6 +30,27 @@ from views.first_run_setup_dialog import FirstRunSetupDialog
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def _run_packaged_migrations() -> int:
+    """Applique les migrations embarquées lors d'une mise à jour client."""
+    setup_logging()
+    try:
+        from alembic import command
+        from alembic.config import Config as AlembicConfig
+
+        bundle_dir = getattr(sys, "_MEIPASS", os.path.abspath(os.path.dirname(__file__)))
+        ini_path = os.path.join(bundle_dir, "alembic.ini")
+        migrations_path = os.path.join(bundle_dir, "migrations")
+        config = AlembicConfig(ini_path)
+        config.set_main_option("script_location", migrations_path.replace("\\", "/"))
+        logger.info("Mise à niveau de la base de données vers la dernière révision...")
+        command.upgrade(config, "head")
+        logger.info("Migration de la base de données terminée avec succès.")
+        return 0
+    except Exception:
+        logger.exception("Échec de la migration de mise à jour")
+        return 1
 
 
 def _apply_light_palette(app: QApplication) -> None:
@@ -72,6 +106,7 @@ def main():
         from services.profil_service import ProfilService
         from services.compte_service import CompteService
         PermissionService.seed_permissions()
+        PermissionService.backfill_stat_sub_permissions()
         ProfilService.seed_default_profiles()
         CompteService.seed_comptes_syscoa()
 
@@ -116,4 +151,6 @@ def main():
     sys.exit(app.exec())
 
 if __name__ == "__main__":
+    if "--migrate" in sys.argv:
+        sys.exit(_run_packaged_migrations())
     main()

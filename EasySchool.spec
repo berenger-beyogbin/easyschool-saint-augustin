@@ -5,8 +5,15 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets')],
-    hiddenimports=[],
+    datas=[
+        ('assets', 'assets'),
+        ('migrations', 'migrations'),
+        ('alembic.ini', '.'),
+    ],
+    # migrations/env.py est embarque comme donnee et n'est donc pas analyse
+    # par PyInstaller. Declarer explicitement ses imports de bibliotheque
+    # standard necessaires a l'execution de `EasySchool.exe --migrate`.
+    hiddenimports=['logging.config'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
