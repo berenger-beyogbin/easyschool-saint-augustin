@@ -1,13 +1,13 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QLineEdit,
     QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QMessageBox,
-    QHeaderView, QSpinBox, QFrame
+    QHeaderView, QSpinBox, QFrame, QInputDialog
 )
 from services.classe_service import ClasseService
 from services.niveau_service import NiveauService
 from app.styles import (
     COLORS, INPUT_STYLE, COMBO_STYLE, BUTTON_PRIMARY, BUTTON_SECONDARY, PAGE_TITLE_STYLE, apply_table_style,
-    configure_table_action_button, make_table_action_container
+    configure_table_action_button, make_table_action_container, MESSAGEBOX_STYLE
 )
 
 
@@ -75,7 +75,7 @@ class ClasseView(QWidget):
         lbl_nom = QLabel("3. Nom / Libellé de Classe * :")
         lbl_nom.setStyleSheet(lbl_style)
         self.txt_nom = QLineEdit()
-        self.txt_nom.setPlaceholderText("Ex : CP1 A, CE1 Rouge")
+        self.txt_nom.setPlaceholderText("Ex : 6E 1, 5E 2")
         self.txt_nom.setStyleSheet(INPUT_STYLE)
 
         lbl_capacite = QLabel("4. Capacité d'élèves :")
@@ -124,8 +124,8 @@ class ClasseView(QWidget):
 
         # Tableau récapitulatif
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Classe", "Cycle", "Niveau", "Capacité", "Supprimer"])
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["Classe", "Cycle", "Niveau", "Capacité", "Modifier", "Supprimer"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         apply_table_style(self.table)
         self.main_layout.addWidget(self.table)
@@ -185,14 +185,40 @@ class ClasseView(QWidget):
             self.table.setItem(i, 2, QTableWidgetItem(c["NiveauLibelle"]))
             self.table.setItem(i, 3, QTableWidgetItem(str(c["Capacite"])))
 
+            btn_modifier = QPushButton("Modifier")
+            configure_table_action_button(btn_modifier, "primary")
+            btn_modifier.clicked.connect(
+                lambda checked=False, id_c=c["IDTClasse"], lib=c["LibClasse"], cap=c["Capacite"]:
+                self.modifier_capacite(id_c, lib, cap)
+            )
+            self.table.setCellWidget(i, 4, make_table_action_container(btn_modifier))
+
             btn_suppr = QPushButton("Supprimer")
             configure_table_action_button(btn_suppr, "danger")
             btn_suppr.clicked.connect(
                 lambda checked=False, id_c=c["IDTClasse"], lib=c["LibClasse"]:
                 self.supprimer_classe(id_c, lib)
             )
-            self.table.setCellWidget(i, 4, make_table_action_container(btn_suppr))
+            self.table.setCellWidget(i, 5, make_table_action_container(btn_suppr))
             self.table.setRowHeight(i, 44)
+
+    def modifier_capacite(self, id_classe, libelle, capacite_actuelle):
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle(f"Modifier la capacité — {libelle}")
+        dialog.setLabelText("Nouvelle capacité d'accueil :")
+        dialog.setInputMode(QInputDialog.InputMode.IntInput)
+        dialog.setIntRange(1, 200)
+        dialog.setIntValue(capacite_actuelle)
+        dialog.setStyleSheet(MESSAGEBOX_STYLE)
+        if dialog.exec() != QInputDialog.DialogCode.Accepted:
+            return
+        nouvelle_capacite = dialog.intValue()
+        reussite, msg = ClasseService.update_capacite(id_classe, nouvelle_capacite)
+        if reussite:
+            QMessageBox.information(self, "Modification réussie", msg)
+            self.load_classes()
+        else:
+            QMessageBox.critical(self, "Erreur", msg)
 
     def supprimer_classe(self, id_classe, libelle):
         reponse = QMessageBox.question(

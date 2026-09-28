@@ -1,3 +1,4 @@
+import re
 from typing import List
 from models.classe import TClasse
 from models.niveau import TNiveau
@@ -5,6 +6,20 @@ from app.database import get_session
 from app.session import AppSession
 import logging
 logger = logging.getLogger(__name__)
+
+
+_LETTER_SUFFIX_RE = re.compile(r"^(?P<base>.+?)[\s-]+(?P<letter>[A-Z])$", re.IGNORECASE)
+
+
+def normaliser_libelle_classe(libelle: str) -> str:
+    """Remplace le suffixe de classe alphabétique par son numéro (A=1, B=2...)."""
+    libelle_normalise = " ".join((libelle or "").strip().upper().split())
+    match = _LETTER_SUFFIX_RE.fullmatch(libelle_normalise)
+    if not match:
+        return libelle_normalise
+
+    numero = ord(match.group("letter").upper()) - ord("A") + 1
+    return f"{match.group('base').rstrip()} {numero}"
 
 
 class ClasseService:
@@ -57,6 +72,7 @@ class ClasseService:
     @staticmethod
     def add_classe(lib_classe: str, sigle: str, id_cycle: int, id_niveau: int, capacite: int) -> tuple[bool, str]:
         """Cree une nouvelle classe d'eleves."""
+        lib_classe = normaliser_libelle_classe(lib_classe)
         if not lib_classe or not id_niveau:
             return False, "Le libelle de la classe et le niveau sont obligatoires."
 
@@ -70,7 +86,7 @@ class ClasseService:
 
             # Verifier les doublons pour le meme niveau, la meme academie et le meme etablissement
             exist = session.query(TClasse).filter_by(
-                LibClasse=lib_classe.upper(),
+                LibClasse=lib_classe,
                 IDT_Niveau=id_niveau,
                 IDAnneeScolaire=active_annee_id,
                 IDEtablissement_Ecole=active_etab_id
@@ -79,8 +95,8 @@ class ClasseService:
                 return False, f"La classe '{lib_classe}' existe deja pour ce niveau et cette session active."
 
             nouvelle = TClasse(
-                LibClasse=lib_classe.upper(),
-                Sigle=sigle.upper() if sigle else lib_classe[:10].replace(" ", "").upper(),
+                LibClasse=lib_classe,
+                Sigle=lib_classe[:10].replace(" ", "").upper(),
                 IDT_Cycle=id_cycle,
                 IDT_Niveau=id_niveau,
                 Capacite=capacite,
@@ -90,6 +106,26 @@ class ClasseService:
             session.add(nouvelle)
             session.commit()
             return True, "Classe creee avec succes !"
+        except Exception as e:
+            session.rollback()
+            return False, f"Erreur base de donnees : {str(e)}"
+        finally:
+            session.close()
+
+    @staticmethod
+    def update_capacite(id_classe: int, capacite: int) -> tuple[bool, str]:
+        """Modifie la capacite d'accueil d'une classe existante."""
+        if capacite < 1 or capacite > 200:
+            return False, "La capacite de la classe doit etre comprise entre 1 et 200."
+
+        session = get_session()
+        try:
+            classe = session.get(TClasse, id_classe)
+            if not classe:
+                return False, "Classe inexistante."
+            classe.Capacite = capacite
+            session.commit()
+            return True, "Capacite de la classe mise a jour avec succes !"
         except Exception as e:
             session.rollback()
             return False, f"Erreur base de donnees : {str(e)}"
