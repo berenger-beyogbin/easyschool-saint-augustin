@@ -91,3 +91,11 @@ assets/logos/
 # manuellement dans packaging/vendor/ avant de compiler l'installateur.
 packaging/vendor/
 packaging/Output/
+
+# === SORTIES DE BUILD/PACKAGING (dossiers dates ou nommes par version) ===
+build_*/
+dist_*/
+
+# === FICHIERS TEMPORAIRES ET RAPPORTS D'IMPORT (donnees personnelles d'eleves) ===
+/tmp/
+/reports/import_eleves_*.csv
