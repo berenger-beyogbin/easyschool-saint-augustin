@@ -8,6 +8,65 @@ logger = logging.getLogger(__name__)
 
 class MontantAutresFraisService:
     @staticmethod
+    def ensure_frais_obligatoires(id_annee: int) -> tuple[bool, str]:
+        """Initialise dans le catalogue les tarifs obligatoires encore absents."""
+        from decimal import Decimal
+        from models.annee_scolaire import TAnneeScolaire
+        from models.autres_frais import AutresFrais
+        from models.niveau import TNiveau
+
+        tarifs = {
+            "POLOS2": ("2 polos", Decimal("12000")),
+            "TENUE_F2": ("2 polos et 2 jupes", Decimal("24000")),
+            "FOUR_NOUV": ("Feuilles et classeur", Decimal("13000")),
+            "FEUIL_ANC": ("Feuilles", Decimal("10000")),
+        }
+        session = get_session()
+        try:
+            annee = session.get(TAnneeScolaire, id_annee)
+            if not annee or annee.Libelle != "2026-2027":
+                return True, "Aucun tarif obligatoire a initialiser."
+
+            types = {f.CodeFrais: f for f in session.query(AutresFrais).filter(
+                AutresFrais.CodeFrais.in_(tarifs)
+            ).all()}
+            for code, (libelle, _montant) in tarifs.items():
+                if code not in types:
+                    types[code] = AutresFrais(CodeFrais=code, LibelleFrais=libelle)
+                    session.add(types[code])
+            session.flush()
+
+            niveaux = session.query(TNiveau).filter(TNiveau.IDAnneeScolaire == id_annee).all()
+            existants = {
+                (m.IDT_Niveau, m.IDAutres_Frais)
+                for m in session.query(MontantAutresFrais).filter(
+                    MontantAutresFrais.IDAnneeScolaire == id_annee,
+                    MontantAutresFrais.IDAutres_Frais.in_(f.IDAutres_Frais for f in types.values()),
+                ).all()
+            }
+            for niveau in niveaux:
+                for code, (_libelle, montant) in tarifs.items():
+                    frais = types[code]
+                    if (niveau.IDT_Niveau, frais.IDAutres_Frais) in existants:
+                        continue
+                    session.add(MontantAutresFrais(
+                        IDAnneeScolaire=id_annee,
+                        IDT_Niveau=niveau.IDT_Niveau,
+                        IDAutres_Frais=frais.IDAutres_Frais,
+                        MontantFrais=montant,
+                        IDEtablissement_Ecole=niveau.IDEtablissement_Ecole,
+                        KeyCompose=f"{id_annee}-{niveau.IDT_Niveau}-{frais.IDAutres_Frais}-{niveau.IDEtablissement_Ecole or 1}",
+                    ))
+            session.commit()
+            return True, "Tarifs obligatoires initialises."
+        except Exception as e:
+            session.rollback()
+            logger.exception("Erreur d'initialisation des frais obligatoires")
+            return False, f"Erreur d'initialisation : {e}"
+        finally:
+            session.close()
+
+    @staticmethod
     def get_montants_by_annee(id_annee: int) -> List[MontantAutresFrais]:
         """Recupere tous les tarifs d'autres frais pour une annee scolaire active."""
         session = get_session()

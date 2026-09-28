@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QFrame,
-    QDateEdit, QAbstractItemView, QListWidget, QListWidgetItem
+    QDateEdit, QAbstractItemView, QListWidget, QListWidgetItem,
+    QDialog, QDialogButtonBox, QPlainTextEdit, QComboBox
 )
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
@@ -11,15 +12,23 @@ from app.session import AppSession
 from app.config import Config
 from utils.receipt_printer import ReceiptPrinter
 from app.styles import (
-    COLORS, INPUT_STYLE, DATE_STYLE, BUTTON_SECONDARY, TABLE_STYLE, apply_card_shadow, format_fcfa
+    COLORS, INPUT_STYLE, DATE_STYLE, COMBO_STYLE, BUTTON_PRIMARY, BUTTON_SECONDARY,
+    BUTTON_TABLE_ACTION_DANGER, TABLE_STYLE, apply_card_shadow, format_fcfa
 )
 from views.ui_components import FinancialSection, FinancialRow, make_separator
 from views.caisse_widgets import (
-    MODE_PAIEMENT_DEFAUT, ToggleSwitch,
+    ToggleSwitch,
     _compute_motif, _fmt_input, _parse_input,
     _CHIP_MUTED, _CHIP_SUCCESS, _FRAIS_LIST_STYLE,
     _make_field_group, _make_panel,
 )
+
+
+MODE_PAIEMENT_LABELS = {"ESPECES": "Espèces", "CHEQUE": "Chèque"}
+
+
+def _format_mode_paiement(code: str) -> str:
+    return MODE_PAIEMENT_LABELS.get((code or "").strip().upper(), code or "Espèces")
 
 
 # ─── Vue principale ──────────────────────────────────────────────────────────
@@ -174,9 +183,32 @@ class CaisseView(QWidget):
         self.txt_vers_scol.setFixedWidth(AMOUNT_W)
         self.txt_vers_scol.setFixedHeight(FIELD_H)
         self.txt_vers_scol.textChanged.connect(lambda: self._format_amount_field(self.txt_vers_scol))
-        grp_scol = _make_field_group("Scolarité", self.txt_vers_scol)
+        grp_scol = _make_field_group("Montant", self.txt_vers_scol)
         form_row.addLayout(grp_scol)
         form_row.setAlignment(grp_scol, Qt.AlignTop)
+
+        self.cmb_mode_paiement = QComboBox()
+        self.cmb_mode_paiement.addItem("Espèces", "ESPECES")
+        self.cmb_mode_paiement.addItem("Chèque", "CHEQUE")
+        self.cmb_mode_paiement.setStyleSheet(COMBO_STYLE)
+        self.cmb_mode_paiement.setFixedWidth(AMOUNT_W)
+        self.cmb_mode_paiement.setFixedHeight(FIELD_H)
+        self.cmb_mode_paiement.currentIndexChanged.connect(self._on_mode_paiement_changed)
+        grp_mode = _make_field_group("Mode", self.cmb_mode_paiement)
+        form_row.addLayout(grp_mode)
+        form_row.setAlignment(grp_mode, Qt.AlignTop)
+
+        self.txt_reference_paiement = QLineEdit()
+        self.txt_reference_paiement.setPlaceholderText("Facultative")
+        self.txt_reference_paiement.setStyleSheet(INPUT_STYLE)
+        self.txt_reference_paiement.setFixedWidth(AMOUNT_W)
+        self.txt_reference_paiement.setFixedHeight(FIELD_H)
+        self.txt_reference_paiement.setEnabled(False)
+        self.grp_reference_paiement = QWidget()
+        self.grp_reference_paiement.setStyleSheet("background-color: transparent; border: none;")
+        self.grp_reference_paiement.setLayout(_make_field_group("N° Chèque", self.txt_reference_paiement))
+        form_row.addWidget(self.grp_reference_paiement)
+        form_row.setAlignment(self.grp_reference_paiement, Qt.AlignTop)
 
         self.txt_vers_trans = QLineEdit("0")
         self.txt_vers_trans.setStyleSheet(INPUT_STYLE)
@@ -263,6 +295,7 @@ class CaisseView(QWidget):
         )
         lbl_reduc.setAlignment(Qt.AlignHCenter)
         self.toggle_reduction = ToggleSwitch()
+        self.toggle_reduction.toggled.connect(self._on_reduction_toggled)
         btn_vbox.addWidget(lbl_reduc, 0, Qt.AlignHCenter)
         btn_vbox.addWidget(self.toggle_reduction, 0, Qt.AlignHCenter)
         btn_vbox.addSpacing(10)
@@ -301,12 +334,32 @@ class CaisseView(QWidget):
     def _build_history_panel(self, parent_layout):
         panel, layout = _make_panel("#475569")
         layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(0)
+        layout.setSpacing(6)
+
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(10, 4, 10, 0)
+        header_row.setSpacing(8)
+
+        lbl_hist = QLabel("Historique des versements")
+        lbl_hist.setStyleSheet(
+            f"font-size: 13px; font-weight: 700; color: {COLORS['text']};"
+            "background-color: transparent; border: none;"
+        )
+        header_row.addWidget(lbl_hist, 1)
+
+        self.btn_annuler_versement = QPushButton("Annuler le versement")
+        self.btn_annuler_versement.setStyleSheet(BUTTON_TABLE_ACTION_DANGER)
+        self.btn_annuler_versement.setCursor(Qt.PointingHandCursor)
+        self.btn_annuler_versement.setEnabled(False)
+        self.btn_annuler_versement.clicked.connect(self.on_annuler_versement)
+        header_row.addWidget(self.btn_annuler_versement)
+
+        layout.addLayout(header_row)
 
         self.table_history = QTableWidget()
-        self.table_history.setColumnCount(7)
+        self.table_history.setColumnCount(9)
         self.table_history.setHorizontalHeaderLabels([
-            "Date", "Scolarité", "Autres frais", "Transport", "Cantine", "Réduc.", "ID"
+            "Date", "Scolarité", "Autres frais", "Transport", "Cantine", "Réduc.", "Mode", "Statut", "ID"
         ])
         if not Config.ENABLE_TRANSPORT:
             self.table_history.setColumnHidden(3, True)
@@ -320,9 +373,11 @@ class CaisseView(QWidget):
         self.table_history.verticalHeader().setVisible(False)
         self.table_history.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table_history.horizontalHeader().setHighlightSections(False)
-        self.table_history.setColumnHidden(6, True)
+        self.table_history.setColumnHidden(8, True)
         self.table_history.setFrameShape(QFrame.NoFrame)
         self.table_history.setShowGrid(False)
+        self.table_history.itemSelectionChanged.connect(self._update_annuler_button)
+        self.table_history.itemDoubleClicked.connect(self._on_historique_double_click)
         layout.addWidget(self.table_history)
 
         parent_layout.addWidget(panel, 1)
@@ -475,10 +530,19 @@ class CaisseView(QWidget):
         self.display_eleves(results)
 
     def display_eleves(self, items):
+        # Vider explicitement la sélection/l'item courant AVANT de repeupler :
+        # sinon, quand le tableau ne contient qu'une seule ligne, Qt la
+        # marque "courante" en interne (surlignage visible) sans que ça
+        # corresponde à notre état applicatif (remis à None juste en dessous).
+        # Un clic sur une ligne déjà "courante" pour Qt ne réémet pas
+        # itemSelectionChanged, donc on_eleve_selected ne se déclenche jamais
+        # et le panneau reste bloqué sur "Aucun élève sélectionné".
+        self.table_eleves.clearSelection()
+        self.table_eleves.setCurrentCell(-1, -1)
         self.table_eleves.setRowCount(len(items))
 
         for i, qi in enumerate(items):
-            m_mat    = qi.eleve.Matricule if qi.eleve else "—"
+            m_mat    = (qi.eleve.MatriculeNational or qi.eleve.Matricule) if qi.eleve else "—"
             m_nom    = f"{qi.eleve.Nom if qi.eleve else ''} {qi.eleve.Prenoms if qi.eleve else ''}".strip()
             m_classe = qi.classe.LibClasse if qi.classe else "Non défini"
             m_cant   = "Oui" if qi.Cantine else "Non"
@@ -534,6 +598,12 @@ class CaisseView(QWidget):
         self.txt_vers_cant.setText("0" if self.txt_vers_cant.isEnabled() else "")
 
         self._load_autres_frais_versement(fin.get("id_inscription"))
+        if self._autres_frais_items and not self.txt_vers_scol.isEnabled():
+            # Le champ represente le versement total et reste donc disponible
+            # lorsqu'il ne reste que des autres frais a regler.
+            self.txt_vers_scol.setEnabled(True)
+            self.txt_vers_scol.setText("0")
+        self._update_valider_button()
         self.load_history()
 
     def _load_autres_frais_versement(self, id_inscription):
@@ -549,7 +619,9 @@ class CaisseView(QWidget):
             return
 
         frais_coches = InscriptionAutresFraisService.get_frais_impayes(id_inscription)
-        self.grp_autres_frais.setVisible(bool(frais_coches))
+        self.grp_autres_frais.setVisible(
+            bool(frais_coches) and not self.toggle_reduction.isChecked()
+        )
         if not frais_coches:
             self._update_autres_frais_total()
             return
@@ -559,8 +631,13 @@ class CaisseView(QWidget):
             libelle = frais.get("LibelleSnapshot") or frais.get("CodeFraisSnapshot") or "Frais"
             montant = frais.get("MontantApplique") or 0
             item = QListWidgetItem(f"{libelle} — {format_fcfa(montant)}")
-            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Unchecked)
+            if frais.get("Obligatoire"):
+                item.setFlags(Qt.ItemIsEnabled)
+                item.setCheckState(Qt.Checked)
+                item.setToolTip("Frais obligatoire : paiement integral requis.")
+            else:
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Unchecked)
             self.list_autres_frais.addItem(item)
             self._autres_frais_items.append((item, frais))
         self.list_autres_frais.blockSignals(False)
@@ -591,6 +668,18 @@ class CaisseView(QWidget):
             for item, frais in self._autres_frais_items
             if item.checkState() == Qt.Checked
         )
+
+    def _on_reduction_toggled(self, active: bool):
+        """Isole le mode reduction, qui concerne uniquement la scolarite."""
+        self.grp_autres_frais.setVisible(bool(self._autres_frais_items) and not active)
+        self._update_valider_button()
+
+    def _on_mode_paiement_changed(self, index: int):
+        """La référence (n° de chèque) n'a de sens qu'en dehors des espèces."""
+        is_especes = self.cmb_mode_paiement.currentData() == "ESPECES"
+        self.txt_reference_paiement.setEnabled(not is_especes)
+        if is_especes:
+            self.txt_reference_paiement.clear()
 
     def _update_financial_panel(self, fin):
         def fmt(v):
@@ -645,6 +734,7 @@ class CaisseView(QWidget):
             autres = int(v.MontantVersAutres)
             trans  = int(v.MontantVersTrans)
             cant   = int(v.MontantCantine)
+            annule = bool(v.Annule)
             vals = [
                 dt_str,
                 f"{scol:,} F".replace(",", " "),
@@ -652,29 +742,219 @@ class CaisseView(QWidget):
                 f"{trans:,} F".replace(",", " "),
                 f"{cant:,} F".replace(",", " "),
                 "Oui" if v.Reduction else "Non",
+                _format_mode_paiement(v.ModePaiement),
+                "Annulé" if annule else "Actif",
                 str(v.IDVersementScol),
             ]
             for col, val in enumerate(vals):
                 item = QTableWidgetItem(val)
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                if col == 0:
+                    item.setData(Qt.UserRole, annule)
+                    if annule and v.MotifAnnulation:
+                        item.setToolTip(f"Annulé : {v.MotifAnnulation}")
                 if col == 1:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                    if scol > 0:
+                    if scol > 0 and not annule:
                         item.setForeground(QColor(COLORS['primary']))
                 elif col == 2:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                    if autres > 0:
+                    if autres > 0 and not annule:
                         item.setForeground(QColor(COLORS['purple']))
                 elif col == 3:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                    if trans > 0:
+                    if trans > 0 and not annule:
                         item.setForeground(QColor("#0369A1"))
                 elif col == 4:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                    if cant > 0:
+                    if cant > 0 and not annule:
                         item.setForeground(QColor(COLORS['warning']))
+                elif col == 6:
+                    item.setTextAlignment(Qt.AlignCenter)
+                elif col == 7:
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setForeground(QColor(COLORS['danger'] if annule else COLORS['success']))
+                if annule:
+                    font = item.font()
+                    font.setItalic(True)
+                    font.setStrikeOut(col != 7)
+                    item.setFont(font)
+                    if col not in (1, 2, 3, 4, 7):
+                        item.setForeground(QColor("#94A3B8"))
                 self.table_history.setItem(i, col, item)
             self.table_history.setRowHeight(i, 34)
+        self._update_annuler_button()
+
+    def _update_annuler_button(self):
+        selected = self.table_history.selectedRanges()
+        enabled = False
+        if selected and AppSession.has_permission("SCOLARITE_VERSEMENTS"):
+            row = selected[0].topRow()
+            item = self.table_history.item(row, 0)
+            if item is not None and not bool(item.data(Qt.UserRole)):
+                enabled = True
+        self.btn_annuler_versement.setEnabled(enabled)
+
+    def _on_historique_double_click(self, item):
+        """Double-clic sur une ligne de l'historique : imprime un duplicata
+        du reçu de ce versement (montants figés en base, donc fiables ;
+        « Montant dû »/« Reste à verser » sont recalculés sur la situation
+        financière ACTUELLE de l'élève, pas sur un instantané historique —
+        aucun snapshot du solde n'est conservé au moment du paiement)."""
+        row = item.row()
+        id_item = self.table_history.item(row, 8)
+        if id_item is None or not id_item.text():
+            return
+        id_versement = int(id_item.text())
+
+        versement = VersementService.get_versement_pour_duplicata(id_versement)
+        if not versement:
+            QMessageBox.warning(self, "Duplicata", "Ce versement est introuvable.")
+            return
+        if versement["Annule"]:
+            QMessageBox.warning(
+                self, "Duplicata",
+                "Ce versement est annulé — impossible d'en imprimer un duplicata."
+            )
+            return
+
+        sel_eleve = self.table_eleves.selectedRanges()
+        if not sel_eleve:
+            return
+        sel_row   = sel_eleve[0].topRow()
+        nom_eleve = self.table_eleves.item(sel_row, 1).text()
+        mat_eleve = self.table_eleves.item(sel_row, 0).text()
+        cls_eleve = self.table_eleves.item(sel_row, 2).text()
+
+        active_annee_id = AppSession.get_active_annee_id()
+        fin = VersementService.get_infos_financieres_eleve(active_annee_id, self.selected_eleve_id)
+
+        m_scol   = versement["MontantVersSco"]
+        m_autres = versement["MontantVersAutres"]
+        m_trans  = versement["MontantVersTrans"]
+        m_cant   = versement["MontantCantine"]
+
+        receipt_data = {
+            "date": versement["DateVers"].strftime("%d/%m/%Y") if versement["DateVers"] else "",
+            "matricule":     mat_eleve,
+            "nom":           nom_eleve,
+            "classe":        cls_eleve,
+            "numero":        str(versement["IDVersementScol"]),
+            "motif":         _compute_motif(m_scol, m_trans, m_cant, m_autres),
+            "mode_paiement": _format_mode_paiement(versement["ModePaiement"]),
+            "reference_paiement": versement["ReferencePaiement"],
+            "total_recu":    m_scol + m_autres + m_trans + m_cant,
+            "receipt_title": "REÇU DE PAIEMENT — DUPLICATA",
+            "preview_title": "Aperçu — Duplicata de reçu",
+            # SCOLARITE — « dû » reconstruit à partir du reste ACTUEL + ce
+            # versement, pour que dû - reçu = reste reste toujours cohérent
+            # à l'impression (exact si aucun autre versement n'est intervenu
+            # depuis celui-ci).
+            "scol_active": fin["options"]["scolarite"],
+            "scol_due":    fin["scol_reste"] + m_scol,
+            "scol_recu":   m_scol,
+            "scol_reste":  fin["scol_reste"],
+            # AUTRES FRAIS
+            "autres_active": fin["autres_due"] > 0 or m_autres > 0,
+            "autres_due":    fin["autres_reste"] + m_autres,
+            "autres_recu":   m_autres,
+            "autres_reste":  fin["autres_reste"],
+            "autres_lignes": versement["autres_lignes"],
+            # TRANSPORT
+            "trans_active": Config.ENABLE_TRANSPORT and fin["options"]["transport"],
+            "trans_due":    fin["trans_reste"] + m_trans,
+            "trans_recu":   m_trans,
+            "trans_reste":  fin["trans_reste"],
+            # CANTINE
+            "cant_active": Config.ENABLE_CANTINE and fin["options"]["cantine"],
+            "cant_due":    fin["cant_reste"] + m_cant,
+            "cant_recu":   m_cant,
+            "cant_reste":  fin["cant_reste"],
+        }
+
+        ReceiptPrinter.print_receipt(self, receipt_data)
+
+    def on_annuler_versement(self):
+        selected = self.table_history.selectedRanges()
+        if not selected:
+            return
+        row = selected[0].topRow()
+        item_flag = self.table_history.item(row, 0)
+        item_id = self.table_history.item(row, 8)
+        if item_flag is None or item_id is None or bool(item_flag.data(Qt.UserRole)):
+            return
+
+        motif = self._prompt_motif_annulation()
+        if motif is None:
+            return
+        if not motif.strip():
+            QMessageBox.warning(self, "Annulation", "Le motif d'annulation est obligatoire.")
+            return
+
+        reponse = QMessageBox.question(
+            self, "Confirmer l'annulation",
+            "Ce versement sera marqué comme annulé et exclu du solde de l'élève.\n"
+            "Cette action reste tracée dans l'historique. Continuer ?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reponse != QMessageBox.Yes:
+            return
+
+        id_versement = int(item_id.text())
+        success, msg = VersementService.annuler_versement(
+            id_versement, motif.strip(),
+            login=AppSession.get_logged_in_username(),
+            id_utilisateur=AppSession.get_current_user_id(),
+        )
+        if success:
+            QMessageBox.information(self, "Versement annulé", msg)
+            self.refresh_eleve_profile()
+        else:
+            QMessageBox.critical(self, "Erreur", msg)
+
+    def _prompt_motif_annulation(self):
+        """Boîte de dialogue dédiée pour saisir le motif d'annulation.
+
+        Construite à la main (plutôt que QInputDialog.getMultiLineText) car les
+        boutons standard de QInputDialog n'héritent pas de manière fiable du
+        style global de l'appli (le sélecteur QSS [text="OK"] ne s'applique
+        pas toujours), ce qui rendait le bouton OK illisible.
+
+        Retourne le texte saisi, ou None si l'utilisateur a annulé.
+        """
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Annuler le versement")
+        dialog.setMinimumWidth(420)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 16)
+        layout.setSpacing(10)
+
+        lbl = QLabel("Motif d'annulation (obligatoire) :")
+        lbl.setStyleSheet(f"color: {COLORS['text']}; font-size: 14px; border: none;")
+        layout.addWidget(lbl)
+
+        txt_motif = QPlainTextEdit()
+        txt_motif.setStyleSheet(INPUT_STYLE)
+        txt_motif.setFixedHeight(90)
+        layout.addWidget(txt_motif)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_ok = buttons.button(QDialogButtonBox.Ok)
+        btn_ok.setText("Valider")
+        btn_ok.setStyleSheet(BUTTON_PRIMARY)
+        btn_ok.setCursor(Qt.PointingHandCursor)
+        btn_cancel = buttons.button(QDialogButtonBox.Cancel)
+        btn_cancel.setText("Annuler")
+        btn_cancel.setStyleSheet(BUTTON_SECONDARY)
+        btn_cancel.setCursor(Qt.PointingHandCursor)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        txt_motif.setFocus()
+        if dialog.exec() != QDialog.Accepted:
+            return None
+        return txt_motif.toPlainText()
 
     def on_validate_and_save(self):
         active_annee_id = AppSession.get_active_annee_id()
@@ -682,25 +962,52 @@ class CaisseView(QWidget):
             QMessageBox.warning(self, "Erreur", "Sélecteur d'élève manquant.")
             return
         q_date = self.txt_date.date().toPython()
+        reduction_active = self.toggle_reduction.isChecked()
         try:
-            m_scol   = _parse_input(self.txt_vers_scol.text())
+            montant_versement = _parse_input(self.txt_vers_scol.text())
             m_trans  = _parse_input(self.txt_vers_trans.text())
             m_cant   = _parse_input(self.txt_vers_cant.text())
-            m_autres = self._get_montant_autres_frais_coches()
+            # Une reduction porte exclusivement sur la scolarite. Les frais
+            # annexes restent dus pour le prochain versement normal.
+            m_autres = 0 if reduction_active else self._get_montant_autres_frais_coches()
         except ValueError:
             QMessageBox.critical(self, "Erreur", "Un des montants saisis est incorrect.")
             return
 
-        ids_autres_frais = [
+        if montant_versement < m_autres:
+            QMessageBox.warning(
+                self,
+                "Versement insuffisant",
+                "Le versement saisi doit couvrir integralement les autres frais selectionnes "
+                f"({format_fcfa(m_autres)}).",
+            )
+            return
+
+        # Le champ VERSEMENT represente la somme totale remise : les autres
+        # frais sont soldes en priorite et seul le reliquat va en scolarite.
+        m_scol = montant_versement - m_autres
+
+        ids_autres_frais = [] if reduction_active else [
             frais["IDInscriptionAutresFrais"]
             for item, frais in self._autres_frais_items
             if item.checkState() == Qt.Checked
         ]
-
-        reduction_active = self.toggle_reduction.isChecked()
+        autres_lignes_recu = [] if reduction_active else [
+            {
+                "libelle": frais.get("LibelleSnapshot") or frais.get("CodeFraisSnapshot") or "Frais",
+                "montant": float(frais.get("MontantApplique") or 0),
+            }
+            for item, frais in self._autres_frais_items
+            if item.checkState() == Qt.Checked
+        ]
 
         # Montants dus AVANT le paiement (pour « Montant dû » sur le reçu)
         fin_before = VersementService.get_infos_financieres_eleve(active_annee_id, self.selected_eleve_id)
+
+        # Capturés AVANT le reset des champs qui suit un succès, sinon le
+        # reçu imprimé juste après afficherait toujours « Espèces ».
+        mode_paiement_saisi = self.cmb_mode_paiement.currentData()
+        reference_saisie = self.txt_reference_paiement.text().strip()
 
         success, msg, new_id = VersementService.create_versement(
             id_annee=active_annee_id,
@@ -716,10 +1023,14 @@ class CaisseView(QWidget):
             restitution=False,
             login=AppSession.get_logged_in_username(),
             ids_autres_frais=ids_autres_frais,
+            mode_paiement=mode_paiement_saisi,
+            reference_paiement=reference_saisie,
         )
         if success:
             self.toggle_reduction.setChecked(False)
             self.txt_date.setDate(QDate.currentDate())
+            self.cmb_mode_paiement.setCurrentIndex(0)
+            self.txt_reference_paiement.clear()
             self.refresh_eleve_profile()
 
             if reduction_active:
@@ -745,10 +1056,10 @@ class CaisseView(QWidget):
                 "nom":           nom_eleve,
                 "classe":        cls_eleve,
                 "numero":        str(new_id) if new_id else "—",
-                # Enrichissement CJGA — valeurs UI temporaires (non persistées en base)
                 "motif":         _compute_motif(m_scol, m_trans, m_cant, m_autres),
-                "mode_paiement": MODE_PAIEMENT_DEFAUT,
-                "total_recu":    m_scol + m_trans + m_cant + m_autres,
+                "mode_paiement": _format_mode_paiement(mode_paiement_saisi),
+                "reference_paiement": reference_saisie,
+                "total_recu":    montant_versement + m_trans + m_cant,
                 # SCOLARITE
                 "scol_active": fin_before["options"]["scolarite"],
                 "scol_due":    fin_before["scol_reste"],   # solde dû AVANT ce paiement
@@ -759,6 +1070,7 @@ class CaisseView(QWidget):
                 "autres_due":    fin_before["autres_reste"],  # solde dû AVANT ce paiement
                 "autres_recu":   m_autres,
                 "autres_reste":  fin_after["autres_reste"],
+                "autres_lignes": autres_lignes_recu,
                 # TRANSPORT
                 "trans_active": Config.ENABLE_TRANSPORT and fin_before["options"]["transport"],
                 "trans_due":    fin_before["trans_reste"],  # solde dû AVANT ce paiement
@@ -787,24 +1099,35 @@ class CaisseView(QWidget):
 
     def _update_valider_button(self):
         try:
-            total = 0
-            if self.txt_vers_scol.isEnabled():
-                total += _parse_input(self.txt_vers_scol.text())
-            if self.txt_vers_trans.isEnabled():
-                total += _parse_input(self.txt_vers_trans.text())
-            if self.txt_vers_cant.isEnabled():
-                total += _parse_input(self.txt_vers_cant.text())
-            total += self._get_montant_autres_frais_coches()
+            versement = _parse_input(self.txt_vers_scol.text()) if self.txt_vers_scol.isEnabled() else 0
+            autres = (
+                0 if self.toggle_reduction.isChecked()
+                else self._get_montant_autres_frais_coches()
+            )
+            valide = versement > 0 and versement >= autres
+            if versement >= autres:
+                scolarite = versement - autres
+                self.lbl_total_autres_frais.setText(
+                    f"Répartition : autres frais {format_fcfa(autres)} • "
+                    f"scolarité {format_fcfa(scolarite)}"
+                )
+            else:
+                self.lbl_total_autres_frais.setText(
+                    f"Versement minimum requis : {format_fcfa(autres)}"
+                )
         except Exception:
-            total = 0
-        self.btn_valider_versement.setEnabled(total > 0)
+            valide = False
+        self.btn_valider_versement.setEnabled(valide)
 
     def clear_fields(self):
         self.txt_vers_scol.setText("")
         self.txt_vers_trans.setText("")
         self.txt_vers_cant.setText("")
+        self.cmb_mode_paiement.setCurrentIndex(0)
+        self.txt_reference_paiement.clear()
         self._load_autres_frais_versement(None)
         self.table_history.setRowCount(0)
+        self.btn_annuler_versement.setEnabled(False)
 
     def clear_financial_panel(self):
         self.lbl_fin_eleve.setText("—")

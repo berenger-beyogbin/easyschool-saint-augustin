@@ -9,8 +9,17 @@ from models.inscription_autres_frais import InscriptionAutresFrais
 from models.autres_frais import AutresFrais
 from models.montant_autres_frais import MontantAutresFrais
 from models.versement_autres_frais import VersementAutresFrais
+from models.annee_scolaire import TAnneeScolaire
 import logging
 logger = logging.getLogger(__name__)
+
+ANNEE_TARIFAIRE_CJGA = "2026-2027"
+FRAIS_OBLIGATOIRES = {
+    "POLOS2": ("2 polos", Decimal("12000")),
+    "TENUE_F2": ("2 polos et 2 jupes", Decimal("24000")),
+    "FOUR_NOUV": ("Feuilles et classeur", Decimal("13000")),
+    "FEUIL_ANC": ("Feuilles", Decimal("10000")),
+}
 
 
 
@@ -20,6 +29,127 @@ class InscriptionAutresFraisService:
     La presence d'une ligne InscriptionAutresFrais pour une inscription vaut "coche" :
     il n'existe pas de champ booleen Coche.
     """
+
+    @staticmethod
+    def _codes_obligatoires(inscription: TInscription) -> tuple[str, ...]:
+        if not inscription.Nouveau:
+            return ("FEUIL_ANC",)
+        sexe = inscription.eleve.Sexe if inscription.eleve else None
+        return (("TENUE_F2" if sexe == 2 else "POLOS2"), "FOUR_NOUV")
+
+    @staticmethod
+    def get_frais_obligatoires_attendus(id_annee: int, nouveau: bool, sexe: int, id_niveau: int | None = None) -> List[dict]:
+        """Retourne un apercu UI des frais obligatoires sans ecrire en base."""
+        session = get_session()
+        try:
+            annee = session.get(TAnneeScolaire, id_annee) if id_annee else None
+            if not annee or annee.Libelle != ANNEE_TARIFAIRE_CJGA:
+                return []
+            codes = ("FEUIL_ANC",) if not nouveau else (
+                ("TENUE_F2" if sexe == 2 else "POLOS2"), "FOUR_NOUV"
+            )
+            types = {f.CodeFrais: f for f in session.query(AutresFrais).filter(
+                AutresFrais.CodeFrais.in_(codes)
+            ).all()}
+            montants = {}
+            if id_niveau:
+                for m in session.query(MontantAutresFrais).filter(
+                    MontantAutresFrais.IDAnneeScolaire == id_annee,
+                    MontantAutresFrais.IDT_Niveau == id_niveau,
+                    MontantAutresFrais.IDAutres_Frais.in_(f.IDAutres_Frais for f in types.values()),
+                ).all():
+                    montants[m.IDAutres_Frais] = m
+            return [
+                {
+                    "IDMontantAutres": None,
+                    "CodeFrais": code,
+                    "LibelleFrais": FRAIS_OBLIGATOIRES[code][0],
+                    "MontantFrais": montants.get(types[code].IDAutres_Frais).MontantFrais
+                    if code in types and types[code].IDAutres_Frais in montants
+                    else FRAIS_OBLIGATOIRES[code][1],
+                    "Obligatoire": True,
+                }
+                for code in codes
+            ]
+        finally:
+            session.close()
+
+    @staticmethod
+    def synchroniser_frais_obligatoires_session(session, inscription: TInscription, login: Optional[str] = None) -> None:
+        """Cree/actualise les frais CJGA obligatoires dans la transaction appelante.
+
+        Une ligne deja payee est immuable. Un changement de profil qui devrait
+        retirer ou modifier une telle ligne est refuse afin d'eviter toute
+        reecriture de l'historique financier.
+        """
+        if not inscription.annee_scolaire or inscription.annee_scolaire.Libelle != ANNEE_TARIFAIRE_CJGA:
+            return
+
+        codes_attendus = set(InscriptionAutresFraisService._codes_obligatoires(inscription))
+        types = {
+            f.CodeFrais: f for f in session.query(AutresFrais).filter(
+                AutresFrais.CodeFrais.in_(FRAIS_OBLIGATOIRES.keys())
+            ).all()
+        }
+        for code, (libelle, _montant) in FRAIS_OBLIGATOIRES.items():
+            if code not in types:
+                types[code] = AutresFrais(CodeFrais=code, LibelleFrais=libelle)
+                session.add(types[code])
+        session.flush()
+
+        lignes = session.query(InscriptionAutresFrais).filter(
+            InscriptionAutresFrais.IDTInscription == inscription.IDTInscription,
+            InscriptionAutresFrais.Obligatoire == True,
+        ).all()
+        par_code = {ligne.CodeFraisSnapshot: ligne for ligne in lignes}
+        ids_lignes = [ligne.IDInscriptionAutresFrais for ligne in lignes]
+        ids_payes = set()
+        if ids_lignes:
+            ids_payes = {
+                row[0] for row in session.query(VersementAutresFrais.IDInscriptionAutresFrais).filter(
+                    VersementAutresFrais.IDInscriptionAutresFrais.in_(ids_lignes)
+                ).all()
+            }
+
+        for code, ligne in par_code.items():
+            if code not in codes_attendus:
+                if ligne.IDInscriptionAutresFrais in ids_payes:
+                    raise ValueError(
+                        f"Le frais obligatoire deja paye '{ligne.LibelleSnapshot or code}' ne peut pas etre remplace."
+                    )
+                session.delete(ligne)
+
+        login_effectif = login or AppSession.get_logged_in_username()
+        for code in codes_attendus:
+            libelle, montant = FRAIS_OBLIGATOIRES[code]
+            tarif = session.query(MontantAutresFrais).filter(
+                MontantAutresFrais.IDAnneeScolaire == inscription.IDTAnneeScolaire,
+                MontantAutresFrais.IDT_Niveau == inscription.IDNiveau,
+                MontantAutresFrais.IDAutres_Frais == types[code].IDAutres_Frais,
+            ).first()
+            if tarif:
+                montant = tarif.MontantFrais
+            ligne = par_code.get(code)
+            if ligne:
+                if ligne.IDInscriptionAutresFrais in ids_payes and Decimal(ligne.MontantApplique) != montant:
+                    raise ValueError(f"Le montant du frais deja paye '{libelle}' ne peut pas etre modifie.")
+                if ligne.IDInscriptionAutresFrais not in ids_payes:
+                    ligne.MontantApplique = montant
+                    ligne.LibelleSnapshot = libelle
+                    ligne.IDAutres_Frais = types[code].IDAutres_Frais
+                continue
+            session.add(InscriptionAutresFrais(
+                IDTInscription=inscription.IDTInscription,
+                IDAutres_Frais=types[code].IDAutres_Frais,
+                IDMontantAutres=None,
+                MontantApplique=montant,
+                Obligatoire=True,
+                Login=login_effectif,
+                CodeFraisSnapshot=code,
+                LibelleSnapshot=libelle,
+            ))
+
+        inscription.AutresFrais = True
 
     @staticmethod
     def get_frais_coches(id_inscription: int) -> List[dict]:
@@ -117,7 +247,8 @@ class InscriptionAutresFraisService:
                 AutresFrais, MontantAutresFrais.IDAutres_Frais == AutresFrais.IDAutres_Frais
             ).filter(
                 MontantAutresFrais.IDT_Niveau == id_niveau,
-                MontantAutresFrais.IDAnneeScolaire == id_annee_scolaire
+                MontantAutresFrais.IDAnneeScolaire == id_annee_scolaire,
+                ~AutresFrais.CodeFrais.in_(FRAIS_OBLIGATOIRES),
             ).all()
 
             return [
@@ -171,7 +302,8 @@ class InscriptionAutresFraisService:
                 desired_par_frais[m.IDAutres_Frais] = m
 
             lignes_existantes = session.query(InscriptionAutresFrais).filter(
-                InscriptionAutresFrais.IDTInscription == id_inscription
+                InscriptionAutresFrais.IDTInscription == id_inscription,
+                InscriptionAutresFrais.Obligatoire == False,
             ).all()
             existantes_par_frais = {ligne.IDAutres_Frais: ligne for ligne in lignes_existantes}
 
@@ -180,6 +312,14 @@ class InscriptionAutresFraisService:
             # Suppression des frais decoches
             for id_autres_frais, ligne in existantes_par_frais.items():
                 if id_autres_frais not in desired_par_frais:
+                    deja_paye = session.query(VersementAutresFrais.IDVersementAutresFrais).filter(
+                        VersementAutresFrais.IDInscriptionAutresFrais == ligne.IDInscriptionAutresFrais
+                    ).first()
+                    if deja_paye:
+                        return False, (
+                            f"Le frais deja paye '{ligne.LibelleSnapshot or ligne.CodeFraisSnapshot}' "
+                            "ne peut pas etre retire de l'inscription."
+                        )
                     session.delete(ligne)
 
             # Ajout des frais nouvellement coches (les existants sont conserves tels quels)
@@ -219,7 +359,8 @@ class InscriptionAutresFraisService:
                 return False, "Inscription introuvable."
 
             session.query(InscriptionAutresFrais).filter(
-                InscriptionAutresFrais.IDTInscription == id_inscription
+                InscriptionAutresFrais.IDTInscription == id_inscription,
+                InscriptionAutresFrais.Obligatoire == False,
             ).delete(synchronize_session=False)
 
             session.commit()

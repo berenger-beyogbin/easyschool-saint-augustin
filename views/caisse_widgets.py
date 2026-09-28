@@ -9,12 +9,6 @@ from PySide6.QtWidgets import QVBoxLayout, QLabel, QPushButton, QFrame
 from PySide6.QtCore import Qt
 from app.styles import COLORS, apply_card_shadow
 
-# ─── Valeur UI temporaire du reçu (non persistée en base) ────────────────────
-# Le mode de paiement n'est pas encore une colonne de VersementScol : la
-# caisse encaissant essentiellement des espèces, la valeur est fixée par
-# défaut pour le reçu, le temps d'une phase ulterieure dédiée si besoin.
-MODE_PAIEMENT_DEFAUT = "Espèce"
-
 
 def _compute_motif(m_scol: float, m_trans: float, m_cant: float, m_autres: float = 0) -> str:
     """Déduit un motif de paiement simple à partir des montants versés."""

@@ -83,6 +83,48 @@ class VersementService:
             session.close()
 
     @staticmethod
+    def get_versement_pour_duplicata(id_versement: int) -> Optional[Dict[str, Any]]:
+        """Reconstitue les donnees persistees d'un versement pour en reimprimer
+        un duplicata de recu : montants figes au moment du paiement, et le
+        detail exact des frais annexes regles par CE versement (via la table
+        de liaison VersementAutresFrais, qui garde ce lien meme si le
+        versement est ensuite annule)."""
+        session = get_session()
+        try:
+            v = session.get(VersementScol, id_versement)
+            if not v:
+                return None
+
+            lignes = session.query(InscriptionAutresFrais).join(
+                VersementAutresFrais,
+                VersementAutresFrais.IDInscriptionAutresFrais == InscriptionAutresFrais.IDInscriptionAutresFrais
+            ).filter(VersementAutresFrais.IDVersementScol == id_versement).all()
+
+            return {
+                "IDVersementScol": v.IDVersementScol,
+                "DateVers": v.DateVers,
+                "MontantVersSco": float(v.MontantVersSco),
+                "MontantVersAutres": float(v.MontantVersAutres),
+                "MontantVersTrans": float(v.MontantVersTrans),
+                "MontantCantine": float(v.MontantCantine),
+                "ModePaiement": v.ModePaiement or "ESPECES",
+                "ReferencePaiement": v.ReferencePaiement or "",
+                "Annule": bool(v.Annule),
+                "autres_lignes": [
+                    {
+                        "libelle": ligne.LibelleSnapshot or ligne.CodeFraisSnapshot or "Frais",
+                        "montant": float(ligne.MontantApplique or 0),
+                    }
+                    for ligne in lignes
+                ],
+            }
+        except Exception:
+            logger.exception("Erreur get_versement_pour_duplicata")
+            return None
+        finally:
+            session.close()
+
+    @staticmethod
     def get_infos_financieres_eleve(id_annee: int, id_eleve: int) -> Dict[str, Any]:
         """Calcule la situation financiere detaillee de l'eleve (Montants dus, Deja verses et Reste)."""
         res = {
@@ -118,21 +160,19 @@ class VersementService:
                 "autres": bool(ins.AutresFrais)
             }
 
-            # 2. Calculer le montant du de Scolarite (regles centralisees : TarificationService)
+            # 2. Scolarite : utiliser en priorite le snapshot de l'inscription.
             if ins.Scolarite:
-                m_scol = session.query(MontantScol).filter(
-                    (MontantScol.IDTAnneeScolaire == id_annee) & (MontantScol.IDNiveau == ins.IDNiveau)
-                ).first()
-                rang, nb_famille = TarificationService.get_rang_famille_pour_inscription(session, ins, id_annee)
-                res["scol_due"] = TarificationService.calculer_scolarite_due(
-                    montant_affecte=m_scol.MontantAffecte if m_scol else 0,
-                    montant_non_affecte=m_scol.MontantNonAffecte if m_scol else 0,
-                    statut_affectation=ins.StatutAffectation,
-                    ebrie_abobote=bool(ins.famille and ins.famille.EbrieAbobote),
-                    nouveau=bool(ins.Nouveau),
-                    rang_famille=rang,
-                    nb_enfants_famille=nb_famille,
-                )
+                if ins.MontantScolariteApplique is not None:
+                    res["scol_due"] = float(ins.MontantScolariteApplique)
+                else:
+                    m_scol = session.query(MontantScol).filter(
+                        (MontantScol.IDTAnneeScolaire == id_annee) & (MontantScol.IDNiveau == ins.IDNiveau)
+                    ).first()
+                    res["scol_due"] = TarificationService.calculer_scolarite_due(
+                        montant_affecte=m_scol.MontantAffecte if m_scol else 0,
+                        montant_non_affecte=m_scol.MontantNonAffecte if m_scol else 0,
+                        statut_affectation=ins.StatutAffectation,
+                    )
 
             # 3. Calculer le montant du de Transport
             if ins.Transport:
@@ -237,6 +277,8 @@ class VersementService:
         restitution: bool = False,
         login: str = "ADMIN",
         ids_autres_frais: Optional[List[int]] = None,
+        mode_paiement: str = "ESPECES",
+        reference_paiement: str = "",
     ) -> tuple[bool, str, Optional[int]]:
         denied = permission_denied("SCOLARITE_VERSEMENTS", "enregistrer un versement")
         if denied:
@@ -257,6 +299,8 @@ class VersementService:
             return False, "Le total du versement doit être superieur a 0 FCFA.", None
 
         ids_autres_frais = list({i for i in (ids_autres_frais or []) if i})
+        if reduction and (m_trans > 0 or m_cant > 0 or m_autres > 0 or ids_autres_frais):
+            return False, "Une reduction s'applique uniquement aux frais de scolarite.", None
 
         session = get_session()
         try:
@@ -294,7 +338,8 @@ class VersementService:
             lignes_autres_frais = []
             if ids_autres_frais:
                 lignes_autres_frais = session.query(InscriptionAutresFrais).filter(
-                    InscriptionAutresFrais.IDInscriptionAutresFrais.in_(ids_autres_frais)
+                    InscriptionAutresFrais.IDInscriptionAutresFrais.in_(ids_autres_frais),
+                    InscriptionAutresFrais.IDTInscription == ins_lock.IDTInscription,
                 ).all()
                 ids_trouves = {ligne.IDInscriptionAutresFrais for ligne in lignes_autres_frais}
                 ids_invalides = set(ids_autres_frais) - ids_trouves
@@ -311,6 +356,29 @@ class VersementService:
                 if abs(total_frais - m_autres) > 0.01:
                     return False, "Le montant des autres frais ne correspond pas aux frais annexes selectionnes.", None
 
+            # Les autres frais obligatoires sont atomiques et doivent tous etre
+            # regles lors du premier paiement de l'inscription. La scolarite,
+            # elle, reste payable par versements partiels.
+            obligatoires_impayes = session.query(InscriptionAutresFrais.IDInscriptionAutresFrais).outerjoin(
+                VersementAutresFrais,
+                VersementAutresFrais.IDInscriptionAutresFrais == InscriptionAutresFrais.IDInscriptionAutresFrais,
+            ).filter(
+                InscriptionAutresFrais.IDTInscription == ins_lock.IDTInscription,
+                InscriptionAutresFrais.Obligatoire == True,
+                VersementAutresFrais.IDVersementAutresFrais.is_(None),
+            ).all()
+            ids_obligatoires = {row[0] for row in obligatoires_impayes}
+            if (
+                not reduction
+                and not restitution
+                and ids_obligatoires
+                and not ids_obligatoires.issubset(set(ids_autres_frais))
+            ):
+                return False, (
+                    "Tous les autres frais obligatoires doivent etre regles integralement "
+                    "avec ce paiement."
+                ), None
+
             # Enregistrement
             n_vers = VersementScol(
                 IDTAnneeScolaire=id_annee,
@@ -324,7 +392,9 @@ class VersementService:
                 Reduction=reduction,
                 Impaye=impaye,
                 Restitution=restitution,
-                Login=login
+                Login=login,
+                ModePaiement=(mode_paiement or "ESPECES").strip().upper(),
+                ReferencePaiement=(reference_paiement or "").strip() or None,
             )
 
             session.add(n_vers)
@@ -378,6 +448,15 @@ class VersementService:
             v.AnnulePar = login
             v.DateAnnulation = datetime.now()
             v.MotifAnnulation = motif.strip()
+
+            # Un versement annule n'a solde aucun frais annexe : liberer les
+            # liens VersementAutresFrais pour que ces frais redeviennent
+            # proposables a la caisse (sinon la contrainte unique sur
+            # IDInscriptionAutresFrais empecherait tout futur reglement).
+            session.query(VersementAutresFrais).filter(
+                VersementAutresFrais.IDVersementScol == id_versement
+            ).delete(synchronize_session=False)
+
             session.commit()
 
             from services.audit_log_service import AuditLogService

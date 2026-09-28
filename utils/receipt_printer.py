@@ -1,8 +1,12 @@
+import os
+
 from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
-from PySide6.QtGui import QPainter, QFont, QPen, QColor, QPageSize, QPageLayout
+from PySide6.QtGui import QPainter, QFont, QPen, QColor, QPageSize, QPageLayout, QPixmap
 from PySide6.QtCore import Qt, QRectF
 
 from app.config import Config
+
+_APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # ── En-tête école : fallback neutre si aucun établissement n'est trouvé ───────
 _HDR_NOM_FALLBACK = "ÉTABLISSEMENT SCOLAIRE"
@@ -134,7 +138,7 @@ def _draw_centered_fit_text(painter: QPainter, rect: QRectF, text: str,
 
 
 class ReceiptPrinter:
-    """Reçu de paiement — A5 paysage. Libellés à gauche, 3 colonnes de valeurs."""
+    """Reçu sur la moitié supérieure d'une feuille A4 (zone A5 paysage)."""
 
     @staticmethod
     def print_receipt(parent, data: dict):
@@ -145,20 +149,23 @@ class ReceiptPrinter:
         if preferred:
             printer.setPrinterName(preferred)
 
-        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A5))
-        printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        # Le pilote d'impression peut agrandir une page A5 pour remplir une
+        # feuille A4. On demande donc explicitement une feuille A4 portrait et
+        # le rendu est limité plus bas à sa moitié supérieure (148,5 mm).
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        printer.setPageOrientation(QPageLayout.Orientation.Portrait)
         printer.setFullPage(True)
 
         hdr = ReceiptPrinter._get_etablissement_header()
 
         preview = QPrintPreviewDialog(printer, parent)
-        preview.setWindowTitle("Aperçu — Reçu de paiement")
+        preview.setWindowTitle(data.get("preview_title", "Aperçu — Reçu de paiement"))
         preview.resize(980, 700)
         preview.paintRequested.connect(lambda p: ReceiptPrinter._render(p, data, hdr))
         preview.exec()
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Reçu de vente kiosque (D2) — même format A5 paysage, contenu adapté :
+    # Reçu de vente kiosque (D2) — même zone A5 sur une feuille A4 :
     # liste d'articles au lieu de la grille de rubriques scolarité/transport/
     # cantine/autres frais.
     # ─────────────────────────────────────────────────────────────────────────
@@ -175,8 +182,8 @@ class ReceiptPrinter:
         if preferred:
             printer.setPrinterName(preferred)
 
-        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A5))
-        printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        printer.setPageOrientation(QPageLayout.Orientation.Portrait)
         printer.setFullPage(True)
 
         hdr = ReceiptPrinter._get_etablissement_header()
@@ -201,7 +208,10 @@ class ReceiptPrinter:
             return v * dpi / 25.4
 
         vp = painter.viewport()
-        W, H = vp.width(), vp.height()
+        W = vp.width()
+        # Une feuille A4 portrait fait 297 mm de haut : le reçu ne doit
+        # occuper que sa moitié supérieure, équivalente à un A5 paysage.
+        H = min(vp.height(), int(mm(148.5)))
 
         ML, MT = mm(10), mm(8)
         MR, MB = mm(10), mm(8)
@@ -221,6 +231,8 @@ class ReceiptPrinter:
         for cx, cy, dx, dy in [(0, 0, 1, 1), (W, 0, -1, 1), (0, H, 1, -1), (W, H, -1, -1)]:
             painter.drawLine(int(cx + dx * gp), int(cy), int(cx + dx * (gp + mk)), int(cy))
             painter.drawLine(int(cx), int(cy + dy * gp), int(cx), int(cy + dy * (gp + mk)))
+
+        ReceiptPrinter._draw_logo(painter, hdr, X, Y, mm)
 
         # ── EN-TÊTE ─────────────────────────────────────────────────────────
         painter.setPen(QPen(C_BLACK))
@@ -377,7 +389,7 @@ class ReceiptPrinter:
         hdr = {
             "type": "", "nom": _HDR_NOM_FALLBACK, "sigle": "",
             "adresse": "", "telephone": "", "email": "", "slogan": "",
-            "dren": "", "iep": "",
+            "dren": "", "iep": "", "logo_path": "",
         }
         try:
             from services.etablissement_service import EtablissementService
@@ -391,9 +403,41 @@ class ReceiptPrinter:
             hdr["slogan"]    = ecole.Slogan or ""
             hdr["dren"]      = ecole.Dren or ""
             hdr["iep"]       = ecole.IEP or ""
+            hdr["logo_path"] = ecole.LogoPath or ""
         except Exception:
             pass
         return hdr
+
+    @staticmethod
+    def _load_logo_pixmap(logo_path: str) -> "QPixmap | None":
+        """Charge le logo de l'établissement pour l'en-tête du reçu.
+        Ne doit jamais lever d'exception : un reçu doit toujours pouvoir s'imprimer,
+        avec ou sans logo."""
+        if not logo_path:
+            return None
+        try:
+            full_path = logo_path if os.path.isabs(logo_path) else os.path.join(_APP_DIR, logo_path)
+            if not os.path.exists(full_path):
+                return None
+            pix = QPixmap(full_path)
+            return pix if not pix.isNull() else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _draw_logo(painter: QPainter, hdr: dict, X: float, Y: float, mm) -> None:
+        """Dessine le logo de l'établissement en haut à gauche du cadre, s'il existe."""
+        pix = ReceiptPrinter._load_logo_pixmap(hdr.get("logo_path", ""))
+        if pix is None:
+            return
+        box = mm(16)
+        scaled = pix.scaled(
+            int(box), int(box),
+            Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation,
+        )
+        lx = X + mm(3) + (box - scaled.width()) / 2
+        ly = Y + mm(2.5) + (box - scaled.height()) / 2
+        painter.drawPixmap(int(lx), int(ly), scaled)
 
     @staticmethod
     def _render(printer: QPrinter, data: dict, hdr: dict = None):
@@ -409,7 +453,10 @@ class ReceiptPrinter:
             return v * dpi / 25.4
 
         vp = painter.viewport()
-        W, H = vp.width(), vp.height()
+        W = vp.width()
+        # Ne jamais étirer le reçu sur toute la hauteur A4, même si le pilote
+        # PDF/imprimante renvoie un viewport A4 complet.
+        H = min(vp.height(), int(mm(148.5)))
 
         ML, MT = mm(10), mm(8)
         MR, MB = mm(10), mm(8)
@@ -431,6 +478,8 @@ class ReceiptPrinter:
             painter.drawLine(int(cx + dx * gp), int(cy), int(cx + dx * (gp + mk)), int(cy))
             painter.drawLine(int(cx), int(cy + dy * gp), int(cx), int(cy + dy * (gp + mk)))
 
+        ReceiptPrinter._draw_logo(painter, hdr, X, Y, mm)
+
         # ── EN-TÊTE (dynamique, selon l'établissement enregistré) ─────────────
         painter.setPen(QPen(C_BLACK))
 
@@ -447,16 +496,22 @@ class ReceiptPrinter:
             hdr_line3_parts.append(f"« {hdr['slogan']} »")
         hdr_line3 = "  —  ".join(s for s in hdr_line3_parts if s)
 
+        # Le logo occupe une boite de 16 mm a partir de X + 3 mm. Toute la
+        # zone textuelle de l'en-tete commence donc apres 21 mm afin que les
+        # noms d'etablissement longs ne puissent jamais passer sur le logo.
+        header_text_x = X + mm(21)
+        header_text_w = CW - mm(23)
+
         painter.setFont(_font(9, bold=True))
         painter.drawText(
-            QRectF(X, Y + mm(2.5), CW, mm(7)),
+            QRectF(header_text_x, Y + mm(2.5), header_text_w, mm(7)),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
             hdr_line1,
         )
 
         _draw_centered_fit_text(
             painter,
-            QRectF(X + mm(2), Y + mm(8), CW - mm(4), mm(12)),
+            QRectF(header_text_x, Y + mm(8), header_text_w, mm(12)),
             hdr_line2,
             base_size=20, bold=True, min_size=11,
         )
@@ -470,7 +525,7 @@ class ReceiptPrinter:
 
         # Ligne fine sous l'en-tête, avec le libellé du document au centre
         y_sep1 = Y + mm(26)
-        label_recu = "REÇU DE PAIEMENT"
+        label_recu = data.get("receipt_title", "REÇU DE PAIEMENT")
         painter.setFont(_font(9, bold=True))
         label_w = painter.fontMetrics().horizontalAdvance(label_recu) + mm(4)
         mid_x = X + CW / 2
@@ -512,15 +567,18 @@ class ReceiptPrinter:
                          f"Numéro :  {data.get('numero', '')}")
 
         # Motif / Mode de paiement — enrichissement CJGA
-        # (valeurs UI temporaires, non persistées en base à ce stade)
         y_info += row_h
         painter.setFont(_font(8, bold=True))
         painter.drawText(QRectF(X + mm(3), y_info, CW * 0.36, row_h),
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                          f"Motif :  {data.get('motif', 'Scolarité')}")
+        mode_label = data.get('mode_paiement', 'Espèce')
+        reference = (data.get('reference_paiement') or '').strip()
+        if reference:
+            mode_label = f"{mode_label}  (Réf. {reference})"
         painter.drawText(QRectF(X + CW * 0.37, y_info, CW * 0.63, row_h),
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                         f"Mode :  {data.get('mode_paiement', 'Espèce')}")
+                         f"Mode :  {mode_label}")
 
         # Séparateur pointillé
         y_dot_h = y_info + row_h + mm(1.5)
@@ -535,7 +593,7 @@ class ReceiptPrinter:
         # affichée ; Transport/Cantine uniquement si actives pour cet élève).
         # Une rubrique désactivée n'a pas de colonne du tout (pas de "—" grisé).
         sections_def = [
-            ("SCOLARITE",    "scol_active",   "scol_due",   "scol_recu",   "scol_reste",   True),
+            (data.get("scol_label", "SCOLARITE"), "scol_active", "scol_due", "scol_recu", "scol_reste", True),
             ("AUTRES FRAIS", "autres_active", "autres_due", "autres_recu", "autres_reste", False),
             ("TRANSPORT",    "trans_active",  "trans_due",  "trans_recu",  "trans_reste",  False),
             ("CANTINE",      "cant_active",   "cant_due",   "cant_recu",   "cant_reste",   False),
@@ -640,8 +698,12 @@ class ReceiptPrinter:
 
         # ── Filigranes SOLDE (par colonne de valeur) ──────────────────────────
         for section, tx in zip(sections, x_cols):
-            act_key, reste_key = section[1], section[4]
-            if data.get(act_key, False) and float(data.get(reste_key, 1)) <= 0.0:
+            act_key, recu_key, reste_key = section[1], section[3], section[4]
+            if (
+                data.get(act_key, False)
+                and float(data.get(recu_key, 0) or 0) > 0.0
+                and float(data.get(reste_key, 1)) <= 0.0
+            ):
                 painter.save()
                 painter.translate(tx + val_w / 2, (y_body_top + TITLE_H + y_footer_top) / 2)
                 painter.rotate(-28)
@@ -676,6 +738,24 @@ class ReceiptPrinter:
             total_line,
         )
 
+        # Les frais annexes payes sont imprimes ligne par ligne. Le snapshot
+        # fourni par la caisse garantit que le libelle du recu reste historique.
+        autres_lignes = list(data.get("autres_lignes") or [])[:3]
+        for idx, ligne in enumerate(autres_lignes):
+            y_detail = nb_y + total_h + mm(idx * 3)
+            painter.setFont(_font(6.5, bold=True))
+            painter.setPen(QPen(C_BLACK))
+            painter.drawText(
+                QRectF(X + mm(4), y_detail, CW * 0.70, mm(3)),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                str(ligne.get("libelle") or "Frais"),
+            )
+            painter.drawText(
+                QRectF(X + CW * 0.72, y_detail, CW * 0.25 - mm(2), mm(3)),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                _fmt(ligne.get("montant", 0)),
+            )
+
         clause_services = " ou ".join(
             s for s, actif in (("du transport", Config.ENABLE_TRANSPORT),
                                 ("de la cantine", Config.ENABLE_CANTINE)) if actif
@@ -686,11 +766,12 @@ class ReceiptPrinter:
 
         painter.setFont(_font(5.5))
         painter.setPen(QPen(C_BLACK))
-        painter.drawText(
-            QRectF(X + mm(2), nb_y + total_h, CW - mm(4), nb_h - total_h),
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
-            nb_text,
-        )
+        if not autres_lignes:
+            painter.drawText(
+                QRectF(X + mm(2), nb_y + total_h, CW - mm(4), nb_h - total_h),
+                Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
+                nb_text,
+            )
 
         # Signature unique centrée
         cx = X + CW / 2

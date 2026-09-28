@@ -33,16 +33,16 @@ def test_scol_due_uses_non_affecte_rate(db_session):
     assert fin["scol_due"] == 80000.0
 
 
-def test_ebrie_abobote_reduction_applied(db_session):
+def test_ebrie_abobote_ne_change_plus_la_scolarite(db_session):
     annee, niveau, classe, famille, eleve, ins = _setup_base(db_session, ebrie_abobote=True)
     fin = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
-    assert fin["scol_due"] == 90000.0  # 100000 - 10000
+    assert fin["scol_due"] == 100000.0
 
 
-def test_nouveau_eleve_affecte_surcharge_applied(db_session):
+def test_nouveau_eleve_affecte_n_a_plus_de_surcharge(db_session):
     annee, niveau, classe, famille, eleve, ins = _setup_base(db_session, nouveau=True)
     fin = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve.IDEleve)
-    assert fin["scol_due"] == 115000.0  # 100000 + 15000 (affecte de l'Etat)
+    assert fin["scol_due"] == 100000.0
 
 
 def test_nouveau_eleve_non_affecte_pas_de_surcharge(db_session):
@@ -53,7 +53,7 @@ def test_nouveau_eleve_non_affecte_pas_de_surcharge(db_session):
     assert fin["scol_due"] == 80000.0  # pas de surcharge "nouveau" pour un non affecte
 
 
-def test_third_child_of_family_gets_reduction(db_session):
+def test_third_child_of_family_n_a_plus_de_reduction_automatique(db_session):
     annee = make_annee(db_session)
     niveau, classe = make_niveau_classe(db_session, annee)
     famille = make_famille(db_session)
@@ -70,8 +70,8 @@ def test_third_child_of_family_gets_reduction(db_session):
     fin1 = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve1.IDEleve)
     fin3 = VersementService.get_infos_financieres_eleve(annee.IDTAnneeScolaire, eleve3.IDEleve)
 
-    assert fin1["scol_due"] == 100000.0      # 1er enfant : pas de reduction
-    assert fin3["scol_due"] == 90000.0       # 3e enfant : -10000
+    assert fin1["scol_due"] == 100000.0
+    assert fin3["scol_due"] == 100000.0
 
 
 def test_create_versement_rejects_amount_above_reste(db_session):
