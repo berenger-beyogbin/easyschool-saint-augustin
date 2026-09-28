@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, Date, Numeric, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -35,6 +35,10 @@ class TInscription(Base):
 
     # Statut d'affectation de l'État (AFFECTE_ETAT / NON_AFFECTE_ETAT)
     StatutAffectation = Column(String(20), nullable=False, default="AFFECTE_ETAT")
+
+    # Snapshot du tarif de scolarite au moment de l'inscription. Il protege
+    # l'historique contre les changements ulterieurs du catalogue tarifaire.
+    MontantScolariteApplique = Column(Numeric(12, 2), nullable=True)
 
     # Relations
     annee_scolaire = relationship("TAnneeScolaire")

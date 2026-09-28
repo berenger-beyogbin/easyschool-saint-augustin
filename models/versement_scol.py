@@ -26,6 +26,8 @@ class VersementScol(Base):
     MontantVersSco = Column(Numeric(12, 2), nullable=False, default=0.0)
     MontantCantine = Column(Numeric(12, 2), nullable=False, default=0.0)
     MontantVersAutres = Column(Numeric(12, 2), nullable=False, default=0.0)
+    ModePaiement = Column(String(30), nullable=False, default="ESPECES")
+    ReferencePaiement = Column(String(80), nullable=True)
     IDTAnneeScolaire = Column(Integer, ForeignKey("TAnneeScolaire.IDTAnneeScolaire", ondelete="RESTRICT"), nullable=False)
     IDEleve = Column(Integer, ForeignKey("Eleve.IDEleve", ondelete="RESTRICT"), nullable=False)
     Restitution = Column(Boolean, default=False)

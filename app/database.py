@@ -78,6 +78,7 @@ def create_tables():
     import models.religion  # noqa: F401
     import models.famille  # noqa: F401
     import models.eleve  # noqa: F401
+    import models.cursus_anterieur  # noqa: F401
     import models.inscription  # noqa: F401
     import models.autres_frais  # noqa: F401
     import models.montant_autres_frais  # noqa: F401
@@ -101,6 +102,8 @@ def create_tables():
     import models.profil_permission  # noqa: F401
     import models.utilisateur  # noqa: F401
     import models.audit_log  # noqa: F401
+    import models.internat  # noqa: F401
+    import models.cantine_externe  # noqa: F401
 
     Base.metadata.create_all(bind=_engine)
     logger.info("Tables creees avec succes dans PostgreSQL !")

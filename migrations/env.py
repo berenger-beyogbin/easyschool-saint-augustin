@@ -21,9 +21,11 @@ import models.cycle  # noqa: E402,F401
 import models.niveau  # noqa: E402,F401
 import models.classe  # noqa: E402,F401
 import models.nationalite  # noqa: E402,F401
+import models.internat  # noqa: E402,F401
 import models.religion  # noqa: E402,F401
 import models.famille  # noqa: E402,F401
 import models.eleve  # noqa: E402,F401
+import models.cursus_anterieur  # noqa: E402,F401
 import models.inscription  # noqa: E402,F401
 import models.autres_frais  # noqa: E402,F401
 import models.montant_autres_frais  # noqa: E402,F401
