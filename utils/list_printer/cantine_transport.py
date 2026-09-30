@@ -260,3 +260,10 @@ class InternatStatPrinter(CantineStatPrinter):
 
     TITRE = "ETAT DES VERSEMENTS DE L'INTERNAT"
     COL_HEADERS = ["N°", "Matricule", "Pensionnaires", "Classe / origine", "Montant dû", "Versé", "Reste", "État"]
+
+
+class CantineExterneStatPrinter(CantineStatPrinter):
+    """Impression A4 paysage de l'état des versements de la cantine externe."""
+
+    TITRE = "ETAT DES VERSEMENTS DE LA CANTINE EXTERNE"
+    COL_HEADERS = ["N°", "Matricule", "Pensionnaires", "Responsable", "Montant dû", "Versé", "Reste", "État"]

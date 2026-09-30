@@ -13,6 +13,7 @@ from models.annee_scolaire import TAnneeScolaire
 from models.versement_scol import VersementScol
 from models.vente import Vente
 from models.internat import InscriptionInternat, VersementInternat
+from models.cantine_externe import InscriptionCantine, VersementCantine
 import logging
 logger = logging.getLogger(__name__)
 
@@ -431,15 +432,32 @@ class ComptabiliteService:
                 q_internat = q_internat.filter(VersementInternat.DateVersement <= date_fin)
             internat = float(q_internat.scalar() or 0)
 
+            q_cantine_ext = session.query(
+                func.coalesce(func.sum(VersementCantine.Montant), 0)
+            ).join(
+                InscriptionCantine,
+                VersementCantine.IDInscriptionCantine == InscriptionCantine.IDInscriptionCantine,
+            ).filter(
+                InscriptionCantine.IDTAnneeScolaire == id_annee,
+                VersementCantine.Annule == False,
+            )
+            if date_debut:
+                q_cantine_ext = q_cantine_ext.filter(VersementCantine.DateVersement >= date_debut)
+            if date_fin:
+                q_cantine_ext = q_cantine_ext.filter(VersementCantine.DateVersement <= date_fin)
+            cantine_externe = float(q_cantine_ext.scalar() or 0)
+
             return {
                 "scolarite": scol, "transport": trans, "cantine": cant,
                 "vente": vente, "autres": autres, "internat": internat,
+                "cantine_externe": cantine_externe,
             }
         except Exception:
             logger.exception("Erreur get_totaux_entrees_rubriques")
             return {
                 "scolarite": 0.0, "transport": 0.0, "cantine": 0.0,
                 "vente": 0.0, "autres": 0.0, "internat": 0.0,
+                "cantine_externe": 0.0,
             }
         finally:
             session.close()

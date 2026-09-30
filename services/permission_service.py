@@ -29,6 +29,8 @@ PERMISSIONS_CATALOG = [
     ("STAT_STOCK_VIEW",         "Statistique — Stock",                   "Statistiques",     58),
     ("STAT_ALPHABETIQUE_VIEW",  "Statistique — Liste alphabétique",      "Statistiques",     59),
     ("STAT_PERIODIQUE_VIEW",    "Statistique — État périodique",         "Statistiques",     60),
+    ("STAT_LISTE_INTERNAT_VIEW", "Statistique — Liste internat (sans montants)", "Statistiques", 61),
+    ("STAT_LISTE_CANTINE_VIEW",  "Statistique — Liste cantine (sans montants)",  "Statistiques", 62),
     ("SMS_VIEW",                "Accès au module SMS",                   "SMS",              60),
     ("PARAMETRES_VIEW",         "Accès aux paramètres",                  "Paramètres",       70),
     ("PARAMETRES_MODIFIER",     "Modification des paramètres",           "Paramètres",       71),

@@ -126,6 +126,11 @@ class VersementCantineDialog(QDialog):
         form.addRow("Montant * :", self.montant)
         form.addRow("Mode de paiement :", self.mode)
         form.addRow("Référence :", self.reference)
+        self.date_versement = QDateEdit(QDate.currentDate())
+        self.date_versement.setCalendarPopup(True)
+        self.date_versement.setDisplayFormat("dd/MM/yyyy")
+        self.date_versement.setMaximumDate(QDate.currentDate())
+        form.addRow("Date du versement :", self.date_versement)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Save).setText("Enregistrer le paiement")
         buttons.button(QDialogButtonBox.Cancel).setText("Annuler")
@@ -139,8 +144,11 @@ class VersementCantineDialog(QDialog):
         except ValueError:
             QMessageBox.warning(self, "Paiement", "Saisissez un montant numérique valide.")
             return
+        qd = self.date_versement.date()
+        date_versement = date(qd.year(), qd.month(), qd.day())
         ok, message = CantineExterneService.verser(
-            self.pensionnaire["id"], montant, self.mode.currentText(), self.reference.text()
+            self.pensionnaire["id"], montant, self.mode.currentText(), self.reference.text(),
+            date_versement,
         )
         if ok:
             numero_recu = message.partition("Reçu ")[2].rstrip(".") or "—"
@@ -148,7 +156,7 @@ class VersementCantineDialog(QDialog):
                 "preview_title": "Aperçu — Reçu de paiement cantine",
                 "receipt_title": "REÇU DE PAIEMENT — CANTINE EXTERNE",
                 "scol_label": "CANTINE",
-                "date": date.today().strftime("%d/%m/%Y"),
+                "date": date_versement.strftime("%d/%m/%Y"),
                 "matricule": self.pensionnaire.get("matricule", ""),
                 "nom": self.pensionnaire.get("nom", ""),
                 "classe": "",

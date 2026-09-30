@@ -132,6 +132,9 @@ class DashboardView(QWidget):
         show_kiosque         = AppSession.has_permission("KIOSQUE_VIEW")
         show_comptabilite    = AppSession.has_permission("COMPTABILITE_VIEW")
         show_cantine_externe = AppSession.has_permission("CANTINE_EXTERNE_VIEW")
+        # Les montants financiers exigent le droit d'encaissement, pas le simple accès au module.
+        fin_internat = AppSession.has_permission("INTERNAT_VERSEMENTS")
+        fin_cantine  = AppSession.has_permission("CANTINE_EXTERNE_VERSEMENTS")
 
         # Deux lignes compactes : effectifs, puis pilotage financier.
         grid_defs = [
@@ -141,14 +144,14 @@ class DashboardView(QWidget):
                 ("total_pensionnaires",        "Pensionnaires",          COLORS["purple"],   "🏠"),
                 ("total_classes",              "Classes actives",        "#0369A1",          "🏫"),
             ]),
-            (show_versements or show_internat or show_kiosque or show_comptabilite or show_cantine_externe, [
+            (show_versements or fin_internat or show_comptabilite or fin_cantine, [
                 ("total_recettes",              "Recettes encaissées",   COLORS["success"],  "📥"),
                 ("total_depenses",              "Dépenses",              COLORS["danger"],   "📤"),
                 ("solde_net",                   "Solde net",             COLORS["primary"],  "⚖"),
                 ("total_reste_internat",        "Reste Internat",        COLORS["warning"],  "⏳"),
                 ("total_reste_cantine_externe", "Reste Cantine",         COLORS["warning"],  "⏳"),
             ]),
-            (show_versements or show_internat or show_cantine_externe, [
+            (show_versements or fin_internat or fin_cantine, [
                 ("total_versements_scolarite",       "Versements scolarité", COLORS["success"], "💳"),
                 ("total_versements_internat",        "Versements internat",  COLORS["purple"],  "🏠"),
                 ("total_versements_cantine_externe", "Versements cantine",   COLORS["warning"],  "🍽"),
@@ -174,11 +177,11 @@ class DashboardView(QWidget):
         self.kpi_cards["total_pensionnaires"].setVisible(show_internat)
         self.kpi_cards["total_depenses"].setVisible(show_comptabilite)
         self.kpi_cards["solde_net"].setVisible(show_comptabilite)
-        self.kpi_cards["total_reste_internat"].setVisible(show_internat)
-        self.kpi_cards["total_reste_cantine_externe"].setVisible(show_cantine_externe)
+        self.kpi_cards["total_reste_internat"].setVisible(fin_internat)
+        self.kpi_cards["total_reste_cantine_externe"].setVisible(fin_cantine)
         self.kpi_cards["total_versements_scolarite"].setVisible(show_versements)
-        self.kpi_cards["total_versements_internat"].setVisible(show_internat)
-        self.kpi_cards["total_versements_cantine_externe"].setVisible(show_cantine_externe)
+        self.kpi_cards["total_versements_internat"].setVisible(fin_internat)
+        self.kpi_cards["total_versements_cantine_externe"].setVisible(fin_cantine)
 
     def _build_alertes(self):
         self.alertes_frame = QFrame()
@@ -360,6 +363,7 @@ class DashboardView(QWidget):
             if AppSession.has_permission("INTERNAT_VIEW"):
                 self.kpi_cards["total_pensionnaires"].set_value(
                     str(summary["total_pensionnaires"]))
+            if AppSession.has_permission("INTERNAT_VERSEMENTS"):
                 self.kpi_cards["total_reste_internat"].set_value(
                     DashboardService.format_fcfa(summary["total_reste_internat"]))
                 attendu = float(summary["total_attendu_internat"] or 0)
@@ -372,7 +376,7 @@ class DashboardView(QWidget):
                 self.kpi_cards["total_versements_internat"].set_subtitle(
                     f"Recouvrement : {taux} %")
 
-            if AppSession.has_permission("CANTINE_EXTERNE_VIEW"):
+            if AppSession.has_permission("CANTINE_EXTERNE_VERSEMENTS"):
                 self.kpi_cards["total_versements_cantine_externe"].set_value(
                     DashboardService.format_fcfa(summary["total_versements_cantine_externe"]))
                 self.kpi_cards["total_reste_cantine_externe"].set_value(
@@ -415,8 +419,8 @@ class DashboardView(QWidget):
                     DashboardService.format_fcfa(summary["solde_net"]))
 
             if any(AppSession.has_permission(code) for code in (
-                "SCOLARITE_VERSEMENTS", "INTERNAT_VIEW", "KIOSQUE_VIEW", "COMPTABILITE_VIEW",
-                "CANTINE_EXTERNE_VIEW",
+                "SCOLARITE_VERSEMENTS", "INTERNAT_VERSEMENTS", "COMPTABILITE_VIEW",
+                "CANTINE_EXTERNE_VERSEMENTS",
             )):
                 can_all = AppSession.has_permission("COMPTABILITE_VIEW")
                 visible_recettes = float(summary["total_recettes"]) if can_all else 0.0
@@ -425,11 +429,11 @@ class DashboardView(QWidget):
                     scol = float(summary["total_versements_scolarite"])
                     visible_recettes += scol
                     details.append(f"Scolarité {DashboardService.format_fcfa(scol)}")
-                if not can_all and AppSession.has_permission("INTERNAT_VIEW"):
+                if not can_all and AppSession.has_permission("INTERNAT_VERSEMENTS"):
                     internat = float(summary["total_versements_internat"])
                     visible_recettes += internat
                     details.append(f"Internat {DashboardService.format_fcfa(internat)}")
-                if not can_all and AppSession.has_permission("CANTINE_EXTERNE_VIEW"):
+                if not can_all and AppSession.has_permission("CANTINE_EXTERNE_VERSEMENTS"):
                     cantine = float(summary["total_versements_cantine_externe"])
                     visible_recettes += cantine
                     details.append(f"Cantine {DashboardService.format_fcfa(cantine)}")
@@ -460,13 +464,14 @@ class DashboardView(QWidget):
         if AppSession.has_permission("INTERNAT_VIEW"):
             internat = DashboardService.get_internat_alerts()
             incomplete = internat["dossiers_incomplets"]
-            reste_internat = internat["reste"]
+            reste_internat = internat["reste"] if AppSession.has_permission("INTERNAT_VERSEMENTS") else 0
             if incomplete or reste_internat > 0:
                 has_alerts = True
                 count += incomplete + (1 if reste_internat > 0 else 0)
                 title = QLabel(
-                    f"🏠  Internat — {incomplete} dossier(s) incomplet(s), "
-                    f"{DashboardService.format_fcfa(reste_internat)} à recouvrer"
+                    f"🏠  Internat — {incomplete} dossier(s) incomplet(s)"
+                    + (f", {DashboardService.format_fcfa(reste_internat)} à recouvrer"
+                       if reste_internat > 0 else "")
                 )
                 title.setStyleSheet(
                     "color:#7C3AED;font-size:12px;font-weight:700;"

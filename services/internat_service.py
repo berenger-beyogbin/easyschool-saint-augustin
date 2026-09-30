@@ -282,7 +282,8 @@ class InternatService:
             session.close()
 
     @staticmethod
-    def verser(id_internat: int, montant, mode: str = "ESPECES", reference: str = "") -> tuple[bool, str]:
+    def verser(id_internat: int, montant, mode: str = "ESPECES", reference: str = "",
+              date_versement: date | None = None) -> tuple[bool, str]:
         denied = permission_denied("INTERNAT_VERSEMENTS", "enregistrer un versement d'internat")
         if denied:
             return denied
@@ -298,10 +299,13 @@ class InternatService:
                 return False, "Le montant doit être supérieur à zéro."
             if montant > reste:
                 return False, f"Le montant dépasse le reste à payer ({int(reste):,} FCFA).".replace(",", " ")
+            date_versement = date_versement or date.today()
+            if date_versement > date.today():
+                return False, "La date du versement ne peut pas être dans le futur."
             numero = f"INT-{datetime.now():%Y%m%d%H%M%S%f}"
             versement = VersementInternat(
                 IDInscriptionInternat=id_internat, NumeroRecu=numero,
-                DateVersement=date.today(), Montant=montant,
+                DateVersement=date_versement, Montant=montant,
                 ModePaiement=mode.strip().upper() or "ESPECES",
                 ReferencePaiement=reference.strip() or None,
                 Login=AppSession.get_logged_in_username(),

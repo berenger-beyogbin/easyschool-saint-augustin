@@ -612,6 +612,59 @@ class StatistiquesService:
             session.close()
 
     @staticmethod
+    def get_etat_versements_cantine_externe() -> List[dict]:
+        """Retourne l'état financier de chaque pensionnaire de la cantine externe."""
+        id_annee = AppSession.get_active_annee_id()
+        if not id_annee:
+            return []
+
+        session = get_session()
+        try:
+            from models.cantine_externe import InscriptionCantine, VersementCantine
+            from models.eleve import Eleve
+
+            versements = session.query(
+                VersementCantine.IDInscriptionCantine.label("id_cantine"),
+                func.sum(VersementCantine.Montant).label("total_verse"),
+            ).filter(
+                VersementCantine.Annule.is_(False)
+            ).group_by(VersementCantine.IDInscriptionCantine).subquery()
+
+            rows = session.query(
+                InscriptionCantine, Eleve, func.coalesce(versements.c.total_verse, 0),
+            ).join(
+                Eleve, InscriptionCantine.IDEleve == Eleve.IDEleve
+            ).outerjoin(
+                versements, versements.c.id_cantine == InscriptionCantine.IDInscriptionCantine,
+            ).filter(
+                InscriptionCantine.IDTAnneeScolaire == id_annee
+            ).order_by(Eleve.Nom, Eleve.Prenoms).all()
+
+            result = []
+            for inscription, eleve, total_verse in rows:
+                montant_du = float(inscription.MontantTotal or 0)
+                montant_verse = float(total_verse or 0)
+                reste = max(0.0, montant_du - montant_verse)
+                etat = "Payé" if montant_du > 0 and reste <= 0 else (
+                    "Partiel" if montant_verse > 0 else "Impayé"
+                )
+                result.append({
+                    "Matricule": eleve.Matricule,
+                    "Nom": f"{eleve.Nom} {eleve.Prenoms}",
+                    "LibClasse": inscription.ResponsableNom or "",
+                    "MontantDu": montant_du,
+                    "MontantVerse": montant_verse,
+                    "Reste": reste,
+                    "Etat": etat,
+                })
+            return result
+        except Exception as e:
+            print(f"Error in get_etat_versements_cantine_externe: {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
     def get_etat_periodique(date_debut: Optional[datetime.date] = None, date_fin: Optional[datetime.date] = None) -> List[dict]:
         """Retourne le récapitulatif des encaissements par rubrique sur une période donnée."""
         id_annee = AppSession.get_active_annee_id()
@@ -631,6 +684,7 @@ class StatistiquesService:
                 lignes.append(("Transport", totaux.get("transport", 0.0)))
             lignes.append(("Autres frais annexes", totaux.get("autres", 0.0)))
             lignes.append(("Internat", totaux.get("internat", 0.0)))
+            lignes.append(("Cantine externe", totaux.get("cantine_externe", 0.0)))
             lignes.append(("Vente Kiosque", totaux.get("vente", 0.0)))
 
             return [{"Rubrique": lib, "Montant": montant} for lib, montant in lignes]

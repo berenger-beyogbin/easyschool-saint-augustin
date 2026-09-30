@@ -12,9 +12,20 @@ class InscritsListPrinter:
     COL_RATIOS  = [0.05, 0.12, 0.12, 0.12, 0.47, 0.12]
     COL_HEADERS = ["N°", "Inscrit le", "Matricule", "Né(e) le", "Noms", "Classe"]
     COL_ALIGN   = ["C", "C", "C", "C", "L", "C"]
+    TITRE       = "LISTE DES INSCRITS"
+    PREVIEW_TITRE = "Aperçu — Liste des Inscrits"
 
     @staticmethod
-    def print_list(parent, rows: list, titre_filtre: str = ""):
+    def format_row(idx: int, item: dict) -> list:
+        d_insc = item["DateInscription"].strftime("%d/%m/%Y") if item.get("DateInscription") else ""
+        matr   = item.get("Matricule") or ""
+        d_nais = item["DateNaissance"].strftime("%d/%m/%Y") if item.get("DateNaissance") else ""
+        noms   = f"{item.get('Nom', '')} {item.get('Prenoms', '')}".upper().strip()
+        classe = item.get("LibClasse") or ""
+        return [str(idx + 1), d_insc, matr, d_nais, noms, classe]
+
+    @classmethod
+    def print_list(cls, parent, rows: list, titre_filtre: str = ""):
         """
         rows : liste de dicts avec clés DateInscription, Matricule, Nom,
                Prenoms, DateNaissance, LibClasse
@@ -30,15 +41,7 @@ class InscritsListPrinter:
         printer.setPageOrientation(QPageLayout.Orientation.Portrait)
         printer.setFullPage(True)
 
-        # Formater les données
-        formatted = []
-        for idx, item in enumerate(rows):
-            d_insc = item["DateInscription"].strftime("%d/%m/%Y") if item.get("DateInscription") else ""
-            matr   = item.get("Matricule") or ""
-            d_nais = item["DateNaissance"].strftime("%d/%m/%Y") if item.get("DateNaissance") else ""
-            noms   = f"{item.get('Nom', '')} {item.get('Prenoms', '')}".upper().strip()
-            classe = item.get("LibClasse") or ""
-            formatted.append([str(idx + 1), d_insc, matr, d_nais, noms, classe])
+        formatted = [cls.format_row(idx, item) for idx, item in enumerate(rows)]
 
         # Infos école
         hdr_type = hdr_nom = hdr_tel = ""
@@ -52,11 +55,11 @@ class InscritsListPrinter:
             pass
 
         preview = QPrintPreviewDialog(printer, parent)
-        preview.setWindowTitle("Aperçu — Liste des Inscrits")
+        preview.setWindowTitle(cls.PREVIEW_TITRE)
         preview.resize(820, 960)
 
         def _paint(p):
-            InscritsListPrinter._render(
+            cls._render(
                 p, formatted, hdr_type, hdr_nom, hdr_tel, titre_filtre
             )
 
@@ -65,8 +68,8 @@ class InscritsListPrinter:
 
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _render(printer, rows, hdr_type, hdr_nom, hdr_tel, titre_filtre):
+    @classmethod
+    def _render(cls, printer, rows, hdr_type, hdr_nom, hdr_tel, titre_filtre):
         painter = QPainter(printer)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -83,7 +86,7 @@ class InscritsListPrinter:
         CW = W - ML - MR
 
         ROW_H     = mm(6.5)
-        COL_W     = [CW * r for r in InscritsListPrinter.COL_RATIOS]
+        COL_W     = [CW * r for r in cls.COL_RATIOS]
         HDR_H     = mm(38)
         TBL_HDR_H = mm(8)
         FTR_H     = mm(8)
@@ -100,7 +103,8 @@ class InscritsListPrinter:
         a_right  = Qt.AlignmentFlag.AlignRight
         a_vcenter = Qt.AlignmentFlag.AlignVCenter
 
-        col_aligns = [a_center, a_center, a_center, a_center, a_left, a_center]
+        _al = {"C": a_center, "L": a_left, "R": a_right}
+        col_aligns = [_al[c] for c in cls.COL_ALIGN]
 
         for page in range(total_pages):
             if page > 0:
@@ -134,7 +138,7 @@ class InscritsListPrinter:
             Y += mm(3)
 
             # Titre du rapport + date
-            title_text = "LISTE DES INSCRITS"
+            title_text = cls.TITRE
             if titre_filtre:
                 title_text += f"  —  {titre_filtre}"
 
@@ -154,7 +158,7 @@ class InscritsListPrinter:
             painter.setFont(_font(8, bold=True))
 
             cx = X
-            for lbl, cw, al in zip(InscritsListPrinter.COL_HEADERS, COL_W, col_aligns):
+            for lbl, cw, al in zip(cls.COL_HEADERS, COL_W, col_aligns):
                 pad = mm(1.5) if al == a_left else mm(0.5)
                 painter.drawText(QRectF(cx + pad, Y, cw - mm(1), TBL_HDR_H),
                                  a_vcenter | al, lbl)
@@ -211,3 +215,29 @@ class InscritsListPrinter:
             )
 
         painter.end()
+
+
+class _ListePensionnairesPrinter(InscritsListPrinter):
+    """Liste nominative sans montants (internat / cantine externe)."""
+
+    COL_RATIOS  = [0.06, 0.16, 0.48, 0.30]
+    COL_ALIGN   = ["C", "C", "L", "C"]
+
+    @staticmethod
+    def format_row(idx: int, item: dict) -> list:
+        return [
+            str(idx + 1), item.get("Matricule") or "",
+            (item.get("Nom") or "").upper().strip(), item.get("LibClasse") or "",
+        ]
+
+
+class InternatListPrinter(_ListePensionnairesPrinter):
+    TITRE = "LISTE DES PENSIONNAIRES DE L'INTERNAT"
+    PREVIEW_TITRE = "Aperçu — Liste de l'internat"
+    COL_HEADERS = ["N°", "Matricule", "Noms", "Classe / origine"]
+
+
+class CantineExterneListPrinter(_ListePensionnairesPrinter):
+    TITRE = "LISTE DES PENSIONNAIRES DE LA CANTINE EXTERNE"
+    PREVIEW_TITRE = "Aperçu — Liste de la cantine externe"
+    COL_HEADERS = ["N°", "Matricule", "Noms", "Responsable"]

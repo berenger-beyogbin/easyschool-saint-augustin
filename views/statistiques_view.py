@@ -6,12 +6,13 @@ from app.session import AppSession
 from views.stat_inscrits_view import StatInscritsView
 from views.stat_nouveaux_view import StatNouveauxView
 from views.stat_scolarite_view import StatScolariteView
-from views.stat_cantine_view import StatCantineView
+from views.stat_cantine_externe_view import StatCantineExterneView
 from views.stat_transport_view import StatTransportView
 from views.stat_vente_view import StatVenteView
 from views.stat_stock_view import StatStockView
 from views.stat_internat_view import StatInternatView
 from views.liste_alphabetique_view import ListeAlphabetiqueView
+from views.stat_liste_pensionnaires_view import StatListeCantineExterneView, StatListeInternatView
 from views.stat_periodique_view import StatPeriodiqueView
 
 
@@ -42,15 +43,18 @@ class StatistiquesView(QWidget):
         self.view_periodique   = StatPeriodiqueView(self.main_window)
         # Vues instanciees seulement si leur module est actif (sinon on
         # construirait une UI pour rien : cf. audit P2-06).
-        self.view_cantine = StatCantineView(self.main_window) if Config.ENABLE_CANTINE else None
+        self.view_cantine = StatCantineExterneView(self.main_window)
+        self.view_liste_internat = StatListeInternatView(self.main_window)
+        self.view_liste_cantine = StatListeCantineExterneView(self.main_window)
         self.view_transport = StatTransportView(self.main_window) if Config.ENABLE_TRANSPORT else None
 
         self.tabs.addTab(self.view_inscrits,     "Inscrits")
         self.tabs.addTab(self.view_nouveaux,     "Nouveaux")
         self.tabs.addTab(self.view_scolarite,    "Scolarité")
         self.tabs.addTab(self.view_internat,     "Internat")
-        if Config.ENABLE_CANTINE:
-            self.tabs.addTab(self.view_cantine,   "Cantine")
+        self.tabs.addTab(self.view_cantine,   "Cantine")
+        self.tabs.addTab(self.view_liste_internat, "Liste Internat")
+        self.tabs.addTab(self.view_liste_cantine,  "Liste Cantine")
         if Config.ENABLE_TRANSPORT:
             self.tabs.addTab(self.view_transport, "Transport")
         self.tabs.addTab(self.view_vente,        "Vente")
@@ -66,6 +70,8 @@ class StatistiquesView(QWidget):
             self.view_scolarite:    "STAT_SCOLARITE_VIEW",
             self.view_internat:     "STAT_INTERNAT_VIEW",
             self.view_cantine:      "STAT_CANTINE_VIEW",
+            self.view_liste_internat: "STAT_LISTE_INTERNAT_VIEW",
+            self.view_liste_cantine:  "STAT_LISTE_CANTINE_VIEW",
             self.view_transport:    "STAT_TRANSPORT_VIEW",
             self.view_vente:        "STAT_VENTE_VIEW",
             self.view_stock:        "STAT_STOCK_VIEW",
