@@ -1,14 +1,15 @@
 import datetime
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDateEdit,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDateEdit, QComboBox,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QAbstractItemView
 )
 from PySide6.QtCore import Qt, QDate
 from services.statistiques_service import StatistiquesService
+from app.session import AppSession
 from utils.list_printer import PeriodiqueStatPrinter
 from app.styles import (
     COLORS, PAGE_TITLE_STYLE, SECTION_TITLE_STYLE,
-    DATE_STYLE, BUTTON_PRIMARY, BUTTON_SUCCESS,
+    DATE_STYLE, COMBO_STYLE, BUTTON_PRIMARY, BUTTON_SUCCESS,
     apply_table_style, make_totaux_panel_widget,
 )
 
@@ -19,6 +20,7 @@ class StatPeriodiqueView(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
         self.main_window = main_window
+        self._applique_preset = False
         self.init_ui()
         self.refresh_data()
 
@@ -65,6 +67,24 @@ class StatPeriodiqueView(QWidget):
         self.btn_imprimer.setStyleSheet(BUTTON_SUCCESS)
         self.btn_imprimer.clicked.connect(self.imprimer_clic)
 
+        lbl_preset = QLabel("Période :")
+        lbl_preset.setStyleSheet(lbl_style)
+        self.cmb_periode = QComboBox()
+        self.cmb_periode.setStyleSheet(COMBO_STYLE)
+        self.cmb_periode.addItem("Personnalisée", "custom")
+        self.cmb_periode.addItem("Aujourd'hui", "today")
+        self.cmb_periode.addItem("Cette semaine", "week")
+        self.cmb_periode.addItem("Ce mois", "month")
+        self.cmb_periode.addItem("Mois dernier", "last_month")
+        self.cmb_periode.addItem("Ce trimestre", "quarter")
+        self.cmb_periode.addItem("Année scolaire", "year")
+        self.cmb_periode.currentIndexChanged.connect(self._appliquer_periode)
+        # Modifier une date à la main repasse le choix sur « Personnalisée ».
+        self.dte_debut.dateChanged.connect(self._marquer_personnalisee)
+        self.dte_fin.dateChanged.connect(self._marquer_personnalisee)
+
+        layout_filtres.addWidget(lbl_preset)
+        layout_filtres.addWidget(self.cmb_periode)
         layout_filtres.addWidget(lbl_debut)
         layout_filtres.addWidget(self.dte_debut)
         layout_filtres.addWidget(lbl_fin)
@@ -94,6 +114,56 @@ class StatPeriodiqueView(QWidget):
         ])
         layout.addWidget(self.totaux_panel)
 
+    def _marquer_personnalisee(self, *_):
+        if self._applique_preset:
+            return
+        self.cmb_periode.blockSignals(True)
+        self.cmb_periode.setCurrentIndex(0)
+        self.cmb_periode.blockSignals(False)
+
+    @staticmethod
+    def _bornes_preset(code: str, today: datetime.date):
+        """(début, fin) d'une période rapide, ou None pour « Personnalisée »."""
+        if code == "today":
+            return today, today
+        if code == "week":
+            debut = today - datetime.timedelta(days=today.weekday())
+            return debut, debut + datetime.timedelta(days=6)
+        if code == "month":
+            debut = today.replace(day=1)
+            suivant = (debut + datetime.timedelta(days=32)).replace(day=1)
+            return debut, suivant - datetime.timedelta(days=1)
+        if code == "last_month":
+            fin = today.replace(day=1) - datetime.timedelta(days=1)
+            return fin.replace(day=1), fin
+        if code == "quarter":
+            mois = 3 * ((today.month - 1) // 3) + 1
+            debut = today.replace(month=mois, day=1)
+            suivant = (debut + datetime.timedelta(days=92)).replace(day=1)
+            return debut, suivant - datetime.timedelta(days=1)
+        if code == "year":
+            libelle = AppSession.get_active_annee_libelle()
+            try:
+                an1, an2 = (int(x) for x in str(libelle).split("-"))
+            except (TypeError, ValueError):
+                an1 = today.year if today.month >= 9 else today.year - 1
+                an2 = an1 + 1
+            return datetime.date(an1, 9, 1), datetime.date(an2, 8, 31)
+        return None
+
+    def _appliquer_periode(self):
+        bornes = self._bornes_preset(self.cmb_periode.currentData(), datetime.date.today())
+        if not bornes:
+            return
+        debut, fin = bornes
+        self._applique_preset = True
+        try:
+            self.dte_debut.setDate(QDate(debut.year, debut.month, debut.day))
+            self.dte_fin.setDate(QDate(fin.year, fin.month, fin.day))
+        finally:
+            self._applique_preset = False
+        self.refresh_data()
+
     def _get_periode(self):
         q_start = self.dte_debut.date()
         q_end = self.dte_fin.date()
@@ -103,6 +173,9 @@ class StatPeriodiqueView(QWidget):
 
     def refresh_data(self):
         start_date, end_date = self._get_periode()
+        if start_date > end_date:
+            QMessageBox.warning(self, "Période", "La date de début doit être antérieure ou égale à la date de fin.")
+            return
         data = StatistiquesService.get_etat_periodique(start_date, end_date)
 
         self.table.setRowCount(0)
@@ -126,6 +199,9 @@ class StatPeriodiqueView(QWidget):
 
     def imprimer_clic(self):
         start_date, end_date = self._get_periode()
+        if start_date > end_date:
+            QMessageBox.warning(self, "Période", "La date de début doit être antérieure ou égale à la date de fin.")
+            return
         data = StatistiquesService.get_etat_periodique(start_date, end_date)
         if not data:
             QMessageBox.information(self, "Impression", "Aucune donnée à imprimer.")
