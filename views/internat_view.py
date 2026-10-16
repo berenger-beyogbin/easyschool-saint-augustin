@@ -657,9 +657,13 @@ class InternatView(QWidget):
                 suppr = QPushButton("Supprimer")
                 suppr.setToolTip("Supprimer cette pensionnaire (erreur de saisie)")
                 suppr.setFixedSize(88, 32)
+                if row["verse"] > 0:
+                    suppr.setEnabled(False)
+                    suppr.setToolTip("Suppression impossible : des versements existent")
                 suppr.setStyleSheet(
                     "QPushButton { color: #DC2626; background: transparent; border: 1px solid #DC2626; "
-                    "border-radius: 6px; font-weight: 700; } QPushButton:hover { background-color: #FEF2F2; }"
+                    "border-radius: 6px; font-weight: 700; } QPushButton:hover { background-color: #FEF2F2; } "
+                    "QPushButton:disabled { color: #9CA3AF; border-color: #D1D5DB; }"
                 )
                 suppr.clicked.connect(lambda checked=False, r=row: self._supprimer(r))
                 actions_layout.addWidget(suppr)
