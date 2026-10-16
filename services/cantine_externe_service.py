@@ -230,6 +230,96 @@ class CantineExterneService:
             session.close()
 
     @staticmethod
+    def get_obstacles_suppression(id_inscription_cantine: int) -> list[str]:
+        """Raisons empechant de supprimer un pensionnaire (liste vide = possible).
+        Les versements actifs doivent d'abord etre tous annules."""
+        session = get_session()
+        try:
+            if not session.get(InscriptionCantine, id_inscription_cantine):
+                return ["Pensionnaire introuvable."]
+            actifs = session.query(VersementCantine).filter_by(
+                IDInscriptionCantine=id_inscription_cantine, Annule=False
+            ).count()
+            if actifs:
+                return [f"{actifs} versement(s) actif(s) : annulez-les tous d'abord (onglet Paiements)."]
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
+    def supprimer_pensionnaire(id_inscription_cantine: int, motif: str, id_utilisateur=None) -> tuple[bool, str]:
+        """Supprime une inscription cantine saisie par erreur. Les versements
+        deja annules sont supprimes avec elle (detail conserve dans l'audit) ;
+        la fiche identite est supprimee aussi si rien d'autre ne s'y rattache."""
+        denied = permission_denied("CANTINE_EXTERNE_ADMISSIONS", "supprimer un pensionnaire cantine")
+        if denied:
+            return denied
+        if not motif or not motif.strip():
+            return False, "Le motif de la suppression est obligatoire."
+        obstacles = CantineExterneService.get_obstacles_suppression(id_inscription_cantine)
+        if obstacles:
+            return False, "Suppression impossible : " + " ".join(obstacles)
+
+        from models.annee_scolaire import TAnneeScolaire
+        from models.inscription import TInscription
+        from models.internat import InscriptionInternat
+        session = get_session()
+        try:
+            row = session.get(InscriptionCantine, id_inscription_cantine)
+            if not row:
+                return False, "Pensionnaire introuvable."
+            annee = session.get(TAnneeScolaire, row.IDTAnneeScolaire)
+            if not annee or annee.Cloturer:
+                return False, "Impossible de supprimer un pensionnaire d'une annee cloturee."
+
+            ancienne = (
+                f"IDEleve={row.IDEleve}; Annee={row.IDTAnneeScolaire}; "
+                f"Statut={row.Statut}; MontantTotal={row.MontantTotal}"
+            )
+            id_eleve = row.IDEleve
+            annules = session.query(VersementCantine).filter_by(
+                IDInscriptionCantine=id_inscription_cantine
+            ).all()
+            if annules:
+                ancienne += "; VersementsAnnulesSupprimes=" + ", ".join(
+                    f"{v.NumeroRecu}:{v.Montant}:{v.MotifAnnulation or ''}" for v in annules
+                )
+                for v in annules:
+                    session.delete(v)
+                session.flush()
+            session.delete(row)
+            session.flush()
+
+            eleve_supprime = False
+            autres = (
+                session.query(InscriptionCantine.IDInscriptionCantine).filter_by(IDEleve=id_eleve).first()
+                or session.query(TInscription.IDTInscription).filter_by(IDEleve=id_eleve).first()
+                or session.query(InscriptionInternat.IDInscriptionInternat).filter_by(IDEleve=id_eleve).first()
+            )
+            if not autres:
+                try:
+                    with session.begin_nested():
+                        session.delete(session.get(Eleve, id_eleve))
+                    eleve_supprime = True
+                except Exception:
+                    pass  # fiche referencee ailleurs : on la conserve
+            session.commit()
+        except Exception as exc:
+            session.rollback()
+            return False, f"Erreur : {exc}"
+        finally:
+            session.close()
+
+        from services.audit_log_service import AuditLogService
+        AuditLogService.log(
+            action="SUPPRIMER_PENSIONNAIRE_CANTINE", table_cible="InscriptionCantine",
+            id_cible=id_inscription_cantine, id_utilisateur=id_utilisateur,
+            ancienne_valeur=ancienne + ("; FicheEleveSupprimee=True" if eleve_supprime else ""),
+            motif=motif.strip(),
+        )
+        return True, "Le pensionnaire a été supprimé de la cantine."
+
+    @staticmethod
     def dashboard(id_annee: int) -> dict:
         rows = CantineExterneService.get_pensionnaires(id_annee)
         return {

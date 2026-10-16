@@ -286,7 +286,9 @@ class CantineExterneView(QWidget):
         self.table_pensionnaires.setAlternatingRowColors(True)
         self.table_pensionnaires.verticalHeader().setDefaultSectionSize(44)
         self.table_pensionnaires.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table_pensionnaires.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        # Les widgets de cellule ne comptent pas dans ResizeToContents : largeur fixe.
+        self.table_pensionnaires.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
+        self.table_pensionnaires.setColumnWidth(6, 210)
         layout.addWidget(self.table_pensionnaires)
         return widget
 
@@ -415,6 +417,20 @@ class CantineExterneView(QWidget):
             payer.setStyleSheet(BUTTON_TABLE_ACTION_PRIMARY)
             payer.clicked.connect(lambda checked=False, r=row: self._payer(r))
             actions_layout.addWidget(payer)
+            if AppSession.has_permission("CANTINE_EXTERNE_ADMISSIONS"):
+                suppr = QPushButton("Supprimer")
+                suppr.setToolTip("Supprimer ce pensionnaire (erreur de saisie)")
+                suppr.setFixedSize(88, 32)
+                if row["verse"] > 0:
+                    suppr.setEnabled(False)
+                    suppr.setToolTip("Suppression impossible : des versements existent")
+                suppr.setStyleSheet(
+                    "QPushButton { color: #DC2626; background: transparent; border: 1px solid #DC2626; "
+                    "border-radius: 6px; font-weight: 700; } QPushButton:hover { background-color: #FEF2F2; } "
+                    "QPushButton:disabled { color: #9CA3AF; border-color: #D1D5DB; }"
+                )
+                suppr.clicked.connect(lambda checked=False, r=row: self._supprimer(r))
+                actions_layout.addWidget(suppr)
             table.setCellWidget(i, 6, actions)
 
     def _filter_payments(self, *_):
@@ -486,6 +502,32 @@ class CantineExterneView(QWidget):
             return
         self.refresh_data()
         QMessageBox.information(self, "Inscription créée", message)
+
+    def _supprimer(self, row):
+        obstacles = CantineExterneService.get_obstacles_suppression(row["id"])
+        if obstacles:
+            QMessageBox.warning(
+                self, "Suppression impossible",
+                f"{row['nom']} ne peut pas être supprimé :\n\n  •  " + "\n  •  ".join(obstacles)
+            )
+            return
+        if QMessageBox.question(
+            self, "Supprimer le pensionnaire",
+            f"Supprimer définitivement {row['nom']} de la cantine ?\n\nCette action est tracée.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        motif, ok_dialog = QInputDialog.getMultiLineText(
+            self, "Supprimer le pensionnaire", "Motif de la suppression (obligatoire) :"
+        )
+        if not ok_dialog:
+            return
+        ok, message = CantineExterneService.supprimer_pensionnaire(
+            row["id"], motif, id_utilisateur=AppSession.get_current_user_id()
+        )
+        (QMessageBox.information if ok else QMessageBox.warning)(self, "Cantine", message)
+        if ok:
+            self.refresh_data()
 
     def _payer(self, row):
         dialog = VersementCantineDialog(row, self)
