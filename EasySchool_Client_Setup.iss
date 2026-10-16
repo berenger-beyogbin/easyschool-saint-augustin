@@ -1,5 +1,5 @@
 #define MyAppName "Easy School CJGA"
-#define MyAppVersion "2.1.0"
+#define MyAppVersion "2.3.0"
 #define MyAppPublisher "CJGA"
 #define MyAppExeName "EasySchool.exe"
 
@@ -11,8 +11,8 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\EasySchool
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=dist\EasySchool_Installation_v2.1.0\2_Client
-OutputBaseFilename=EasySchool_CJGA_Client_Setup_v2.1.0
+OutputDir=dist
+OutputBaseFilename=EasySchool_CJGA_Client_Setup_v2.3.0
 SetupIconFile=assets\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
@@ -32,7 +32,7 @@ Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"; Flags: unchecked
 
 [Files]
-Source: "dist_client_latest\EasySchool\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\app_v2.3.0\EasySchool\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
@@ -110,6 +110,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   EnvContent: String;
+  ResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -123,5 +124,35 @@ begin
 
     if not SaveStringToFile(ExpandConstant('{app}\.env'), EnvContent, False) then
       RaiseException('Impossible de créer le fichier de configuration .env.');
+
+#ifndef SANS_MIGRATION
+    { Le client 2.2.0 doit toujours mettre le schema de la base a niveau
+      avant son premier lancement. Sans cette etape, une colonne ajoutee par
+      migration (par exemple VersementScol.ModePaiement) manque et le tableau
+      de bord masque l'erreur en affichant tous les indicateurs a zero. }
+    if not Exec(
+      ExpandConstant('{app}\{#MyAppExeName}'),
+      '--migrate',
+      ExpandConstant('{app}'),
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) or (ResultCode <> 0) then
+    begin
+      if ResultCode = 2 then
+        RaiseException(
+          'Installation terminee, mais la connexion PostgreSQL est refusee.' + #13#10 +
+          'Le serveur, l''utilisateur ou le mot de passe saisi est incorrect.' + #13#10 +
+          'Corrigez le fichier ' + ExpandConstant('{app}\.env') + ' puis lancez :' + #13#10 +
+          '"' + ExpandConstant('{app}\{#MyAppExeName}') + '" --migrate'
+        )
+      else
+        RaiseException(
+          'La configuration du client est terminee, mais la migration de la base a echoue.' + #13#10 +
+          'Verifiez les droits de l''utilisateur PostgreSQL puis consultez :' + #13#10 +
+          '%LOCALAPPDATA%\EasySchool\logs\easy_school.log'
+        );
+    end;
+#endif
   end;
 end;
