@@ -826,17 +826,12 @@ class InternatView(QWidget):
         if obstacles:
             QMessageBox.warning(
                 self, "Suppression impossible",
-                f"{row['nom']} ne peut pas être supprimée :
-
-  •  " + "
-  •  ".join(obstacles)
+                f"{row['nom']} ne peut pas être supprimée :\n\n  •  " + "\n  •  ".join(obstacles)
             )
             return
         if QMessageBox.question(
             self, "Supprimer la pensionnaire",
-            f"Supprimer définitivement {row['nom']} de l’internat ?
-
-"
+            f"Supprimer définitivement {row['nom']} de l’internat ?\n\n"
             "Son dossier sera supprimé. Cette action est tracée.",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         ) != QMessageBox.Yes:
