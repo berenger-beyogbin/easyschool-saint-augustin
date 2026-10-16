@@ -650,6 +650,16 @@ class InternatView(QWidget):
             payer.setStyleSheet(BUTTON_TABLE_ACTION_PRIMARY)
             payer.clicked.connect(lambda checked=False, r=row: self._payer(r))
             actions_layout.addWidget(payer)
+            if AppSession.has_permission("INTERNAT_ADMISSIONS"):
+                suppr = QPushButton("Supprimer")
+                suppr.setToolTip("Supprimer cette pensionnaire (erreur de saisie)")
+                suppr.setFixedSize(88, 32)
+                suppr.setStyleSheet(
+                    "QPushButton { color: #DC2626; background: transparent; border: 1px solid #DC2626; "
+                    "border-radius: 6px; font-weight: 700; } QPushButton:hover { background-color: #FEF2F2; }"
+                )
+                suppr.clicked.connect(lambda checked=False, r=row: self._supprimer(r))
+                actions_layout.addWidget(suppr)
             table.setCellWidget(i, 7, actions)
 
     def _filter_payments(self, *_):
@@ -809,6 +819,38 @@ class InternatView(QWidget):
 
     def _dossier(self, row):
         if DossierDialog(row["id"], self).exec():
+            self.refresh_data()
+
+    def _supprimer(self, row):
+        obstacles = InternatService.get_obstacles_suppression(row["id"])
+        if obstacles:
+            QMessageBox.warning(
+                self, "Suppression impossible",
+                f"{row['nom']} ne peut pas être supprimée :
+
+  •  " + "
+  •  ".join(obstacles)
+            )
+            return
+        if QMessageBox.question(
+            self, "Supprimer la pensionnaire",
+            f"Supprimer définitivement {row['nom']} de l’internat ?
+
+"
+            "Son dossier sera supprimé. Cette action est tracée.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        motif, ok_dialog = QInputDialog.getMultiLineText(
+            self, "Supprimer la pensionnaire", "Motif de la suppression (obligatoire) :"
+        )
+        if not ok_dialog:
+            return
+        ok, message = InternatService.supprimer_pensionnaire(
+            row["id"], motif, id_utilisateur=AppSession.get_current_user_id()
+        )
+        (QMessageBox.information if ok else QMessageBox.warning)(self, "Internat", message)
+        if ok:
             self.refresh_data()
 
     def _payer(self, row):

@@ -148,3 +148,51 @@ def test_annulation_du_dernier_versement_retrograde_le_statut(db_session):
     assert InternatService.annuler_versement(versement.IDVersementInternat, "Erreur de saisie")[0]
     db_session.refresh(internat)
     assert internat.Statut == "EN_ATTENTE_PAIEMENT"
+
+
+def _externe(db_session, nom="KONE"):
+    annee = make_annee(db_session)
+    donnees = {
+        "nom": nom, "prenoms": "Awa", "date_naissance": date(2014, 6, 1),
+        "etablissement": "EPP", "classe": "CM2",
+        "responsable_nom": "Resp", "responsable_contact": "0500000000",
+    }
+    assert InternatService.inscrire_externe(annee.IDTAnneeScolaire, donnees, "NOUVELLE")[0]
+    return db_session.query(InscriptionInternat).one()
+
+
+def test_suppression_pensionnaire_externe_supprime_aussi_la_fiche(db_session):
+    internat = _externe(db_session)
+    ok, message = InternatService.supprimer_pensionnaire(internat.IDInscriptionInternat, "Erreur")
+    assert ok, message
+    db_session.expire_all()
+    assert db_session.query(InscriptionInternat).count() == 0
+    assert db_session.query(InternatPieceDossier).count() == 0
+    assert db_session.query(Eleve).count() == 0
+
+
+def test_suppression_pensionnaire_du_college_conserve_leleve(db_session):
+    _, inscription = _inscription_fille(db_session)
+    assert InternatService.inscrire(inscription.IDTInscription, "NOUVELLE")[0]
+    internat = db_session.query(InscriptionInternat).one()
+    ok, message = InternatService.supprimer_pensionnaire(internat.IDInscriptionInternat, "Erreur")
+    assert ok, message
+    db_session.expire_all()
+    assert db_session.query(InscriptionInternat).count() == 0
+    assert db_session.query(Eleve).count() == 1
+
+
+def test_suppression_pensionnaire_refusee_avec_versement_ou_sans_motif(db_session):
+    internat = _externe(db_session)
+    ok, message = InternatService.supprimer_pensionnaire(internat.IDInscriptionInternat, " ")
+    assert not ok and "motif" in message.lower()
+
+    assert InternatService.verser(internat.IDInscriptionInternat, 50_000)[0]
+    ok, message = InternatService.supprimer_pensionnaire(internat.IDInscriptionInternat, "Erreur")
+    assert not ok and "versement" in message.lower()
+
+    versement = db_session.query(VersementInternat).one()
+    assert InternatService.annuler_versement(versement.IDVersementInternat, "Erreur")[0]
+    ok, message = InternatService.supprimer_pensionnaire(internat.IDInscriptionInternat, "Erreur")
+    assert not ok
+    assert db_session.query(InscriptionInternat).count() == 1

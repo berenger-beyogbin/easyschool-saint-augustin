@@ -268,10 +268,17 @@ class InscriptionView(QWidget):
             "padding: 8px 14px; font-weight: 700; }"
             "QPushButton:hover { background-color: #FEF2F2; }"
         )
+        self.btn_supprimer.setMinimumHeight(44)
         self.btn_supprimer.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_supprimer.clicked.connect(self.on_supprimer_inscription)
-        self.btn_supprimer.setVisible(False)
-        c3.addWidget(self.btn_supprimer)
+        # Conteneur avec marge haute : l'espacement disparait avec le bouton.
+        self.zone_supprimer = QWidget()
+        self.zone_supprimer.setStyleSheet("background: transparent;")
+        zl = QVBoxLayout(self.zone_supprimer)
+        zl.setContentsMargins(0, 10, 0, 0)
+        zl.addWidget(self.btn_supprimer)
+        self.zone_supprimer.setVisible(False)
+        c3.addWidget(self.zone_supprimer)
 
         col_droite.addWidget(card3)
         col_droite.addStretch(1)
@@ -498,9 +505,9 @@ class InscriptionView(QWidget):
             self._prefill_inscription(situation)
             self.btn_inscrire.setText("Modifier l'Inscription")
             self.btn_inscrire.setStyleSheet(_BTN_MODIFIER)
-            self.btn_supprimer.setVisible(AppSession.has_permission("SCOLARITE_INSCRIPTIONS"))
+            self.zone_supprimer.setVisible(AppSession.has_permission("SCOLARITE_INSCRIPTIONS"))
         else:
-            self.btn_supprimer.setVisible(False)
+            self.zone_supprimer.setVisible(False)
             self._mode_modification = False
             self._id_inscription_courante = None
             self._reset_form()
@@ -514,7 +521,7 @@ class InscriptionView(QWidget):
         self._eleve_courant = None
         self._mode_modification = False
         self._id_inscription_courante = None
-        self.btn_supprimer.setVisible(False)
+        self.zone_supprimer.setVisible(False)
         self.panel_resume.clear()
         self.panel_famille.clear_no_eleve()
         self._set_form_enabled(False)

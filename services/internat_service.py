@@ -337,6 +337,88 @@ class InternatService:
             session.close()
 
     @staticmethod
+    def get_obstacles_suppression(id_internat: int) -> list[str]:
+        """Raisons empechant de supprimer une pensionnaire (liste vide = possible).
+        Tout versement, meme annule, bloque : il reste une trace comptable."""
+        session = get_session()
+        try:
+            if not session.get(InscriptionInternat, id_internat):
+                return ["Pensionnaire introuvable."]
+            versements = session.query(VersementInternat).filter_by(
+                IDInscriptionInternat=id_internat
+            ).all()
+            actifs = sum(1 for v in versements if not v.Annule)
+            if actifs:
+                return [f"{actifs} versement(s) actif(s) : annulez-les d'abord (onglet Paiements)."]
+            if versements:
+                return [
+                    "Des versements annules existent et sont conserves pour la tracabilite "
+                    "comptable : la pensionnaire ne peut plus etre supprimee."
+                ]
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
+    def supprimer_pensionnaire(id_internat: int, motif: str, id_utilisateur=None) -> tuple[bool, str]:
+        """Supprime une admission a l'internat saisie par erreur (avec son
+        dossier). Pour une externe creee uniquement pour l'internat, la fiche
+        eleve est supprimee aussi si rien d'autre ne s'y rattache."""
+        denied = permission_denied("INTERNAT_ADMISSIONS", "supprimer une pensionnaire")
+        if denied:
+            return denied
+        if not motif or not motif.strip():
+            return False, "Le motif de la suppression est obligatoire."
+        obstacles = InternatService.get_obstacles_suppression(id_internat)
+        if obstacles:
+            return False, "Suppression impossible : " + " ".join(obstacles)
+
+        from models.annee_scolaire import TAnneeScolaire
+        session = get_session()
+        try:
+            row = session.get(InscriptionInternat, id_internat)
+            if not row:
+                return False, "Pensionnaire introuvable."
+            annee = session.get(TAnneeScolaire, row.IDTAnneeScolaire)
+            if not annee or annee.Cloturer:
+                return False, "Impossible de supprimer une pensionnaire d'une annee cloturee."
+
+            ancienne = (
+                f"IDEleve={row.IDEleve}; Origine={row.OrigineScolaire}; Type={row.TypePensionnaire}; "
+                f"Annee={row.IDTAnneeScolaire}; Statut={row.Statut}; MontantAnnuel={row.MontantAnnuel}"
+            )
+            id_eleve, externe = row.IDEleve, row.OrigineScolaire == "EXTERNE"
+            session.delete(row)  # pieces du dossier supprimees en cascade
+            session.flush()
+
+            eleve_supprime = False
+            if externe:
+                autres = session.query(InscriptionInternat.IDInscriptionInternat).filter_by(IDEleve=id_eleve).first() \
+                    or session.query(TInscription.IDTInscription).filter_by(IDEleve=id_eleve).first()
+                if not autres:
+                    try:
+                        with session.begin_nested():
+                            session.delete(session.get(Eleve, id_eleve))
+                        eleve_supprime = True
+                    except Exception:
+                        pass  # fiche referencee ailleurs : on la conserve
+            session.commit()
+        except Exception as exc:
+            session.rollback()
+            return False, f"Erreur : {exc}"
+        finally:
+            session.close()
+
+        from services.audit_log_service import AuditLogService
+        AuditLogService.log(
+            action="SUPPRIMER_PENSIONNAIRE", table_cible="InscriptionInternat", id_cible=id_internat,
+            id_utilisateur=id_utilisateur,
+            ancienne_valeur=ancienne + ("; FicheEleveSupprimee=True" if eleve_supprime else ""),
+            motif=motif.strip(),
+        )
+        return True, "La pensionnaire a été supprimée de l'internat."
+
+    @staticmethod
     def annuler_versement(id_versement: int, motif: str) -> tuple[bool, str]:
         denied = permission_denied("INTERNAT_VERSEMENTS", "annuler un versement d'internat")
         if denied:
