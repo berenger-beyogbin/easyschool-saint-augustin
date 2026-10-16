@@ -339,7 +339,7 @@ class InternatService:
     @staticmethod
     def get_obstacles_suppression(id_internat: int) -> list[str]:
         """Raisons empechant de supprimer une pensionnaire (liste vide = possible).
-        Tout versement, meme annule, bloque : il reste une trace comptable."""
+        Les versements actifs doivent d'abord etre tous annules."""
         session = get_session()
         try:
             if not session.get(InscriptionInternat, id_internat):
@@ -349,12 +349,7 @@ class InternatService:
             ).all()
             actifs = sum(1 for v in versements if not v.Annule)
             if actifs:
-                return [f"{actifs} versement(s) actif(s) : annulez-les d'abord (onglet Paiements)."]
-            if versements:
-                return [
-                    "Des versements annules existent et sont conserves pour la tracabilite "
-                    "comptable : la pensionnaire ne peut plus etre supprimee."
-                ]
+                return [f"{actifs} versement(s) actif(s) : annulez-les tous d'abord (onglet Paiements)."]
             return []
         finally:
             session.close()
@@ -388,6 +383,16 @@ class InternatService:
                 f"Annee={row.IDTAnneeScolaire}; Statut={row.Statut}; MontantAnnuel={row.MontantAnnuel}"
             )
             id_eleve, externe = row.IDEleve, row.OrigineScolaire == "EXTERNE"
+            # Versements deja annules : supprimes avec la fiche (FK RESTRICT),
+            # leur detail est conserve dans la piste d'audit.
+            annules = session.query(VersementInternat).filter_by(IDInscriptionInternat=id_internat).all()
+            if annules:
+                ancienne += "; VersementsAnnulesSupprimes=" + ", ".join(
+                    f"{v.NumeroRecu}:{v.Montant}:{v.MotifAnnulation or ''}" for v in annules
+                )
+                for v in annules:
+                    session.delete(v)
+                session.flush()
             session.delete(row)  # pieces du dossier supprimees en cascade
             session.flush()
 

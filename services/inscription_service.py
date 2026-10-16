@@ -378,8 +378,8 @@ class InscriptionService:
     @staticmethod
     def get_obstacles_suppression(id_inscription: int) -> list[str]:
         """Raisons qui empechent de supprimer une inscription (liste vide =
-        suppression possible). Tout versement (meme annule) et tout dossier d'internat lie
-        bloquent : la trace comptable doit etre conservee."""
+        suppression possible). Tout versement actif (a annuler d'abord, de facon tracee) et tout
+        dossier d'internat lie bloquent."""
         from models.internat import InscriptionInternat
         session = get_session()
         try:
@@ -390,11 +390,12 @@ class InscriptionService:
             nb_versements = session.query(VersementScol).filter(
                 VersementScol.IDTAnneeScolaire == ins.IDTAnneeScolaire,
                 VersementScol.IDEleve == ins.IDEleve,
+                VersementScol.Annule == False,
             ).count()
             if nb_versements:
                 obstacles.append(
-                    f"{nb_versements} versement(s) (actifs ou annules) existent pour cet eleve : "
-                    "ils sont conserves pour la tracabilite comptable, l'inscription ne peut plus etre supprimee."
+                    f"{nb_versements} versement(s) actif(s) existent pour cet eleve : "
+                    "annulez-les tous d'abord depuis l'onglet Versements."
                 )
             if session.query(InscriptionInternat.IDInscriptionInternat).filter_by(
                 IDTInscription=id_inscription

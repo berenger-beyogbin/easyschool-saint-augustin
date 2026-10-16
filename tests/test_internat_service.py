@@ -194,5 +194,7 @@ def test_suppression_pensionnaire_refusee_avec_versement_ou_sans_motif(db_sessio
     versement = db_session.query(VersementInternat).one()
     assert InternatService.annuler_versement(versement.IDVersementInternat, "Erreur")[0]
     ok, message = InternatService.supprimer_pensionnaire(internat.IDInscriptionInternat, "Erreur")
-    assert not ok
-    assert db_session.query(InscriptionInternat).count() == 1
+    assert ok, message
+    db_session.expire_all()
+    assert db_session.query(InscriptionInternat).count() == 0
+    assert db_session.query(VersementInternat).count() == 0
