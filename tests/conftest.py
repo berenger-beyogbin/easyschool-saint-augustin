@@ -3,7 +3,7 @@ import os
 # Doit s'executer AVANT tout import de app.config / app.database : Config lit
 # les variables d'environnement au moment de l'import, et load_dotenv() ne
 # remplace jamais une variable deja definie (override=False par defaut).
-os.environ["DB_NAME"] = "easy_school_test_db"
+os.environ["DB_NAME"] = "easy_school_test_db2"
 
 import pytest
 

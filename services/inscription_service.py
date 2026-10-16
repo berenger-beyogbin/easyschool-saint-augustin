@@ -376,6 +376,85 @@ class InscriptionService:
             session.close()
 
     @staticmethod
+    def get_obstacles_suppression(id_inscription: int) -> list[str]:
+        """Raisons qui empechent de supprimer une inscription (liste vide =
+        suppression possible). Versements non annules (scolarite, cantine,
+        frais annexes) et dossier d'internat lie bloquent : l'utilisateur doit
+        d'abord les annuler de facon tracee."""
+        from models.internat import InscriptionInternat
+        session = get_session()
+        try:
+            ins = session.get(TInscription, id_inscription)
+            if not ins:
+                return ["Inscription introuvable."]
+            obstacles = []
+            nb_versements = session.query(VersementScol).filter(
+                VersementScol.IDTAnneeScolaire == ins.IDTAnneeScolaire,
+                VersementScol.IDEleve == ins.IDEleve,
+                VersementScol.Annule == False,
+            ).count()
+            if nb_versements:
+                obstacles.append(
+                    f"{nb_versements} versement(s) actif(s) existent pour cet eleve : "
+                    "annulez-les d'abord depuis l'onglet Versements."
+                )
+            if session.query(InscriptionInternat.IDInscriptionInternat).filter_by(
+                IDTInscription=id_inscription
+            ).first():
+                obstacles.append("Un dossier d'internat est lie a cette inscription.")
+            return obstacles
+        finally:
+            session.close()
+
+    @staticmethod
+    def supprimer_inscription(
+        id_inscription: int, motif: str, id_utilisateur: Optional[int] = None
+    ) -> tuple[bool, str]:
+        """Supprime definitivement une inscription (erreur de saisie) avec
+        piste d'audit. Refuse si des versements actifs ou un dossier
+        d'internat y sont rattaches, ou si l'annee est cloturee."""
+        from services.authorization import permission_denied
+        denied = permission_denied("SCOLARITE_INSCRIPTIONS", "supprimer une inscription")
+        if denied:
+            return denied
+        if not motif or not motif.strip():
+            return False, "Le motif de la suppression est obligatoire."
+
+        obstacles = InscriptionService.get_obstacles_suppression(id_inscription)
+        if obstacles:
+            return False, "Suppression impossible :\n- " + "\n- ".join(obstacles)
+
+        session = get_session()
+        try:
+            ins = session.get(TInscription, id_inscription)
+            if not ins:
+                return False, "Inscription introuvable."
+            annee = session.get(TAnneeScolaire, ins.IDTAnneeScolaire)
+            if not annee or annee.Cloturer:
+                return False, "Impossible de supprimer une inscription d'une annee cloturee."
+
+            ancienne = (
+                f"IDEleve={ins.IDEleve}; IDClasse={ins.IDClasse}; IDNiveau={ins.IDNiveau}; "
+                f"Annee={ins.IDTAnneeScolaire}; Statut={ins.StatutAffectation}; "
+                f"MontantScolarite={ins.MontantScolariteApplique}"
+            )
+            # InscriptionAutresFrais (et ses liens) partent en cascade FK.
+            session.delete(ins)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            return False, f"Erreur lors de la suppression : {e}"
+        finally:
+            session.close()
+
+        from services.audit_log_service import AuditLogService
+        AuditLogService.log(
+            action="SUPPRIMER_INSCRIPTION", table_cible="TInscription", id_cible=id_inscription,
+            id_utilisateur=id_utilisateur, ancienne_valeur=ancienne, motif=motif.strip(),
+        )
+        return True, "L'inscription a ete supprimee."
+
+    @staticmethod
     def get_versements_scolarite_bloquants(id_inscription: int) -> list:
         """Versements de scolarité actifs (non annulés) qui bloquent un
         changement de niveau/statut d'affectation pour cette inscription

@@ -178,3 +178,60 @@ def test_versement_lie_au_bon_eleve_et_a_la_bonne_famille(db_session):
     versement = db_session.get(VersementScol, id_versement)
     assert versement.IDEleve == eleve.IDEleve
     assert versement.IDFamille == famille.IdTFamille
+
+
+def _inscrire(db_session, matricule, tarif=0):
+    annee, niveau, classe = _prepare(db_session)
+    if tarif:
+        from tests.factories import make_montant_scol
+        make_montant_scol(db_session, annee, niveau, montant_affecte=tarif, montant_non_affecte=tarif)
+    famille = make_famille(db_session)
+    eleve = make_eleve(db_session, famille, matricule=matricule)
+    InscriptionService.create_inscription({
+        "IDEleve": eleve.IDEleve, "IDNiveau": niveau.IDT_Niveau, "IDClasse": classe.IDTClasse,
+    })
+    ins = db_session.query(TInscription).filter_by(IDEleve=eleve.IDEleve).one()
+    return annee, niveau, eleve, ins
+
+
+def test_suppression_inscription_sans_versement(db_session):
+    annee, niveau, eleve, ins = _inscrire(db_session, "EL-DEL1")
+    id_ins = ins.IDTInscription
+
+    ok, message = InscriptionService.supprimer_inscription(id_ins, "Erreur de saisie")
+
+    assert ok, message
+    db_session.expire_all()
+    assert db_session.query(TInscription).filter_by(IDTInscription=id_ins).count() == 0
+    assert db_session.get(Eleve, eleve.IDEleve) is not None
+
+
+def test_suppression_inscription_exige_un_motif(db_session):
+    annee, niveau, eleve, ins = _inscrire(db_session, "EL-DEL2")
+
+    ok, message = InscriptionService.supprimer_inscription(ins.IDTInscription, "  ")
+
+    assert not ok
+    assert "motif" in message.lower()
+    assert db_session.query(TInscription).count() == 1
+
+
+def test_suppression_inscription_bloquee_par_versement_actif_puis_possible_apres_annulation(db_session):
+    annee, niveau, eleve, ins = _inscrire(db_session, "EL-DEL3", tarif=50_000)
+    ok, message, id_versement = VersementService.create_versement(
+        id_annee=annee.IDTAnneeScolaire, id_eleve=eleve.IDEleve, id_famille=ins.IDFamille,
+        date_v=date.today(), m_scol=20_000, m_trans=0, m_cant=0, m_autres=0,
+    )
+    assert ok, message
+
+    ok, message = InscriptionService.supprimer_inscription(ins.IDTInscription, "Erreur")
+    assert not ok
+    assert "versement" in message.lower()
+    assert db_session.query(TInscription).count() == 1
+
+    ok, message = VersementService.annuler_versement(id_versement, "Erreur")
+    assert ok, message
+    ok, message = InscriptionService.supprimer_inscription(ins.IDTInscription, "Erreur")
+    assert ok, message
+    db_session.expire_all()
+    assert db_session.query(TInscription).count() == 0

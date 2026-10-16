@@ -260,6 +260,19 @@ class InscriptionView(QWidget):
         self.btn_inscrire.clicked.connect(self.on_inscrire)
         c3.addWidget(self.btn_inscrire)
 
+        # Visible uniquement en mode modification (inscription existante).
+        self.btn_supprimer = QPushButton("Supprimer l'inscription")
+        self.btn_supprimer.setStyleSheet(
+            f"QPushButton {{ color: {COLORS['danger']}; background: transparent; "
+            f"border: 1px solid {COLORS['danger']}; border-radius: 8px; "
+            "padding: 8px 14px; font-weight: 700; }"
+            "QPushButton:hover { background-color: #FEF2F2; }"
+        )
+        self.btn_supprimer.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_supprimer.clicked.connect(self.on_supprimer_inscription)
+        self.btn_supprimer.setVisible(False)
+        c3.addWidget(self.btn_supprimer)
+
         col_droite.addWidget(card3)
         col_droite.addStretch(1)
 
@@ -485,7 +498,9 @@ class InscriptionView(QWidget):
             self._prefill_inscription(situation)
             self.btn_inscrire.setText("Modifier l'Inscription")
             self.btn_inscrire.setStyleSheet(_BTN_MODIFIER)
+            self.btn_supprimer.setVisible(AppSession.has_permission("SCOLARITE_INSCRIPTIONS"))
         else:
+            self.btn_supprimer.setVisible(False)
             self._mode_modification = False
             self._id_inscription_courante = None
             self._reset_form()
@@ -499,6 +514,7 @@ class InscriptionView(QWidget):
         self._eleve_courant = None
         self._mode_modification = False
         self._id_inscription_courante = None
+        self.btn_supprimer.setVisible(False)
         self.panel_resume.clear()
         self.panel_famille.clear_no_eleve()
         self._set_form_enabled(False)
@@ -716,7 +732,57 @@ class InscriptionView(QWidget):
             QMessageBox.critical(self, "Erreur", message)
         return success
 
-    def _prompt_motif_correction(self):
+    def on_supprimer_inscription(self):
+        """Supprime l'inscription courante (erreur de saisie) apres
+        confirmation et motif ; le service refuse s'il reste des versements
+        actifs ou un dossier d'internat."""
+        if not self._mode_modification or not self._id_inscription_courante:
+            return
+        if not AppSession.has_permission("SCOLARITE_INSCRIPTIONS"):
+            QMessageBox.warning(self, "Permission", "Permission insuffisante pour supprimer une inscription.")
+            return
+
+        obstacles = InscriptionService.get_obstacles_suppression(self._id_inscription_courante)
+        if obstacles:
+            QMessageBox.warning(
+                self, "Suppression impossible",
+                "Cette inscription ne peut pas être supprimée :\n\n  •  " + "\n  •  ".join(obstacles)
+            )
+            return
+
+        e = self._eleve_courant
+        reponse = QMessageBox.question(
+            self, "Supprimer l'inscription",
+            f"Supprimer définitivement l'inscription de {e.Nom} {e.Prenoms} pour l'année active ?\n\n"
+            "L'élève restera dans la base mais ne sera plus inscrit. "
+            "Les frais annexes cochés seront supprimés.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reponse != QMessageBox.Yes:
+            return
+
+        motif = self._prompt_motif_correction(
+            titre="Supprimer l'inscription", libelle="Motif de la suppression (obligatoire) :"
+        )
+        if motif is None:
+            return
+        if not motif.strip():
+            QMessageBox.warning(self, "Suppression", "Le motif est obligatoire.")
+            return
+
+        success, message = InscriptionService.supprimer_inscription(
+            self._id_inscription_courante, motif.strip(),
+            id_utilisateur=AppSession.get_current_user_id(),
+        )
+        if success:
+            QMessageBox.information(self, "Inscription supprimée", message)
+            self.on_eleve_selected(self.selected_eleve_id)
+            self.panel_recherche.refresh()
+        else:
+            QMessageBox.critical(self, "Erreur", message)
+
+    def _prompt_motif_correction(self, titre="Corriger l'inscription",
+                                 libelle="Motif de la correction (obligatoire) :"):
         """Boîte de dialogue dédiée pour saisir le motif de la correction.
 
         Construite à la main (plutôt que QInputDialog.getMultiLineText) car
@@ -728,13 +794,13 @@ class InscriptionView(QWidget):
         Retourne le texte saisi, ou None si l'utilisateur a annulé.
         """
         dialog = QDialog(self)
-        dialog.setWindowTitle("Corriger l'inscription")
+        dialog.setWindowTitle(titre)
         dialog.setMinimumWidth(420)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(20, 20, 20, 16)
         layout.setSpacing(10)
 
-        lbl = QLabel("Motif de la correction (obligatoire) :")
+        lbl = QLabel(libelle)
         lbl.setStyleSheet(f"color: {COLORS['text']}; font-size: 14px; border: none;")
         layout.addWidget(lbl)
 
