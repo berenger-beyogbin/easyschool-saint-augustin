@@ -443,7 +443,10 @@ class InternatView(QWidget):
         self.table_pensionnaires.verticalHeader().setDefaultSectionSize(44)
         self.table_pensionnaires.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table_pensionnaires.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.table_pensionnaires.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        # Les widgets de cellule ne comptent pas dans ResizeToContents : largeur fixe
+        # pour deux boutons de 88 px + espacement + marges.
+        self.table_pensionnaires.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.table_pensionnaires.setColumnWidth(7, 210)
         layout.addWidget(self.table_pensionnaires)
         return widget
 
