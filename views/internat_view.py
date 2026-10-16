@@ -646,7 +646,7 @@ class InternatView(QWidget):
             actions_layout = QHBoxLayout(actions)
             actions_layout.setContentsMargins(3, 3, 3, 3)
             actions_layout.setSpacing(4)
-            payer = QPushButton("Paiement")
+            payer = QPushButton("Payer")
             payer.setToolTip("Enregistrer un paiement")
             payer.setFixedSize(88, 32)
             payer.setEnabled(row["reste"] > 0)
