@@ -216,7 +216,7 @@ def test_suppression_inscription_exige_un_motif(db_session):
     assert db_session.query(TInscription).count() == 1
 
 
-def test_suppression_inscription_bloquee_par_versement_actif_puis_possible_apres_annulation(db_session):
+def test_suppression_inscription_bloquee_par_tout_versement_meme_annule(db_session):
     annee, niveau, eleve, ins = _inscrire(db_session, "EL-DEL3", tarif=50_000)
     ok, message, id_versement = VersementService.create_versement(
         id_annee=annee.IDTAnneeScolaire, id_eleve=eleve.IDEleve, id_famille=ins.IDFamille,
@@ -227,11 +227,11 @@ def test_suppression_inscription_bloquee_par_versement_actif_puis_possible_apres
     ok, message = InscriptionService.supprimer_inscription(ins.IDTInscription, "Erreur")
     assert not ok
     assert "versement" in message.lower()
-    assert db_session.query(TInscription).count() == 1
 
     ok, message = VersementService.annuler_versement(id_versement, "Erreur")
     assert ok, message
     ok, message = InscriptionService.supprimer_inscription(ins.IDTInscription, "Erreur")
-    assert ok, message
+    assert not ok
+    assert "versement" in message.lower()
     db_session.expire_all()
-    assert db_session.query(TInscription).count() == 0
+    assert db_session.query(TInscription).count() == 1
