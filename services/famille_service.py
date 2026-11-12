@@ -2,6 +2,7 @@ from app.database import get_session
 from models.famille import TFamille
 from models.eleve import Eleve
 import re
+from sqlalchemy.orm import joinedload
 
 class FamilleService:
     """
@@ -23,6 +24,147 @@ class FamilleService:
         session = get_session()
         try:
             return session.get(TFamille, id_famille)
+        finally:
+            session.close()
+
+    @staticmethod
+    def find_by_nom_et_telephone(nom: str, telephone: str) -> TFamille | None:
+        """Récupération exacte (Nom + Téléphone du responsable) : ce couple
+        est contraint unique (uq_famille_nom_cellulaire), donc fiable juste
+        après une création réussie pour retrouver l'IdTFamille sans changer
+        la signature de create_famille."""
+        session = get_session()
+        try:
+            return session.query(TFamille).filter_by(
+                NomResponsable=nom, CellulaireResponsable=telephone
+            ).first()
+        finally:
+            session.close()
+
+    @staticmethod
+    def search_parent_contacts(query: str, limit: int = 8) -> list[dict]:
+        """Recherche un parent existant par nom ou téléphone normalisé."""
+        query = (query or "").strip()
+        query_digits = re.sub(r"\D", "", query)
+        query_name = query.casefold()
+        if len(query_name) < 3 and len(query_digits) < 6:
+            return []
+
+        session = get_session()
+        try:
+            results = []
+            seen = set()
+            families = session.query(TFamille).options(
+                joinedload(TFamille.eleves)
+            ).order_by(TFamille.NomResponsable).all()
+            role_fields = (
+                ("Père", "NomPere", "TelPere", "TelBureauPere", "EmailPere"),
+                ("Mère", "NomMere", "TelMere", "TelBureauMere", "EmailMere"),
+                ("Tuteur", "NomTuteur", "CelTuteur", "TelBureauTuteur", "EmailTuteur"),
+            )
+            contact_keys = (
+                "NomPere", "TelPere", "TelBureauPere", "EmailPere",
+                "NomMere", "TelMere", "TelBureauMere", "EmailMere",
+                "NomTuteur", "CelTuteur", "TelBureauTuteur", "EmailTuteur",
+            )
+            for family in families:
+                children = ", ".join(
+                    f"{child.Nom} {child.Prenoms}" for child in family.eleves
+                )
+                contacts = {key: getattr(family, key, None) or "" for key in contact_keys}
+                for role, name_key, phone_key, phone2_key, email_key in role_fields:
+                    name = getattr(family, name_key, None) or ""
+                    phone = getattr(family, phone_key, None) or ""
+                    phone2 = getattr(family, phone2_key, None) or ""
+                    haystack_digits = re.sub(r"\D", "", f"{phone}{phone2}")
+                    name_match = len(query_name) >= 3 and query_name in name.casefold()
+                    phone_match = len(query_digits) >= 6 and query_digits in haystack_digits
+                    identity = (family.IdTFamille, role, name.casefold(), re.sub(r"\D", "", phone))
+                    if (name_match or phone_match) and identity not in seen:
+                        seen.add(identity)
+                        results.append({
+                            "family_id": family.IdTFamille,
+                            "role": role,
+                            "name": name,
+                            "phone": phone,
+                            "phone2": phone2,
+                            "email": getattr(family, email_key, None) or "",
+                            "children": children,
+                            "contacts": contacts,
+                        })
+                        if len(results) >= limit:
+                            return results
+            return results
+        finally:
+            session.close()
+
+    @staticmethod
+    def enregistrer_contacts_eleve(id_eleve: int, data: dict) -> tuple[bool, str, int | None]:
+        """Crée/met à jour la famille derrière une saisie simple des contacts.
+
+        Le père, la mère ou le tuteur choisi comme contact principal alimente
+        les champs responsables obligatoires. Pour un élève sans famille, une
+        famille existante portant le même nom/téléphone principal est réutilisée
+        afin de regrouper naturellement les frères et sœurs.
+        """
+        session = get_session()
+        try:
+            eleve = session.get(Eleve, id_eleve)
+            if not eleve:
+                return False, "Élève introuvable.", None
+
+            principal = data.get("Principal")
+            contacts = {
+                "PERE": (data.get("NomPere", "").strip(), data.get("TelPere", "").strip(), 2),
+                "MERE": (data.get("NomMere", "").strip(), data.get("TelMere", "").strip(), 3),
+                "TUTEUR": (data.get("NomTuteur", "").strip(), data.get("CelTuteur", "").strip(), 1),
+            }
+            if principal not in contacts:
+                return False, "Choisissez le contact principal.", None
+            nom_resp, tel_resp, qualite = contacts[principal]
+            if not nom_resp or not tel_resp:
+                return False, "Le contact principal doit avoir un nom et un téléphone.", None
+
+            for email_key in ("EmailPere", "EmailMere", "EmailTuteur"):
+                email = (data.get(email_key) or "").strip()
+                if email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+                    return False, f"L'adresse e-mail « {email} » est invalide.", None
+
+            famille = session.get(TFamille, eleve.IDFamille) if eleve.IDFamille else None
+            if not famille and data.get("ExistingFamilyId"):
+                famille = session.get(TFamille, int(data["ExistingFamilyId"]))
+            if not famille:
+                famille = session.query(TFamille).filter_by(
+                    NomResponsable=nom_resp, CellulaireResponsable=tel_resp
+                ).first()
+            if not famille:
+                famille = TFamille(
+                    NomResponsable=nom_resp,
+                    CellulaireResponsable=tel_resp,
+                    QualiteResponsable=qualite,
+                )
+                session.add(famille)
+                session.flush()
+
+            famille.NomResponsable = nom_resp
+            famille.CellulaireResponsable = tel_resp
+            famille.QualiteResponsable = qualite
+            famille.EmailResponsable = data.get({
+                "PERE": "EmailPere", "MERE": "EmailMere", "TUTEUR": "EmailTuteur"
+            }[principal]) or None
+            for key in (
+                "NomPere", "TelPere", "TelBureauPere", "EmailPere",
+                "NomMere", "TelMere", "TelBureauMere", "EmailMere",
+                "NomTuteur", "CelTuteur", "TelBureauTuteur", "EmailTuteur",
+            ):
+                setattr(famille, key, (data.get(key) or "").strip() or None)
+
+            eleve.IDFamille = famille.IdTFamille
+            session.commit()
+            return True, "Contacts des parents enregistrés avec succès.", famille.IdTFamille
+        except Exception as e:
+            session.rollback()
+            return False, f"Erreur lors de l'enregistrement des contacts : {e}", None
         finally:
             session.close()
 
@@ -80,6 +222,8 @@ class FamilleService:
                 AdresseResponsable=data.get("AdresseResponsable"),
                 CellulaireResponsable=tel_resp,
                 EmailResponsable=email if email else None,
+                TelBureauResponsable=data.get("TelBureauResponsable"),
+                TelDomicileResponsable=data.get("TelDomicileResponsable"),
                 SIMaitre=data.get("SIMaitre", False),
                 EbrieAbobote=data.get("EbrieAbobote", False),
                 NomUrgence=data.get("NomUrgence"),
@@ -90,11 +234,31 @@ class FamilleService:
                 NomPere=data.get("NomPere"),
                 ProfessionPere=data.get("ProfessionPere"),
                 TelPere=data.get("TelPere"),
+                EmailPere=data.get("EmailPere"),
+                EntreprisePere=data.get("EntreprisePere"),
+                LieuResidencePere=data.get("LieuResidencePere"),
+                TelBureauPere=data.get("TelBureauPere"),
+                TelDomicilePere=data.get("TelDomicilePere"),
+                AdressePostalePere=data.get("AdressePostalePere"),
                 NomMere=data.get("NomMere"),
                 ProfessionMere=data.get("ProfessionMere"),
                 TelMere=data.get("TelMere"),
-                EnsCatPrimaire=data.get("EnsCatPrimaire", False),
-                EnsCatSecondaire=data.get("EnsCatSecondaire", False)
+                EmailMere=data.get("EmailMere"),
+                EntrepriseMere=data.get("EntrepriseMere"),
+                LieuResidenceMere=data.get("LieuResidenceMere"),
+                TelBureauMere=data.get("TelBureauMere"),
+                TelDomicileMere=data.get("TelDomicileMere"),
+                AdressePostaleMere=data.get("AdressePostaleMere"),
+                NomTuteur=data.get("NomTuteur"),
+                ProfessionTuteur=data.get("ProfessionTuteur"),
+                EntrepriseTuteur=data.get("EntrepriseTuteur"),
+                CelTuteur=data.get("CelTuteur"),
+                EmailTuteur=data.get("EmailTuteur"),
+                TelBureauTuteur=data.get("TelBureauTuteur"),
+                TelDomicileTuteur=data.get("TelDomicileTuteur"),
+                AdressePostaleTuteur=data.get("AdressePostaleTuteur"),
+                MotivationChoixEcole=data.get("MotivationChoixEcole"),
+                Observations=data.get("Observations"),
             )
             session.add(famille)
             session.commit()
@@ -134,7 +298,7 @@ class FamilleService:
                 TFamille.IdTFamille != id_famille
             ).first()
             if doublon:
-                return False, f"Une autre famille possède déjà ce couple Responsable / Téléphone."
+                return False, "Une autre famille possède déjà ce couple Responsable / Téléphone."
 
             # Mise à jour des valeurs
             famille.NomResponsable = nom_resp
@@ -145,8 +309,13 @@ class FamilleService:
             famille.AdresseResponsable = data.get("AdresseResponsable")
             famille.CellulaireResponsable = tel_resp
             famille.EmailResponsable = email if email else None
+            famille.TelBureauResponsable = data.get("TelBureauResponsable")
+            famille.TelDomicileResponsable = data.get("TelDomicileResponsable")
             famille.SIMaitre = data.get("SIMaitre", False)
-            famille.EbrieAbobote = data.get("EbrieAbobote", False)
+            # Le formulaire de saisie n'expose plus cette case a cocher ; on
+            # preserve la valeur existante (reduction deja accordee) au lieu
+            # de la reinitialiser silencieusement a False a chaque edition.
+            famille.EbrieAbobote = data.get("EbrieAbobote", famille.EbrieAbobote)
             famille.NomUrgence = data.get("NomUrgence")
             famille.ContactUrgence = data.get("ContactUrgence")
             famille.HabitationUrgence = data.get("HabitationUrgence")
@@ -155,11 +324,31 @@ class FamilleService:
             famille.NomPere = data.get("NomPere")
             famille.ProfessionPere = data.get("ProfessionPere")
             famille.TelPere = data.get("TelPere")
+            famille.EmailPere = data.get("EmailPere")
+            famille.EntreprisePere = data.get("EntreprisePere")
+            famille.LieuResidencePere = data.get("LieuResidencePere")
+            famille.TelBureauPere = data.get("TelBureauPere")
+            famille.TelDomicilePere = data.get("TelDomicilePere")
+            famille.AdressePostalePere = data.get("AdressePostalePere")
             famille.NomMere = data.get("NomMere")
             famille.ProfessionMere = data.get("ProfessionMere")
             famille.TelMere = data.get("TelMere")
-            famille.EnsCatPrimaire = data.get("EnsCatPrimaire", False)
-            famille.EnsCatSecondaire = data.get("EnsCatSecondaire", False)
+            famille.EmailMere = data.get("EmailMere")
+            famille.EntrepriseMere = data.get("EntrepriseMere")
+            famille.LieuResidenceMere = data.get("LieuResidenceMere")
+            famille.TelBureauMere = data.get("TelBureauMere")
+            famille.TelDomicileMere = data.get("TelDomicileMere")
+            famille.AdressePostaleMere = data.get("AdressePostaleMere")
+            famille.NomTuteur = data.get("NomTuteur")
+            famille.ProfessionTuteur = data.get("ProfessionTuteur")
+            famille.EntrepriseTuteur = data.get("EntrepriseTuteur")
+            famille.CelTuteur = data.get("CelTuteur")
+            famille.EmailTuteur = data.get("EmailTuteur")
+            famille.TelBureauTuteur = data.get("TelBureauTuteur")
+            famille.TelDomicileTuteur = data.get("TelDomicileTuteur")
+            famille.AdressePostaleTuteur = data.get("AdressePostaleTuteur")
+            famille.MotivationChoixEcole = data.get("MotivationChoixEcole")
+            famille.Observations = data.get("Observations")
 
             session.commit()
             return True, "Famille mise à jour avec succès !"

@@ -2,6 +2,9 @@ from typing import List
 from models.cycle import TCycle
 from app.database import get_session
 from app.session import AppSession
+import logging
+logger = logging.getLogger(__name__)
+
 
 class CycleService:
     @staticmethod
@@ -15,8 +18,8 @@ class CycleService:
                 IDAnneeScolaire=active_annee_id,
                 IDEtablissement_Ecole=active_etab_id
             ).order_by(TCycle.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_all TCycle : {e}")
+        except Exception:
+            logger.exception("Erreur get_all TCycle")
             return []
         finally:
             session.close()

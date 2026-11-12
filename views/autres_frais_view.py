@@ -9,7 +9,7 @@ from services.autres_frais_service import AutresFraisService
 from services.montant_autres_frais_service import MontantAutresFraisService
 from app.session import AppSession
 from app.styles import (
-    COLORS, INPUT_STYLE, COMBO_STYLE, SECTION_TITLE_STYLE,
+    INPUT_STYLE, COMBO_STYLE, SECTION_TITLE_STYLE,
     BUTTON_PRIMARY, BUTTON_DANGER,
     GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE, apply_table_style
 )
@@ -141,6 +141,10 @@ class AutresFraisView(QWidget):
         if not active_annee_id:
             return
 
+        # Les frais obligatoires historiques doivent aussi exister dans le
+        # catalogue afin que leurs montants soient visibles et modifiables.
+        MontantAutresFraisService.ensure_frais_obligatoires(active_annee_id)
+
         # Combobox types de frais
         self.cmb_types.clear()
         types = AutresFraisService.get_all_autres_frais()
@@ -193,6 +197,22 @@ class AutresFraisView(QWidget):
             if item_id:
                 self.selected_ids.append(int(item_id.text()))
         self.btn_supprimer.setEnabled(len(self.selected_ids) > 0)
+
+        # Une ligne unique charge son tarif dans le formulaire. Le bouton
+        # d'enregistrement mettra ensuite à jour la ligne existante.
+        if len(rows) == 1:
+            row = next(iter(rows))
+            id_montant = int(self.table.item(row, 3).text())
+            active_annee_id = AppSession.get_active_annee_id()
+            tarifs = MontantAutresFraisService.get_montants_by_annee(active_annee_id)
+            tarif = next((t for t in tarifs if t.IDMontantAutres == id_montant), None)
+            if tarif:
+                index = self.cmb_types.findData(tarif.IDAutres_Frais)
+                if index >= 0:
+                    self.cmb_types.setCurrentIndex(index)
+                self.txt_montant.setText(str(int(tarif.MontantFrais)))
+                for cb, id_niveau in self._niveau_checkboxes:
+                    cb.setChecked(id_niveau == tarif.IDT_Niveau)
 
     def on_create_type(self):
         code = self.txt_code.text().strip()

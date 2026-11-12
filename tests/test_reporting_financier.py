@@ -1,0 +1,236 @@
+from datetime import date, time
+from decimal import Decimal
+
+from app.session import AppSession
+from models.compte import Compte
+from models.sortie_fin import SortieFin
+from models.versement_scol import VersementScol
+from models.vente import Vente
+from services.dashboard_service import DashboardService
+from services.statistiques_service import StatistiquesService
+from tests.factories import (
+    make_annee,
+    make_eleve,
+    make_famille,
+    make_inscription,
+    make_montant_cantine,
+    make_montant_scol,
+    make_montant_transport,
+    make_niveau_classe,
+)
+
+
+def _setup_reporting(db_session):
+    annee = make_annee(db_session)
+    niveau, classe = make_niveau_classe(db_session, annee)
+    famille = make_famille(db_session)
+    eleve = make_eleve(db_session, famille, matricule="REPORT1")
+    make_inscription(
+        db_session,
+        annee,
+        famille,
+        eleve,
+        niveau,
+        classe,
+        cantine=True,
+        transport=True,
+    )
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+    return annee, niveau, famille, eleve
+
+
+def _add_versement(
+    db_session,
+    annee,
+    famille,
+    eleve,
+    *,
+    scol=0,
+    cantine=0,
+    transport=0,
+    autres=0,
+    reduction=False,
+    annule=False,
+):
+    versement = VersementScol(
+        IDTAnneeScolaire=annee.IDTAnneeScolaire,
+        IDFamille=famille.IdTFamille,
+        IDEleve=eleve.IDEleve,
+        DateVers=date.today(),
+        MontantVersSco=scol,
+        MontantCantine=cantine,
+        MontantVersTrans=transport,
+        MontantVersAutres=autres,
+        Reduction=reduction,
+        Annule=annule,
+    )
+    db_session.add(versement)
+    db_session.commit()
+    return versement
+
+
+def _add_depense(db_session, annee, montant, *, annule=False):
+    compte = db_session.query(Compte).filter_by(NumCompte="601").first()
+    if compte is None:
+        compte = Compte(NumCompte="601", LibCompte="Achats")
+        db_session.add(compte)
+        db_session.commit()
+    db_session.add(
+        SortieFin(
+            Benef="Fournisseur",
+            Montant=montant,
+            DateSortie=date.today(),
+            IDAnSco=annee.IDTAnneeScolaire,
+            DebitCredit="Debit",
+            IDCompte=compte.IDCompte,
+            Annule=annule,
+        )
+    )
+    db_session.commit()
+
+
+def _add_vente(db_session, annee, montant, *, annule=False, numero_recu=None):
+    vente = Vente(
+        IDTAnneeScolaire=annee.IDTAnneeScolaire,
+        NumeroRecu=numero_recu or f"V-TEST-{montant}-{annule}",
+        DateVente=date.today(),
+        HeureVente=time(12, 0, 0),
+        ModePaiement="Espèce",
+        MontantTotal=montant,
+        Annule=annule,
+    )
+    db_session.add(vente)
+    db_session.commit()
+    return vente
+
+
+def test_dashboard_totals_exclude_cancelled_payments(db_session):
+    annee, _, famille, eleve = _setup_reporting(db_session)
+    _add_versement(db_session, annee, famille, eleve, scol=10_000)
+    _add_versement(db_session, annee, famille, eleve, scol=90_000, annule=True)
+
+    summary = DashboardService.get_dashboard_summary()
+
+    assert summary["total_versements_scolarite"] == Decimal("10000.00")
+    assert summary["total_recettes"] == Decimal("10000.00")
+
+
+def test_dashboard_total_depenses_excludes_cancelled_sortie_fin(db_session):
+    annee, _, _, _ = _setup_reporting(db_session)
+    _add_depense(db_session, annee, 7_000)
+    _add_depense(db_session, annee, 11_000, annule=True)
+
+    summary = DashboardService.get_dashboard_summary()
+
+    assert summary["total_depenses"] == Decimal("7000.00")
+
+
+def test_dashboard_total_recettes_includes_other_fees(db_session):
+    annee, _, famille, eleve = _setup_reporting(db_session)
+    _add_versement(db_session, annee, famille, eleve, autres=4_000)
+
+    summary = DashboardService.get_dashboard_summary()
+
+    assert summary["total_recettes"] == Decimal("4000.00")
+
+
+def test_dashboard_total_ventes_kiosque_excludes_cancelled_sales(db_session):
+    annee, _, _, _ = _setup_reporting(db_session)
+    _add_vente(db_session, annee, 3_000, numero_recu="V-A")
+    _add_vente(db_session, annee, 9_000, annule=True, numero_recu="V-B")
+
+    summary = DashboardService.get_dashboard_summary()
+
+    assert summary["total_ventes_kiosque"] == Decimal("3000.00")
+    assert summary["total_recettes"] == Decimal("3000.00")
+
+
+def test_impayes_ignore_cancelled_payments_and_reductions(db_session):
+    annee, niveau, famille, eleve = _setup_reporting(db_session)
+    make_montant_scol(db_session, annee, niveau, montant_affecte=100_000)
+    _add_versement(db_session, annee, famille, eleve, scol=20_000)
+    _add_versement(db_session, annee, famille, eleve, scol=50_000, reduction=True)
+    _add_versement(db_session, annee, famille, eleve, scol=25_000, annule=True)
+
+    impayes = DashboardService.get_impayes_scolarite()
+
+    assert impayes == [{
+        "eleve": "Kouassi Jean",
+        "classe": "CM2 A",
+        "du": "100 000 F",
+        "verse": "20 000 F",
+        "reste": "80 000 F",
+    }]
+
+
+def test_statistics_ignore_cancelled_payments_in_all_payment_reports(db_session):
+    annee, niveau, famille, eleve = _setup_reporting(db_session)
+    make_montant_scol(db_session, annee, niveau, montant_affecte=100_000)
+    make_montant_cantine(db_session, annee, niveau, montant=20_000)
+    make_montant_transport(db_session, annee, niveau, montant=15_000)
+    _add_versement(db_session, annee, famille, eleve, scol=10_000, cantine=2_000, transport=3_000)
+    _add_versement(db_session, annee, famille, eleve, scol=60_000, cantine=9_000, transport=8_000, annule=True)
+    _add_versement(db_session, annee, famille, eleve, scol=5_000, reduction=True)
+    _add_versement(db_session, annee, famille, eleve, scol=7_000, reduction=True, annule=True)
+
+    scolarite = StatistiquesService.get_etat_versements_scolarite()[0]
+    cantine = StatistiquesService.get_etat_versements_cantine()[0]
+    transport = StatistiquesService.get_etat_versements_transport()[0]
+
+    assert scolarite["MontantVerse"] == 10_000
+    assert scolarite["Reduction"] == 5_000
+    assert scolarite["Reste"] == 85_000
+    assert cantine["MontantVerse"] == 2_000
+    assert cantine["Reste"] == 18_000
+    assert transport["MontantVerse"] == 3_000
+    assert transport["Reste"] == 12_000
+
+
+def test_get_inscrits_returns_eleve_classe_niveau_details(db_session):
+    annee, niveau, famille, eleve = _setup_reporting(db_session)
+
+    inscrits = StatistiquesService.get_inscrits()
+
+    assert inscrits == [{
+        "DateInscription": date.today(),
+        "Matricule": "REPORT1",
+        "Nom": "Kouassi",
+        "Prenoms": "Jean",
+        "DateNaissance": date(2015, 1, 1),
+        "LibClasse": "CM2 A",
+        "LibNiveau": "CM2",
+    }]
+
+
+def test_get_nouveaux_inscrits_filters_on_nouveau_flag(db_session):
+    annee = make_annee(db_session)
+    niveau, classe = make_niveau_classe(db_session, annee)
+    famille = make_famille(db_session)
+    eleve_nouveau = make_eleve(db_session, famille, matricule="NEW1", nom="Nouveau")
+    eleve_ancien = make_eleve(db_session, famille, matricule="OLD1", nom="Ancien")
+    make_inscription(db_session, annee, famille, eleve_nouveau, niveau, classe, nouveau=True)
+    make_inscription(db_session, annee, famille, eleve_ancien, niveau, classe, nouveau=False)
+    AppSession.set_active_annee(annee.IDTAnneeScolaire, annee.Libelle)
+
+    nouveaux = StatistiquesService.get_nouveaux_inscrits()
+
+    assert len(nouveaux) == 1
+    assert nouveaux[0]["Matricule"] == "NEW1"
+    assert nouveaux[0]["Nom"] == "Nouveau"
+
+
+def test_get_liste_alphabetique_includes_famille_contact(db_session):
+    annee, niveau, famille, eleve = _setup_reporting(db_session)
+
+    liste = StatistiquesService.get_liste_alphabetique()
+
+    assert liste == [{
+        "Matricule": "REPORT1",
+        "Nom": "Kouassi",
+        "Prenoms": "Jean",
+        "DateNaissance": date(2015, 1, 1),
+        "Sexe": 1,
+        "LibClasse": "CM2 A",
+        "Profession": None,
+        "Telephone": "0700000000",
+    }]

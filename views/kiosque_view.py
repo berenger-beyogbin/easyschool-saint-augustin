@@ -1,7 +1,6 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QFrame
+    QWidget, QVBoxLayout, QTabWidget
 )
-from PySide6.QtCore import Qt
 from views.vente_view import VenteView
 from views.approvisionnement_view import ApprovisionnementView
 from views.article_list_view import ArticleListView
@@ -55,18 +54,21 @@ class KiosqueView(QWidget):
         self.tab_principal.addTab(tab_kiosque_widget, "KIOSQUE")
 
         # ---- ONGLET 2 : BIBLIOTHÈQUE (Placeholder) ----
-        tab_biblio_widget = QWidget()
-        tab_biblio_widget.setStyleSheet(f"background-color: {COLORS['bg']};")
-        layout_biblio = QVBoxLayout(tab_biblio_widget)
-        layout_biblio.setContentsMargins(20, 20, 20, 20)
+        # Non utilisé pour la version collège CJGA (voir app.config.Config.ENABLE_BIBLIOTHEQUE).
+        from app.config import Config
+        if Config.ENABLE_BIBLIOTHEQUE:
+            tab_biblio_widget = QWidget()
+            tab_biblio_widget.setStyleSheet(f"background-color: {COLORS['bg']};")
+            layout_biblio = QVBoxLayout(tab_biblio_widget)
+            layout_biblio.setContentsMargins(20, 20, 20, 20)
 
-        placeholder = EmptyState(
-            icon="📚",
-            title="SERVICE BIBLIOTHÈQUE",
-            message="Module Bibliothèque à venir.\nCette fonctionnalité sera connectée ultérieurement."
-        )
-        layout_biblio.addWidget(placeholder)
-        self.tab_principal.addTab(tab_biblio_widget, "BIBLIOTHÈQUE")
+            placeholder = EmptyState(
+                icon="📚",
+                title="SERVICE BIBLIOTHÈQUE",
+                message="Module Bibliothèque à venir.\nCette fonctionnalité sera connectée ultérieurement."
+            )
+            layout_biblio.addWidget(placeholder)
+            self.tab_principal.addTab(tab_biblio_widget, "BIBLIOTHÈQUE")
 
         layout_principal.addWidget(self.tab_principal)
 

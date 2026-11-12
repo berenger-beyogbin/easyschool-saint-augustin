@@ -1,15 +1,19 @@
 import datetime
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDateEdit,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDateEdit, QInputDialog,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QAbstractItemView
 )
 from PySide6.QtCore import Qt, QDate
+from PySide6.QtGui import QColor
 from services.statistiques_service import StatistiquesService
+from services.vente_service import VenteService
 from utils.list_printer import VenteStatPrinter
+from app.session import AppSession
 from app.styles import (
     COLORS, PAGE_TITLE_STYLE, SECTION_TITLE_STYLE,
     DATE_STYLE, BUTTON_PRIMARY, BUTTON_SUCCESS,
-    apply_table_style, make_totaux_panel_widget
+    apply_table_style, make_totaux_panel_widget,
+    configure_table_action_button, make_table_action_container,
 )
 
 
@@ -77,9 +81,9 @@ class StatVenteView(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels([
-            "Date", "Heure", "Article", "Quantité", "Prix unitaire", "Total", "Utilisateur"
+            "Date", "Heure", "Article", "Quantité", "Prix unitaire", "Total", "Utilisateur", "Action"
         ])
         apply_table_style(self.table, alternate="yellow")
 
@@ -91,6 +95,7 @@ class StatVenteView(QWidget):
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
 
         layout.addWidget(self.table)
 
@@ -114,11 +119,15 @@ class StatVenteView(QWidget):
         total_general = 0.0
 
         for idx, item in enumerate(data):
-            total_general += item["Total"]
+            annule = bool(item.get("Annule"))
+            if not annule:
+                total_general += item["Total"]
 
             d = item["DateSort"].strftime("%d/%m/%Y") if item["DateSort"] else ""
             h = item["HeureSortie"].strftime("%H:%M:%S") if item["HeureSortie"] else ""
             art = item["Article"] or ""
+            if annule:
+                art += " (ANNULÉ)"
             qty = str(item["QuantiteSort"])
             pu = StatistiquesService.format_fcfa(item["Prix_vente"])
             tot = StatistiquesService.format_fcfa(item["Total"])
@@ -144,6 +153,12 @@ class StatVenteView(QWidget):
             it_user = QTableWidgetItem(user)
             it_user.setTextAlignment(Qt.AlignCenter)
 
+            if annule:
+                tip = f"Vente annulée ({item.get('NumeroRecu') or ''})"
+                for cell in (it_date, it_heure, it_art, it_qty, it_pu, it_total, it_user):
+                    cell.setForeground(QColor(COLORS["muted"]))
+                    cell.setToolTip(tip)
+
             self.table.setItem(idx, 0, it_date)
             self.table.setItem(idx, 1, it_heure)
             self.table.setItem(idx, 2, it_art)
@@ -152,7 +167,39 @@ class StatVenteView(QWidget):
             self.table.setItem(idx, 5, it_total)
             self.table.setItem(idx, 6, it_user)
 
+            btn_annuler = QPushButton("Déjà annulé" if annule else "Annuler")
+            configure_table_action_button(btn_annuler, "danger")
+            btn_annuler.setEnabled(not annule)
+            id_vente = item.get("IDVente")
+            numero_recu = item.get("NumeroRecu")
+            btn_annuler.clicked.connect(
+                lambda checked=False, idv=id_vente, num=numero_recu: self.annuler_vente(idv, num)
+            )
+            self.table.setCellWidget(idx, 7, make_table_action_container(btn_annuler))
+
         self.lbl_tot_general.setText(StatistiquesService.format_fcfa(total_general))
+
+    def annuler_vente(self, id_vente, numero_recu):
+        if not id_vente:
+            return
+        motif, ok = QInputDialog.getMultiLineText(
+            self, "Annulation de la vente",
+            f"Motif d'annulation de la vente {numero_recu or ''} :"
+        )
+        if not ok:
+            return
+        if not motif.strip():
+            QMessageBox.warning(self, "Motif requis", "Le motif d'annulation est obligatoire.")
+            return
+
+        login_util = AppSession.get_logged_in_username() or "admin"
+        id_utilisateur = AppSession.get_current_user_id()
+        success, msg = VenteService.annuler_vente(id_vente, motif, login_util, id_utilisateur)
+        if success:
+            QMessageBox.information(self, "Succès", msg)
+            self.refresh_data()
+        else:
+            QMessageBox.critical(self, "Erreur", msg)
 
     def imprimer_clic(self):
         q_start = self.dte_debut.date()

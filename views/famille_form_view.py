@@ -3,7 +3,8 @@ import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QCheckBox, QComboBox, QMessageBox, QFrame,
-    QGridLayout, QScrollArea, QWidget, QGraphicsDropShadowEffect
+    QGridLayout, QScrollArea, QWidget, QGraphicsDropShadowEffect,
+    QPlainTextEdit
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -155,6 +156,10 @@ class FamilleFormView(QDialog):
     def __init__(self, parent=None, id_famille=None):
         super().__init__(parent)
         self.id_famille = id_famille
+        # IDTFamille de la famille creee (rempli apres un accept() reussi en
+        # mode creation) : permet a un appelant (ex. FamilleAssociationDialog)
+        # de savoir immediatement quelle famille associer, sans re-recherche.
+        self.created_id_famille = None
         self.setWindowTitle("Enregistrement de Parents")
         self.setMinimumSize(860, 560)
         self.resize(900, 640)
@@ -216,26 +221,81 @@ class FamilleFormView(QDialog):
         self.txt_nom_pere.textChanged.connect(self.on_pere_changed)
         self.txt_prof_pere = _field("Profession")
         self.txt_prof_pere.textChanged.connect(self.on_pere_changed)
+        self.txt_entr_pere = _field("Entreprise")
         self.txt_tel_pere  = _field("Téléphone")
         self.txt_tel_pere.textChanged.connect(self.on_pere_changed)
+        self.txt_tel_bur_pere = _field("Tél. Bureau")
+        self.txt_tel_dom_pere = _field("Tél. domicile")
+        self.txt_res_pere  = _field("Lieu de résidence")
+        self.txt_adr_pere  = _field("Adresse postale")
         lyt_pere.addLayout(_inline_row("Nom & Prénoms :", self.txt_nom_pere))
         lyt_pere.addLayout(_inline_row("Profession :",    self.txt_prof_pere))
+        lyt_pere.addLayout(_inline_row("Entreprise :",    self.txt_entr_pere))
         lyt_pere.addLayout(_inline_row("Téléphone :",     self.txt_tel_pere))
+        lyt_pere.addLayout(_inline_row("Tél. Bureau :",   self.txt_tel_bur_pere))
+        lyt_pere.addLayout(_inline_row("Tél. domicile :", self.txt_tel_dom_pere))
+        lyt_pere.addLayout(_inline_row("Lieu de résidence :", self.txt_res_pere))
+        lyt_pere.addLayout(_inline_row("Adresse postale :", self.txt_adr_pere))
 
         card_mere, lyt_mere = _card("Mère")
         self.txt_nom_mere  = _field("Nom et prénoms")
         self.txt_nom_mere.textChanged.connect(self.on_mere_changed)
         self.txt_prof_mere = _field("Profession")
         self.txt_prof_mere.textChanged.connect(self.on_mere_changed)
+        self.txt_entr_mere = _field("Entreprise")
         self.txt_tel_mere  = _field("Téléphone")
         self.txt_tel_mere.textChanged.connect(self.on_mere_changed)
+        self.txt_tel_bur_mere = _field("Tél. Bureau")
+        self.txt_tel_dom_mere = _field("Tél. domicile")
+        self.txt_res_mere  = _field("Lieu de résidence")
+        self.txt_adr_mere  = _field("Adresse postale")
         lyt_mere.addLayout(_inline_row("Nom & Prénoms :", self.txt_nom_mere))
         lyt_mere.addLayout(_inline_row("Profession :",    self.txt_prof_mere))
+        lyt_mere.addLayout(_inline_row("Entreprise :",    self.txt_entr_mere))
         lyt_mere.addLayout(_inline_row("Téléphone :",     self.txt_tel_mere))
+        lyt_mere.addLayout(_inline_row("Tél. Bureau :",   self.txt_tel_bur_mere))
+        lyt_mere.addLayout(_inline_row("Tél. domicile :", self.txt_tel_dom_mere))
+        lyt_mere.addLayout(_inline_row("Lieu de résidence :", self.txt_res_mere))
+        lyt_mere.addLayout(_inline_row("Adresse postale :", self.txt_adr_mere))
 
         parents_row.addWidget(card_pere)
         parents_row.addWidget(card_mere)
         body.addLayout(parents_row)
+
+        # ── Tuteur ─────────────────────────────────────────────────────────────
+        card_tut, lyt_tut = _card("Tuteur")
+        self.txt_nom_tuteur  = _field("Nom et prénoms")
+        self.txt_nom_tuteur.textChanged.connect(self.on_tuteur_changed)
+        self.txt_prof_tuteur = _field("Profession")
+        self.txt_prof_tuteur.textChanged.connect(self.on_tuteur_changed)
+        self.txt_entr_tuteur = _field("Entreprise")
+        self.txt_tel_tuteur  = _field("Cel")
+        self.txt_tel_tuteur.textChanged.connect(self.on_tuteur_changed)
+        self.txt_tel_bur_tuteur = _field("Tél. Bureau")
+        self.txt_tel_dom_tuteur = _field("Tél. domicile")
+        self.txt_adr_tuteur  = _field("Adresse postale")
+
+        gt = QGridLayout()
+        gt.setHorizontalSpacing(10)
+        gt.setVerticalSpacing(8)
+        gt.setColumnStretch(1, 1)
+        gt.setColumnStretch(3, 1)
+        gt.addWidget(_gl("Nom & Prénoms :"),  0, 0)
+        gt.addWidget(self.txt_nom_tuteur,     0, 1, 1, 3)
+        gt.addWidget(_gl("Profession :"),     1, 0)
+        gt.addWidget(self.txt_prof_tuteur,    1, 1)
+        gt.addWidget(_gl("Entreprise :"),     1, 2)
+        gt.addWidget(self.txt_entr_tuteur,    1, 3)
+        gt.addWidget(_gl("Cel :"),            2, 0)
+        gt.addWidget(self.txt_tel_tuteur,     2, 1)
+        gt.addWidget(_gl("Tél. Bureau :"),    2, 2)
+        gt.addWidget(self.txt_tel_bur_tuteur, 2, 3)
+        gt.addWidget(_gl("Tél. domicile :"),  3, 0)
+        gt.addWidget(self.txt_tel_dom_tuteur, 3, 1)
+        gt.addWidget(_gl("Adresse postale :"), 3, 2)
+        gt.addWidget(self.txt_adr_tuteur,     3, 3)
+        lyt_tut.addLayout(gt)
+        body.addWidget(card_tut)
 
         # ── Responsable légal ─────────────────────────────────────────────────
         card_resp, lyt_resp = _card("Responsable légal  *")
@@ -253,6 +313,8 @@ class FamilleFormView(QDialog):
         self.txt_adr_resp   = _field("Adresse")
         self.txt_hab_resp   = _field("Habitation")
         self.txt_hab_resp.textChanged.connect(self.on_resp_info_changed)
+        self.txt_tel_bur_resp = _field("Tél. Bureau")
+        self.txt_tel_dom_resp = _field("Tél. domicile")
 
         # Grille 2 colonnes : (label | champ) × 2
         gr = QGridLayout()
@@ -271,18 +333,22 @@ class FamilleFormView(QDialog):
         gr.addWidget(self.txt_prof_resp,          1, 1)
         gr.addWidget(_gl("Tél. portable * :"),    1, 2)
         gr.addWidget(self.txt_tel_resp,           1, 3)
-        # Ligne 2 : Email | Adresse
-        gr.addWidget(_gl("Email :"),              2, 0)
-        gr.addWidget(self.txt_email_resp,         2, 1)
-        gr.addWidget(_gl("Adresse :"),            2, 2)
-        gr.addWidget(self.txt_adr_resp,           2, 3)
-        # Ligne 3 : Habitation pleine largeur
-        gr.addWidget(_gl("Habitation :"),         3, 0)
-        gr.addWidget(self.txt_hab_resp,           3, 1, 1, 3)
+        # Ligne 2 : Tél Bureau | Tél domicile
+        gr.addWidget(_gl("Tél. Bureau :"),        2, 0)
+        gr.addWidget(self.txt_tel_bur_resp,       2, 1)
+        gr.addWidget(_gl("Tél. domicile :"),      2, 2)
+        gr.addWidget(self.txt_tel_dom_resp,       2, 3)
+        # Ligne 3 : Email | Adresse
+        gr.addWidget(_gl("Email :"),              3, 0)
+        gr.addWidget(self.txt_email_resp,         3, 1)
+        gr.addWidget(_gl("Adresse :"),             3, 2)
+        gr.addWidget(self.txt_adr_resp,           3, 3)
+        # Ligne 4 : Habitation pleine largeur
+        gr.addWidget(_gl("Habitation :"),         4, 0)
+        gr.addWidget(self.txt_hab_resp,           4, 1, 1, 3)
 
         lyt_resp.addLayout(gr)
 
-        # Statuts particuliers
         chk_style = f"""
 QCheckBox {{
     font-size: 12px;
@@ -312,26 +378,6 @@ QCheckBox::indicator:checked:hover {{
     border-color: #1D4ED8;
 }}
 """
-        self.chk_ebrie   = QCheckBox("Ebrié d'Abobo-té")
-        self.chk_cat_pri = QCheckBox("Ens. cat. primaire")
-        self.chk_cat_sec = QCheckBox("Ens. cat. secondaire")
-        for chk in (self.chk_ebrie, self.chk_cat_pri, self.chk_cat_sec):
-            chk.setStyleSheet(chk_style)
-
-        # Un seul choix autorisé à la fois
-        self.chk_ebrie.toggled.connect(lambda c: self._exclusive_cat(c, self.chk_ebrie))
-        self.chk_cat_pri.toggled.connect(lambda c: self._exclusive_cat(c, self.chk_cat_pri))
-        self.chk_cat_sec.toggled.connect(lambda c: self._exclusive_cat(c, self.chk_cat_sec))
-
-        chk_row = QHBoxLayout()
-        chk_row.setSpacing(16)
-        chk_row.addStretch()
-        chk_row.addWidget(self.chk_ebrie)
-        chk_row.addWidget(self.chk_cat_pri)
-        chk_row.addWidget(self.chk_cat_sec)
-        chk_row.addStretch()
-        lyt_resp.addLayout(chk_row)
-
         body.addWidget(card_resp)
 
         # ── Contact d'urgence ────────────────────────────────────────────────
@@ -361,6 +407,31 @@ QCheckBox::indicator:checked:hover {{
 
         lyt_urg.addLayout(gu)
         body.addWidget(card_urg)
+
+        # ── Notes du dossier ─────────────────────────────────────────────────
+        card_notes, lyt_notes = _card("Notes")
+
+        self.txt_motivation = _field("Pourquoi demandez-vous le collège Catholique Garnier Attinguié ?")
+        lyt_notes.addWidget(_lbl("Motivation du choix de l'établissement :"))
+        lyt_notes.addWidget(self.txt_motivation)
+
+        self.txt_observations = QPlainTextEdit()
+        self.txt_observations.setFixedHeight(64)
+        self.txt_observations.setStyleSheet(f"""
+            QPlainTextEdit {{
+                border: 1.5px solid {_BORDER};
+                border-radius: 8px;
+                background-color: #FFFFFF;
+                color: {_TEXT};
+                font-size: 13px;
+                padding: 8px 12px;
+            }}
+            QPlainTextEdit:focus {{ border-color: {_BLUE}; }}
+        """)
+        lyt_notes.addWidget(_lbl("Observations :"))
+        lyt_notes.addWidget(self.txt_observations)
+
+        body.addWidget(card_notes)
 
         scroll.setWidget(container)
         main_layout.addWidget(scroll, 1)
@@ -393,7 +464,11 @@ QCheckBox::indicator:checked:hover {{
     # ─── LOGIQUE INTERACTION (inchangée) ─────────────────────────────────────
 
     def on_qualite_changed(self, index):
-        if index == 1:
+        if index == 0:
+            self.txt_nom_resp.setText(self.txt_nom_tuteur.text())
+            self.txt_prof_resp.setText(self.txt_prof_tuteur.text())
+            self.txt_tel_resp.setText(self.txt_tel_tuteur.text())
+        elif index == 1:
             self.txt_nom_resp.setText(self.txt_nom_pere.text())
             self.txt_prof_resp.setText(self.txt_prof_pere.text())
             self.txt_tel_resp.setText(self.txt_tel_pere.text())
@@ -401,6 +476,12 @@ QCheckBox::indicator:checked:hover {{
             self.txt_nom_resp.setText(self.txt_nom_mere.text())
             self.txt_prof_resp.setText(self.txt_prof_mere.text())
             self.txt_tel_resp.setText(self.txt_tel_mere.text())
+
+    def on_tuteur_changed(self):
+        if self.cmb_qualite.currentIndex() == 0:
+            self.txt_nom_resp.setText(self.txt_nom_tuteur.text())
+            self.txt_prof_resp.setText(self.txt_prof_tuteur.text())
+            self.txt_tel_resp.setText(self.txt_tel_tuteur.text())
 
     def on_pere_changed(self):
         if self.cmb_qualite.currentIndex() == 1:
@@ -438,9 +519,29 @@ QCheckBox::indicator:checked:hover {{
         self.txt_nom_pere.setText(fam.NomPere or "")
         self.txt_prof_pere.setText(fam.ProfessionPere or "")
         self.txt_tel_pere.setText(fam.TelPere or "")
+        self.txt_entr_pere.setText(fam.EntreprisePere or "")
+        self.txt_res_pere.setText(fam.LieuResidencePere or "")
+        self.txt_tel_bur_pere.setText(fam.TelBureauPere or "")
+        self.txt_tel_dom_pere.setText(fam.TelDomicilePere or "")
+        self.txt_adr_pere.setText(fam.AdressePostalePere or "")
+
         self.txt_nom_mere.setText(fam.NomMere or "")
         self.txt_prof_mere.setText(fam.ProfessionMere or "")
         self.txt_tel_mere.setText(fam.TelMere or "")
+        self.txt_entr_mere.setText(fam.EntrepriseMere or "")
+        self.txt_res_mere.setText(fam.LieuResidenceMere or "")
+        self.txt_tel_bur_mere.setText(fam.TelBureauMere or "")
+        self.txt_tel_dom_mere.setText(fam.TelDomicileMere or "")
+        self.txt_adr_mere.setText(fam.AdressePostaleMere or "")
+
+        self.txt_nom_tuteur.setText(fam.NomTuteur or "")
+        self.txt_prof_tuteur.setText(fam.ProfessionTuteur or "")
+        self.txt_entr_tuteur.setText(fam.EntrepriseTuteur or "")
+        self.txt_tel_tuteur.setText(fam.CelTuteur or "")
+        self.txt_tel_bur_tuteur.setText(fam.TelBureauTuteur or "")
+        self.txt_tel_dom_tuteur.setText(fam.TelDomicileTuteur or "")
+        self.txt_adr_tuteur.setText(fam.AdressePostaleTuteur or "")
+
         idx = fam.QualiteResponsable - 1
         if 0 <= idx < 3:
             self.cmb_qualite.setCurrentIndex(idx)
@@ -450,13 +551,14 @@ QCheckBox::indicator:checked:hover {{
         self.txt_email_resp.setText(fam.EmailResponsable or "")
         self.txt_adr_resp.setText(fam.AdresseResponsable or "")
         self.txt_hab_resp.setText(fam.HabitationParent or "")
-        self.chk_ebrie.setChecked(fam.EbrieAbobote)
-        self.chk_cat_pri.setChecked(fam.EnsCatPrimaire)
-        self.chk_cat_sec.setChecked(fam.EnsCatSecondaire)
+        self.txt_tel_bur_resp.setText(fam.TelBureauResponsable or "")
+        self.txt_tel_dom_resp.setText(fam.TelDomicileResponsable or "")
         self.chk_urg_meme.setChecked(fam.UrgenceMoimeme)
         self.txt_nom_urg.setText(fam.NomUrgence or "")
         self.txt_cont_urg.setText(fam.ContactUrgence or "")
         self.txt_hab_urg.setText(fam.HabitationUrgence or "")
+        self.txt_motivation.setText(fam.MotivationChoixEcole or "")
+        self.txt_observations.setPlainText(fam.Observations or "")
 
     def save_data(self):
         nom_resp = self.txt_nom_resp.text().strip()
@@ -479,8 +581,9 @@ QCheckBox::indicator:checked:hover {{
             "AdresseResponsable":    self.txt_adr_resp.text().strip(),
             "CellulaireResponsable": tel_resp,
             "EmailResponsable":      self.txt_email_resp.text().strip(),
+            "TelBureauResponsable":  self.txt_tel_bur_resp.text().strip(),
+            "TelDomicileResponsable": self.txt_tel_dom_resp.text().strip(),
             "SIMaitre":              False,
-            "EbrieAbobote":          self.chk_ebrie.isChecked(),
             "NomUrgence":            self.txt_nom_urg.text().strip(),
             "ContactUrgence":        self.txt_cont_urg.text().strip(),
             "HabitationUrgence":     self.txt_hab_urg.text().strip(),
@@ -489,16 +592,36 @@ QCheckBox::indicator:checked:hover {{
             "NomPere":               self.txt_nom_pere.text().strip(),
             "ProfessionPere":        self.txt_prof_pere.text().strip(),
             "TelPere":               self.txt_tel_pere.text().strip(),
+            "EntreprisePere":        self.txt_entr_pere.text().strip(),
+            "LieuResidencePere":     self.txt_res_pere.text().strip(),
+            "TelBureauPere":         self.txt_tel_bur_pere.text().strip(),
+            "TelDomicilePere":       self.txt_tel_dom_pere.text().strip(),
+            "AdressePostalePere":    self.txt_adr_pere.text().strip(),
             "NomMere":               self.txt_nom_mere.text().strip(),
             "ProfessionMere":        self.txt_prof_mere.text().strip(),
             "TelMere":               self.txt_tel_mere.text().strip(),
-            "EnsCatPrimaire":        self.chk_cat_pri.isChecked(),
-            "EnsCatSecondaire":      self.chk_cat_sec.isChecked(),
+            "EntrepriseMere":        self.txt_entr_mere.text().strip(),
+            "LieuResidenceMere":     self.txt_res_mere.text().strip(),
+            "TelBureauMere":         self.txt_tel_bur_mere.text().strip(),
+            "TelDomicileMere":       self.txt_tel_dom_mere.text().strip(),
+            "AdressePostaleMere":    self.txt_adr_mere.text().strip(),
+            "NomTuteur":             self.txt_nom_tuteur.text().strip(),
+            "ProfessionTuteur":      self.txt_prof_tuteur.text().strip(),
+            "EntrepriseTuteur":      self.txt_entr_tuteur.text().strip(),
+            "CelTuteur":             self.txt_tel_tuteur.text().strip(),
+            "TelBureauTuteur":       self.txt_tel_bur_tuteur.text().strip(),
+            "TelDomicileTuteur":     self.txt_tel_dom_tuteur.text().strip(),
+            "AdressePostaleTuteur":  self.txt_adr_tuteur.text().strip(),
+            "MotivationChoixEcole":  self.txt_motivation.text().strip(),
+            "Observations":          self.txt_observations.toPlainText().strip(),
         }
         if self.id_famille:
             success, message = FamilleService.update_famille(self.id_famille, data)
         else:
             success, message = FamilleService.create_famille(data)
+            if success:
+                nouvelle = FamilleService.find_by_nom_et_telephone(nom_resp, tel_resp)
+                self.created_id_famille = nouvelle.IdTFamille if nouvelle else None
 
         if success:
             QMessageBox.information(self, "Succès", message)
@@ -506,11 +629,3 @@ QCheckBox::indicator:checked:hover {{
         else:
             QMessageBox.critical(self, "Erreur", message)
 
-    def _exclusive_cat(self, checked: bool, sender):
-        """Décoche les autres options de catégorie quand une est cochée."""
-        if checked:
-            for chk in (self.chk_ebrie, self.chk_cat_pri, self.chk_cat_sec):
-                if chk is not sender:
-                    chk.blockSignals(True)
-                    chk.setChecked(False)
-                    chk.blockSignals(False)

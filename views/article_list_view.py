@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox
+    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QDialog
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -105,8 +105,7 @@ class ArticleListView(QWidget):
         self.table.setRowCount(len(articles))
 
         for idx, art in enumerate(articles):
-            sc = StockService.get_stock_by_article(art.IDTArticle)
-            stock_qte = sc.QuantiteCour if sc else 0
+            stock_qte = StockService.get_stock_disponible(art.IDTArticle)
 
             est_kit = "OUI" if art.KIT else "NON"
 
@@ -204,6 +203,3 @@ class ArticleListView(QWidget):
     def on_fermer(self):
         if self.main_window and hasattr(self.main_window, "close_active_tab"):
             self.main_window.close_active_tab()
-
-# Import QDialog de compatibilité
-from PySide6.QtWidgets import QDialog

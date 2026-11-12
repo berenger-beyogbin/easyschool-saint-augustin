@@ -4,7 +4,6 @@ from views.enregistrement_mouvement_view import EnregistrementMouvementView
 from views.etat_sorties_view import EtatSortiesView
 from views.balance_comptes_view import BalanceComptesView
 from app.styles import COLORS, TAB_STYLE
-from views.ui_components import make_module_header
 
 
 class ComptabiliteView(QWidget):

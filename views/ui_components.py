@@ -8,16 +8,13 @@ from PySide6.QtCore import Qt
 
 from app.styles import (
     COLORS,
-    SECTION_TITLE_STYLE, CARD_STYLE, SECTION_CARD_STYLE,
+    CARD_STYLE, SECTION_CARD_STYLE,
     SECTION_HEADER_STYLE, FORM_SECTION_STYLE, MODULE_HEADER_STYLE,
-    BUTTON_PRIMARY, BUTTON_SUCCESS, BUTTON_SECONDARY, BUTTON_DANGER,
     BADGE_SUCCESS, BADGE_WARNING, BADGE_DANGER, BADGE_INFO,
     SECTION_LABEL_STYLE, INFO_LABEL_STYLE, MUTED_LABEL_STYLE,
-    VALUE_LABEL_STYLE, LABEL_STYLE, MESSAGEBOX_STYLE, INPUT_STYLE,
+    LABEL_STYLE, MESSAGEBOX_STYLE, INPUT_STYLE,
     apply_card_shadow, configure_button,
-    configure_table_action_button, make_table_action_container,
-    configure_compact_input, configure_search_input,
-    make_field_label, format_fcfa,
+    configure_search_input,
 )
 
 
@@ -118,7 +115,7 @@ class KpiCard(QFrame):
         self.setObjectName("kpiCard")
         color = color or COLORS["primary"]
         self._color = color
-        self.setMinimumHeight(120)
+        self.setFixedHeight(116)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setStyleSheet(f"""
             QFrame#kpiCard {{
@@ -138,8 +135,8 @@ class KpiCard(QFrame):
         icon_bg = f"rgba({_r},{_g},{_b},0.12)"
 
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 18, 20, 14)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(18, 12, 18, 10)
+        main_layout.setSpacing(5)
 
         top_row = QHBoxLayout()
         top_row.setSpacing(10)
@@ -155,7 +152,7 @@ class KpiCard(QFrame):
 
         if icon:
             icon_pill = QFrame()
-            icon_pill.setFixedSize(48, 48)
+            icon_pill.setFixedSize(40, 40)
             icon_pill.setStyleSheet(f"""
                 QFrame {{
                     background-color: {icon_bg};
@@ -168,7 +165,7 @@ class KpiCard(QFrame):
             pill_layout.setSpacing(0)
             lbl_icon = QLabel(icon)
             lbl_icon.setStyleSheet(
-                f"font-size: 24px; color: {color}; background-color: transparent; border: none;"
+                f"font-size: 20px; color: {color}; background-color: transparent; border: none;"
             )
             lbl_icon.setAlignment(Qt.AlignCenter)
             pill_layout.addWidget(lbl_icon)
@@ -178,11 +175,18 @@ class KpiCard(QFrame):
 
         self.lbl_value = QLabel("—")
         self.lbl_value.setStyleSheet(
-            f"font-size: 26px; font-weight: bold; color: {COLORS['text']};"
+            f"font-size: 23px; font-weight: bold; color: {COLORS['text']};"
             "background-color: transparent; border: none;"
         )
         self.lbl_value.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         main_layout.addWidget(self.lbl_value)
+
+        self.lbl_subtitle = QLabel("")
+        self.lbl_subtitle.setStyleSheet(
+            "font-size:10px;color:#64748B;background:transparent;border:none;"
+        )
+        self.lbl_subtitle.setVisible(False)
+        main_layout.addWidget(self.lbl_subtitle)
 
         accent_bar = QFrame()
         accent_bar.setFixedHeight(3)
@@ -193,6 +197,10 @@ class KpiCard(QFrame):
 
     def set_value(self, value: str):
         self.lbl_value.setText(value)
+
+    def set_subtitle(self, text: str):
+        self.lbl_subtitle.setText(text)
+        self.lbl_subtitle.setVisible(bool(text))
 
 
 class SectionHeader(QFrame):

@@ -48,7 +48,7 @@ class ScolariteView(QWidget):
 
         self.sub_tabs.addTab(self.view_inscription, "Inscription")
         self.sub_tabs.addTab(self.view_eleves,      "Élèves")
-        self.sub_tabs.addTab(self.view_familles,    "Liste des Parents")
+        self.sub_tabs.addTab(self.view_familles,    "Familles / Responsables")
 
         # Filtrage droits sous-onglets — avant connexion signal pour éviter les chargements parasites
         self.sub_tabs.setTabVisible(0, has_inscriptions)
@@ -74,7 +74,7 @@ class ScolariteView(QWidget):
 
     def on_sub_tab_changed(self, index):
         if index == 0:
-            self.view_inscription.load_responsables()
+            self.view_inscription.refresh_recherche()
             self.view_inscription.load_niveaux()
         elif index == 1:
             self.view_eleves.load_data()

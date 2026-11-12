@@ -1,6 +1,6 @@
 import datetime
 from typing import List, Optional, Any
-from sqlalchemy import func, case
+from sqlalchemy import func
 from app.database import get_session
 from app.session import AppSession
 
@@ -14,6 +14,7 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
@@ -22,6 +23,7 @@ class StatistiquesService:
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
                                           .join(TNiveau, TInscription.IDNiveau == TNiveau.IDT_Niveau)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe), joinedload(TInscription.niveau))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -35,7 +37,7 @@ class StatistiquesService:
             for ins in results:
                 lst.append({
                     "DateInscription": ins.DateInscription,
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": ins.eleve.Nom,
                     "Prenoms": ins.eleve.Prenoms,
                     "DateNaissance": ins.eleve.DateNaissance,
@@ -58,12 +60,14 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee, TInscription.Nouveau == True)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -79,7 +83,7 @@ class StatistiquesService:
             for ins in results:
                 lst.append({
                     "DateInscription": ins.DateInscription,
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": ins.eleve.Nom,
                     "Prenoms": ins.eleve.Prenoms,
                     "DateNaissance": ins.eleve.DateNaissance,
@@ -102,11 +106,13 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
             from models.montant_scol import MontantScol
             from models.versement_scol import VersementScol
+            from services.tarification_service import TarificationService
 
             # Enseignant/famille categorisation possible
             # 1. Recuperer tous les tarifs de cette annee
@@ -119,7 +125,8 @@ class StatistiquesService:
                 func.sum(VersementScol.MontantVersSco).label("vers_sum"),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).group_by(VersementScol.IDEleve).all()
 
             versements_map = {v[0]: float(v[1]) if v[1] is not None else 0.0 for v in versements_sums}
@@ -130,7 +137,8 @@ class StatistiquesService:
                 func.sum(VersementScol.MontantVersSco).label("reduc_sum"),
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == True
+                VersementScol.Reduction == True,
+                VersementScol.Annule == False,
             ).group_by(VersementScol.IDEleve).all()
 
             reductions_map = {v[0]: float(v[1]) if v[1] is not None else 0.0 for v in reductions_sums}
@@ -138,6 +146,7 @@ class StatistiquesService:
             # 3. Récupérer les inscriptions
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe), joinedload(TInscription.famille))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -147,40 +156,19 @@ class StatistiquesService:
             q = q.order_by(TClasse.LibClasse, Eleve.Nom, Eleve.Prenoms)
             inscriptions = q.all()
 
-            # Pré-calcul des rangs par famille (ordre IDTInscription) pour la règle 3e enfant
-            from collections import defaultdict
-            fam_buckets = defaultdict(list)
-            for row in session.query(
-                TInscription.IDFamille, TInscription.IDEleve, TInscription.IDTInscription
-            ).filter(TInscription.IDTAnneeScolaire == id_annee
-            ).order_by(TInscription.IDFamille, TInscription.IDTInscription.asc()).all():
-                fam_buckets[row.IDFamille].append(row.IDEleve)
-            rang_par_eleve = {}
-            for id_fam, eleve_ids in fam_buckets.items():
-                for idx, id_el in enumerate(eleve_ids):
-                    rang_par_eleve[id_el] = (idx + 1, len(eleve_ids))
-
             lst = []
             for ins in inscriptions:
-                # Calcul montant du
+                # Calcul montant du (regles centralisees : TarificationService)
                 scol_due = 0.0
                 if ins.Scolarite:
                     m_scol = montants_map.get(ins.IDNiveau)
-                    if m_scol:
-                        if ins.famille and ins.famille.EnsCatPrimaire:
-                            scol_due = float(m_scol.MontantEnsPri)
-                        elif ins.famille and ins.famille.EnsCatSecondaire:
-                            scol_due = float(m_scol.MontantEnsSecondaire)
-                        else:
-                            scol_due = float(m_scol.Montant)
-
-                    if ins.famille and ins.famille.EbrieAbobote:
-                        scol_due = max(0.0, scol_due - 10000.0)
-                    if ins.Nouveau:
-                        scol_due += 10000.0
-                    rang, nb_famille = rang_par_eleve.get(ins.IDEleve, (1, 1))
-                    if nb_famille >= 3 and rang >= 3:
-                        scol_due = max(0.0, scol_due - 10000.0)
+                    scol_due = float(ins.MontantScolariteApplique) if ins.MontantScolariteApplique is not None else (
+                        TarificationService.calculer_scolarite_due(
+                            montant_affecte=m_scol.MontantAffecte if m_scol else 0,
+                            montant_non_affecte=m_scol.MontantNonAffecte if m_scol else 0,
+                            statut_affectation=ins.StatutAffectation,
+                        )
+                    )
 
                 scol_vers  = versements_map.get(ins.IDEleve, 0.0)
                 scol_reduc = reductions_map.get(ins.IDEleve, 0.0)
@@ -195,7 +183,7 @@ class StatistiquesService:
                     etat = "Impayé"
 
                 lst.append({
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": f"{ins.eleve.Nom} {ins.eleve.Prenoms}",
                     "LibClasse": ins.classe.LibClasse,
                     "MontantDu": scol_due,
@@ -220,6 +208,7 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
@@ -232,12 +221,16 @@ class StatistiquesService:
             payments_sums = session.query(
                 VersementScol.IDEleve,
                 func.sum(VersementScol.MontantCantine).label("cant_sum")
-            ).filter(VersementScol.IDTAnneeScolaire == id_annee).group_by(VersementScol.IDEleve).all()
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Annule == False,
+            ).group_by(VersementScol.IDEleve).all()
 
             payments_map = {p[0]: float(p[1]) if p[1] is not None else 0.0 for p in payments_sums}
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee, TInscription.Cantine == True)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -262,7 +255,7 @@ class StatistiquesService:
                     etat = "Impayé"
 
                 lst.append({
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": f"{ins.eleve.Nom} {ins.eleve.Prenoms}",
                     "LibClasse": ins.classe.LibClasse,
                     "MontantDu": cant_due,
@@ -286,6 +279,7 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
@@ -298,12 +292,16 @@ class StatistiquesService:
             payments_sums = session.query(
                 VersementScol.IDEleve,
                 func.sum(VersementScol.MontantVersTrans).label("trans_sum")
-            ).filter(VersementScol.IDTAnneeScolaire == id_annee).group_by(VersementScol.IDEleve).all()
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Annule == False,
+            ).group_by(VersementScol.IDEleve).all()
 
             payments_map = {p[0]: float(p[1]) if p[1] is not None else 0.0 for p in payments_sums}
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee, TInscription.Transport == True)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -328,7 +326,7 @@ class StatistiquesService:
                     etat = "Impayé"
 
                 lst.append({
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": f"{ins.eleve.Nom} {ins.eleve.Prenoms}",
                     "LibClasse": ins.classe.LibClasse,
                     "MontantDu": trans_due,
@@ -352,30 +350,38 @@ class StatistiquesService:
 
         session = get_session()
         try:
-            from models.stock_sortie import StockSortie
-            from models.article import Article
+            from sqlalchemy.orm import joinedload
+            from models.vente import Vente, VenteLigne
 
-            q = session.query(StockSortie).join(Article, StockSortie.IDTArticle == Article.IDTArticle)\
-                                          .filter(StockSortie.IDTAnneeScolaire == id_annee)
+            q = session.query(VenteLigne).options(
+                joinedload(VenteLigne.vente), joinedload(VenteLigne.article)
+            ).join(Vente, VenteLigne.IDVente == Vente.IDVente).filter(
+                Vente.IDTAnneeScolaire == id_annee
+            )
             if date_debut:
-                q = q.filter(StockSortie.DateSort >= date_debut)
+                q = q.filter(Vente.DateVente >= date_debut)
             if date_fin:
-                q = q.filter(StockSortie.DateSort <= date_fin)
+                q = q.filter(Vente.DateVente <= date_fin)
 
-            q = q.order_by(StockSortie.DateSort.desc(), StockSortie.HeureSortie.desc())
+            q = q.order_by(Vente.DateVente.desc(), Vente.HeureVente.desc(), VenteLigne.IDVenteLigne.desc())
             results = q.all()
 
             lst = []
-            for item in results:
-                total_val = float(item.QuantiteSort) * float(item.Prix_vente)
+            for ligne in results:
                 lst.append({
-                    "DateSort": item.DateSort,
-                    "HeureSortie": item.HeureSortie,
-                    "Article": item.article.Libelle,
-                    "QuantiteSort": item.QuantiteSort,
-                    "Prix_vente": float(item.Prix_vente),
-                    "Total": total_val,
-                    "Login": item.Login
+                    "DateSort": ligne.vente.DateVente,
+                    "HeureSortie": ligne.vente.HeureVente,
+                    "Article": ligne.article.Libelle,
+                    "QuantiteSort": ligne.Quantite,
+                    "Prix_vente": float(ligne.PrixUnitaire),
+                    "Total": float(ligne.Total),
+                    "Login": ligne.vente.Login,
+                    # Champs additionnels (D2), utilises par stat_vente_view.py
+                    # pour l'annulation et l'affichage du recu :
+                    "IDVente": ligne.IDVente,
+                    "NumeroRecu": ligne.vente.NumeroRecu,
+                    "ModePaiement": ligne.vente.ModePaiement,
+                    "Annule": ligne.vente.Annule,
                 })
             return lst
         except Exception as e:
@@ -390,15 +396,27 @@ class StatistiquesService:
         session = get_session()
         try:
             from models.article import Article
+            from models.kit_article import KitArticle
             from models.stock_cour import StockCour
 
-            results = session.query(Article, StockCour.QuantiteCour).outerjoin(
-                StockCour, Article.IDTArticle == StockCour.IDTArticle
-            ).order_by(Article.Libelle.asc()).all()
+            articles = session.query(Article).order_by(Article.Libelle.asc()).all()
+            stocks_simples = {s.IDTArticle: s.QuantiteCour for s in session.query(StockCour).all()}
 
             lst = []
-            for art, qte_cour in results:
-                qty = qte_cour if qte_cour is not None else 0
+            for art in articles:
+                if art.KIT:
+                    # Un KIT n'a plus de ligne de stock propre depuis D3 : sa
+                    # quantite vendable est deduite du stock de ses composants.
+                    lignes = session.query(KitArticle).filter_by(IDKit=art.IDTArticle).all()
+                    if not lignes:
+                        qty = 0
+                    else:
+                        qty = max(0, min(
+                            stocks_simples.get(ligne.IDArticleComposant, 0) // ligne.Quantite
+                            for ligne in lignes
+                        ))
+                else:
+                    qty = stocks_simples.get(art.IDTArticle, 0)
                 pu = float(art.PU)
                 seuil = int(art.QTESeuil) if art.QTESeuil is not None else 0
                 val_stock = qty * pu
@@ -435,12 +453,14 @@ class StatistiquesService:
 
         session = get_session()
         try:
+            from sqlalchemy.orm import joinedload
             from models.inscription import TInscription
             from models.eleve import Eleve
             from models.classe import TClasse
 
             q = session.query(TInscription).join(Eleve, TInscription.IDEleve == Eleve.IDEleve)\
                                           .join(TClasse, TInscription.IDClasse == TClasse.IDTClasse)\
+                                          .options(joinedload(TInscription.eleve), joinedload(TInscription.classe), joinedload(TInscription.famille))\
                                           .filter(TInscription.IDTAnneeScolaire == id_annee)
             if id_niveau:
                 q = q.filter(TInscription.IDNiveau == id_niveau)
@@ -454,7 +474,7 @@ class StatistiquesService:
             for ins in results:
                 famille = ins.famille
                 lst.append({
-                    "Matricule": ins.eleve.Matricule,
+                    "Matricule": ins.eleve.MatriculeNational or ins.eleve.Matricule,
                     "Nom": ins.eleve.Nom,
                     "Prenoms": ins.eleve.Prenoms,
                     "DateNaissance": ins.eleve.DateNaissance,
@@ -522,6 +542,155 @@ class StatistiquesService:
             return []
         finally:
             session.close()
+
+    @staticmethod
+    def get_etat_versements_internat() -> List[dict]:
+        """Retourne l'état financier de chaque pensionnaire de l'année active."""
+        id_annee = AppSession.get_active_annee_id()
+        if not id_annee:
+            return []
+
+        session = get_session()
+        try:
+            from models.classe import TClasse
+            from models.eleve import Eleve
+            from models.inscription import TInscription
+            from models.internat import InscriptionInternat, VersementInternat
+
+            versements = session.query(
+                VersementInternat.IDInscriptionInternat.label("id_internat"),
+                func.sum(VersementInternat.Montant).label("total_verse"),
+            ).filter(
+                VersementInternat.Annule.is_(False)
+            ).group_by(VersementInternat.IDInscriptionInternat).subquery()
+
+            rows = session.query(
+                InscriptionInternat,
+                Eleve,
+                TClasse.LibClasse,
+                func.coalesce(versements.c.total_verse, 0),
+            ).join(
+                Eleve, InscriptionInternat.IDEleve == Eleve.IDEleve
+            ).outerjoin(
+                TInscription,
+                InscriptionInternat.IDTInscription == TInscription.IDTInscription,
+            ).outerjoin(
+                TClasse, TInscription.IDClasse == TClasse.IDTClasse,
+            ).outerjoin(
+                versements,
+                versements.c.id_internat == InscriptionInternat.IDInscriptionInternat,
+            ).filter(
+                InscriptionInternat.IDTAnneeScolaire == id_annee
+            ).order_by(Eleve.Nom, Eleve.Prenoms).all()
+
+            result = []
+            for internat, eleve, classe, total_verse in rows:
+                montant_du = float(internat.MontantAnnuel or 0)
+                montant_verse = float(total_verse or 0)
+                reste = max(0.0, montant_du - montant_verse)
+                etat = "Payé" if montant_du > 0 and reste <= 0 else (
+                    "Partiel" if montant_verse > 0 else "Impayé"
+                )
+                origine = "Collège" if internat.OrigineScolaire == "COLLEGE" else "Externe"
+                lib_classe = classe or internat.ClasseFrequentee or origine
+                result.append({
+                    "Matricule": eleve.Matricule,
+                    "Nom": f"{eleve.Nom} {eleve.Prenoms}",
+                    "LibClasse": lib_classe,
+                    "Origine": origine,
+                    "Type": "Nouvelle" if internat.TypePensionnaire == "NOUVELLE" else "Renouvellement",
+                    "MontantDu": montant_du,
+                    "MontantVerse": montant_verse,
+                    "Reste": reste,
+                    "Etat": etat,
+                })
+            return result
+        except Exception as e:
+            print(f"Error in get_etat_versements_internat: {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_etat_versements_cantine_externe() -> List[dict]:
+        """Retourne l'état financier de chaque pensionnaire de la cantine externe."""
+        id_annee = AppSession.get_active_annee_id()
+        if not id_annee:
+            return []
+
+        session = get_session()
+        try:
+            from models.cantine_externe import InscriptionCantine, VersementCantine
+            from models.eleve import Eleve
+
+            versements = session.query(
+                VersementCantine.IDInscriptionCantine.label("id_cantine"),
+                func.sum(VersementCantine.Montant).label("total_verse"),
+            ).filter(
+                VersementCantine.Annule.is_(False)
+            ).group_by(VersementCantine.IDInscriptionCantine).subquery()
+
+            rows = session.query(
+                InscriptionCantine, Eleve, func.coalesce(versements.c.total_verse, 0),
+            ).join(
+                Eleve, InscriptionCantine.IDEleve == Eleve.IDEleve
+            ).outerjoin(
+                versements, versements.c.id_cantine == InscriptionCantine.IDInscriptionCantine,
+            ).filter(
+                InscriptionCantine.IDTAnneeScolaire == id_annee
+            ).order_by(Eleve.Nom, Eleve.Prenoms).all()
+
+            result = []
+            for inscription, eleve, total_verse in rows:
+                montant_du = float(inscription.MontantTotal or 0)
+                montant_verse = float(total_verse or 0)
+                reste = max(0.0, montant_du - montant_verse)
+                etat = "Payé" if montant_du > 0 and reste <= 0 else (
+                    "Partiel" if montant_verse > 0 else "Impayé"
+                )
+                result.append({
+                    "Matricule": eleve.Matricule,
+                    "Nom": f"{eleve.Nom} {eleve.Prenoms}",
+                    "LibClasse": inscription.ResponsableNom or "",
+                    "MontantDu": montant_du,
+                    "MontantVerse": montant_verse,
+                    "Reste": reste,
+                    "Etat": etat,
+                })
+            return result
+        except Exception as e:
+            print(f"Error in get_etat_versements_cantine_externe: {e}")
+            return []
+        finally:
+            session.close()
+
+    @staticmethod
+    def get_etat_periodique(date_debut: Optional[datetime.date] = None, date_fin: Optional[datetime.date] = None) -> List[dict]:
+        """Retourne le récapitulatif des encaissements par rubrique sur une période donnée."""
+        id_annee = AppSession.get_active_annee_id()
+        if not id_annee:
+            return []
+
+        try:
+            from app.config import Config
+            from services.comptabilite_service import ComptabiliteService
+
+            totaux = ComptabiliteService.get_totaux_entrees_rubriques(id_annee, date_debut, date_fin)
+
+            lignes = [("Scolarité", totaux.get("scolarite", 0.0))]
+            if Config.ENABLE_CANTINE:
+                lignes.append(("Cantine", totaux.get("cantine", 0.0)))
+            if Config.ENABLE_TRANSPORT:
+                lignes.append(("Transport", totaux.get("transport", 0.0)))
+            lignes.append(("Autres frais annexes", totaux.get("autres", 0.0)))
+            lignes.append(("Internat", totaux.get("internat", 0.0)))
+            lignes.append(("Cantine externe", totaux.get("cantine_externe", 0.0)))
+            lignes.append(("Vente Kiosque", totaux.get("vente", 0.0)))
+
+            return [{"Rubrique": lib, "Montant": montant} for lib, montant in lignes]
+        except Exception as e:
+            print(f"Error in get_etat_periodique: {e}")
+            return []
 
     @staticmethod
     def format_fcfa(montant: Any) -> str:

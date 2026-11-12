@@ -9,15 +9,13 @@ Ce document décrit pas à pas la procédure de test technique et fonctionnel po
 ### Étape 1.1 : Tarification Scolarité
 1. Allez dans l'onglet **Scolarité > Versements > Scolarité**.
 2. Dans le bloc de gauche **APPLICATION COMMUNE À TOUS LES NIVEAUX** :
-   - Saisissez `150000` pour la Scolarité standard.
-   - Saisissez `100000` pour Enseignant Catholique Primaire.
-   - Saisissez `120000` pour Enseignant Catholique Secondaire.
+   - Saisissez `130000` pour Non affecté et `150000` pour Affecté.
    - Cliquez sur **Appliquer à tous les niveaux** et validez le message de succès.
-3. Vérifiez dans la grille de droite que tous les niveaux se voient attribuer ces montants.
+3. Vérifiez dans la grille de droite que tous les niveaux se voient attribuer ces montants (colonnes Non affecté / Affecté).
 4. Sélectionnez le niveau **CP1** dans la grille :
-   - Dans le bloc **MODIFIER LE NIVEAU SÉLECTIONNÉ**, modifiez la Scolarité standard à `160000`.
+   - Dans le bloc **MODIFIER LE NIVEAU SÉLECTIONNÉ**, modifiez le tarif Affecté à `160000`.
    - Cliquez sur **Enregistrer ce niveau**.
-   - Vérifiez que la valeur du CP1 dans le tableau s'est mise à jour à `160 000 F`.
+   - Vérifiez que la valeur Affecté du CP1 dans le tableau s'est mise à jour à `160 000 F`.
 
 ### Étape 1.2 : Tarification Transport
 1. Allez dans l'onglet **Scolarité > Versements > Transport**.
@@ -109,7 +107,7 @@ ORDER BY f."CodeFrais", n."Libelle";
 
 ### 3.3. Vérification des Paramétrages de Scolarité Standard par Niveau
 ```sql
-SELECT s."IDMontantScol" AS id, n."Libelle" AS niveau, s."Montant" AS standard, s."MontantEnsPri" AS cat_pri, s."MontantEnsSecondaire" AS cat_sec
+SELECT s."IDMontantScol" AS id, n."Libelle" AS niveau, s."MontantNonAffecte" AS non_affecte, s."MontantAffecte" AS affecte
 FROM "MontantScol" s
 JOIN "TNiveau" n ON s."IDNiveau" = n."IDT_Niveau"
 ORDER BY n."Libelle";

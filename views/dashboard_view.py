@@ -3,16 +3,17 @@ from datetime import date
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QScrollArea,
     QPushButton, QTableWidget, QTableWidgetItem,
-    QAbstractItemView, QHeaderView, QSizePolicy,
+    QAbstractItemView, QHeaderView,
 )
 from PySide6.QtCore import Qt
 
+from app.config import Config
 from app.session import AppSession
 from app.styles import (
-    COLORS, BUTTON_PRIMARY, BUTTON_SECONDARY, apply_table_style, apply_card_shadow
+    COLORS, BUTTON_PRIMARY, apply_card_shadow
 )
 from services.dashboard_service import DashboardService
-from views.ui_components import KpiCard, FinancialSection, make_separator
+from views.ui_components import KpiCard, make_separator
 
 
 class DashboardView(QWidget):
@@ -125,27 +126,35 @@ class DashboardView(QWidget):
     def _build_cartes(self):
         self.kpi_cards = {}
 
-        show_scolarite    = AppSession.has_permission("SCOLARITE_VIEW")
-        show_versements   = AppSession.has_permission("SCOLARITE_VERSEMENTS")
-        show_kiosque      = AppSession.has_permission("KIOSQUE_VIEW")
-        show_comptabilite = AppSession.has_permission("COMPTABILITE_VIEW")
+        show_scolarite       = AppSession.has_permission("SCOLARITE_VIEW")
+        show_versements      = AppSession.has_permission("SCOLARITE_VERSEMENTS")
+        show_internat        = AppSession.has_permission("INTERNAT_VIEW")
+        show_kiosque         = AppSession.has_permission("KIOSQUE_VIEW")
+        show_comptabilite    = AppSession.has_permission("COMPTABILITE_VIEW")
+        show_cantine_externe = AppSession.has_permission("CANTINE_EXTERNE_VIEW")
+        # Les montants financiers exigent le droit d'encaissement, pas le simple accès au module.
+        fin_internat = AppSession.has_permission("INTERNAT_VERSEMENTS")
+        fin_cantine  = AppSession.has_permission("CANTINE_EXTERNE_VERSEMENTS")
 
-        # (visible_ligne, cartes)
+        # Deux lignes compactes : effectifs, puis pilotage financier.
         grid_defs = [
-            (show_scolarite, [
+            (show_scolarite or show_internat, [
                 ("total_inscrits",             "Élèves inscrits",        COLORS["primary"],  "🎓"),
                 ("total_nouveaux",             "Nouveaux élèves",        COLORS["success"],  "✨"),
+                ("total_pensionnaires",        "Pensionnaires",          COLORS["purple"],   "🏠"),
                 ("total_classes",              "Classes actives",        "#0369A1",          "🏫"),
             ]),
-            (show_versements, [
-                ("total_versements_scolarite", "Versements scolarité",   COLORS["success"],  "💳"),
-                ("total_versements_cantine",   "Versements cantine",     COLORS["warning"],  "🍽"),
-                ("total_versements_transport", "Versements transport",   COLORS["warning"],  "🚌"),
+            (show_versements or fin_internat or show_comptabilite or fin_cantine, [
+                ("total_recettes",              "Recettes encaissées",   COLORS["success"],  "📥"),
+                ("total_depenses",              "Dépenses",              COLORS["danger"],   "📤"),
+                ("solde_net",                   "Solde net",             COLORS["primary"],  "⚖"),
+                ("total_reste_internat",        "Reste Internat",        COLORS["warning"],  "⏳"),
+                ("total_reste_cantine_externe", "Reste Cantine",         COLORS["warning"],  "⏳"),
             ]),
-            (show_kiosque or show_comptabilite, [
-                ("total_ventes_kiosque",       "Ventes kiosque",         COLORS["primary"],  "🛒"),
-                ("total_depenses",             "Dépenses compta",        COLORS["danger"],   "📤"),
-                ("total_recettes",             "Recettes compta",        COLORS["success"],  "📥"),
+            (show_versements or fin_internat or fin_cantine, [
+                ("total_versements_scolarite",       "Versements scolarité", COLORS["success"], "💳"),
+                ("total_versements_internat",        "Versements internat",  COLORS["purple"],  "🏠"),
+                ("total_versements_cantine_externe", "Versements cantine",   COLORS["warning"],  "🍽"),
             ]),
         ]
 
@@ -162,10 +171,17 @@ class DashboardView(QWidget):
             row_widget.setVisible(row_visible)
             self.main_layout.addWidget(row_widget)
 
-        # Visibilité par carte individuelle pour la ligne mixte kiosque / compta
-        self.kpi_cards["total_ventes_kiosque"].setVisible(show_kiosque)
+        self.kpi_cards["total_inscrits"].setVisible(show_scolarite)
+        self.kpi_cards["total_nouveaux"].setVisible(show_scolarite)
+        self.kpi_cards["total_classes"].setVisible(show_scolarite)
+        self.kpi_cards["total_pensionnaires"].setVisible(show_internat)
         self.kpi_cards["total_depenses"].setVisible(show_comptabilite)
-        self.kpi_cards["total_recettes"].setVisible(show_comptabilite)
+        self.kpi_cards["solde_net"].setVisible(show_comptabilite)
+        self.kpi_cards["total_reste_internat"].setVisible(fin_internat)
+        self.kpi_cards["total_reste_cantine_externe"].setVisible(fin_cantine)
+        self.kpi_cards["total_versements_scolarite"].setVisible(show_versements)
+        self.kpi_cards["total_versements_internat"].setVisible(fin_internat)
+        self.kpi_cards["total_versements_cantine_externe"].setVisible(fin_cantine)
 
     def _build_alertes(self):
         self.alertes_frame = QFrame()
@@ -273,6 +289,12 @@ class DashboardView(QWidget):
 
         self.tbl_versements.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.tbl_ventes.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+
+        # Cantine / Transport désactivés pour la version collège CJGA
+        if not Config.ENABLE_CANTINE:
+            self.tbl_versements.setColumnHidden(4, True)
+        if not Config.ENABLE_TRANSPORT:
+            self.tbl_versements.setColumnHidden(5, True)
         tables_widget.setVisible(show_versements or show_ventes)
         self.main_layout.addWidget(tables_widget)
 
@@ -338,13 +360,43 @@ class DashboardView(QWidget):
                 self.kpi_cards["total_nouveaux"].set_value(str(summary["total_nouveaux"]))
                 self.kpi_cards["total_classes"].set_value(str(summary["total_classes"]))
 
+            if AppSession.has_permission("INTERNAT_VIEW"):
+                self.kpi_cards["total_pensionnaires"].set_value(
+                    str(summary["total_pensionnaires"]))
+            if AppSession.has_permission("INTERNAT_VERSEMENTS"):
+                self.kpi_cards["total_reste_internat"].set_value(
+                    DashboardService.format_fcfa(summary["total_reste_internat"]))
+                attendu = float(summary["total_attendu_internat"] or 0)
+                encaisse = float(summary["total_versements_internat"] or 0)
+                taux = int(encaisse * 100 / attendu) if attendu > 0 else 0
+                self.kpi_cards["total_pensionnaires"].set_subtitle(
+                    f"Recouvrement : {taux} %")
+                self.kpi_cards["total_versements_internat"].set_value(
+                    DashboardService.format_fcfa(summary["total_versements_internat"]))
+                self.kpi_cards["total_versements_internat"].set_subtitle(
+                    f"Recouvrement : {taux} %")
+
+            if AppSession.has_permission("CANTINE_EXTERNE_VERSEMENTS"):
+                self.kpi_cards["total_versements_cantine_externe"].set_value(
+                    DashboardService.format_fcfa(summary["total_versements_cantine_externe"]))
+                self.kpi_cards["total_reste_cantine_externe"].set_value(
+                    DashboardService.format_fcfa(summary["total_reste_cantine_externe"]))
+                attendu_cantine = float(summary["total_attendu_cantine_externe"] or 0)
+                verse_cantine = float(summary["total_versements_cantine_externe"] or 0)
+                taux_cantine = min(100, int(verse_cantine * 100 / attendu_cantine)) \
+                    if attendu_cantine > 0 else 0
+                self.kpi_cards["total_versements_cantine_externe"].set_subtitle(
+                    f"Recouvrement : {taux_cantine} %")
+
             if AppSession.has_permission("SCOLARITE_VERSEMENTS"):
                 self.kpi_cards["total_versements_scolarite"].set_value(
                     DashboardService.format_fcfa(summary["total_versements_scolarite"]))
-                self.kpi_cards["total_versements_cantine"].set_value(
-                    DashboardService.format_fcfa(summary["total_versements_cantine"]))
-                self.kpi_cards["total_versements_transport"].set_value(
-                    DashboardService.format_fcfa(summary["total_versements_transport"]))
+                attendu_scolarite = float(summary["total_attendu_scolarite"] or 0)
+                verse_scolarite = float(summary["total_versements_scolarite"] or 0)
+                taux_scolarite = min(100, int(verse_scolarite * 100 / attendu_scolarite)) \
+                    if attendu_scolarite > 0 else 0
+                self.kpi_cards["total_versements_scolarite"].set_subtitle(
+                    f"Recouvrement : {taux_scolarite} %")
                 self._update_table(
                     self.tbl_versements,
                     DashboardService.get_latest_versements(),
@@ -352,8 +404,6 @@ class DashboardView(QWidget):
                 )
 
             if AppSession.has_permission("KIOSQUE_VIEW"):
-                self.kpi_cards["total_ventes_kiosque"].set_value(
-                    DashboardService.format_fcfa(summary["total_ventes_kiosque"]))
                 self._update_table(
                     self.tbl_ventes,
                     DashboardService.get_latest_ventes(),
@@ -365,6 +415,43 @@ class DashboardView(QWidget):
                     DashboardService.format_fcfa(summary["total_depenses"]))
                 self.kpi_cards["total_recettes"].set_value(
                     DashboardService.format_fcfa(summary["total_recettes"]))
+                self.kpi_cards["solde_net"].set_value(
+                    DashboardService.format_fcfa(summary["solde_net"]))
+
+            if any(AppSession.has_permission(code) for code in (
+                "SCOLARITE_VERSEMENTS", "INTERNAT_VERSEMENTS", "COMPTABILITE_VIEW",
+                "CANTINE_EXTERNE_VERSEMENTS",
+            )):
+                can_all = AppSession.has_permission("COMPTABILITE_VIEW")
+                visible_recettes = float(summary["total_recettes"]) if can_all else 0.0
+                details = []
+                if not can_all and AppSession.has_permission("SCOLARITE_VERSEMENTS"):
+                    scol = float(summary["total_versements_scolarite"])
+                    visible_recettes += scol
+                    details.append(f"Scolarité {DashboardService.format_fcfa(scol)}")
+                if not can_all and AppSession.has_permission("INTERNAT_VERSEMENTS"):
+                    internat = float(summary["total_versements_internat"])
+                    visible_recettes += internat
+                    details.append(f"Internat {DashboardService.format_fcfa(internat)}")
+                if not can_all and AppSession.has_permission("CANTINE_EXTERNE_VERSEMENTS"):
+                    cantine = float(summary["total_versements_cantine_externe"])
+                    visible_recettes += cantine
+                    details.append(f"Cantine {DashboardService.format_fcfa(cantine)}")
+                if not can_all and AppSession.has_permission("KIOSQUE_VIEW"):
+                    kiosque = float(summary["total_ventes_kiosque"])
+                    visible_recettes += kiosque
+                    details.append(f"Kiosque {DashboardService.format_fcfa(kiosque)}")
+                if can_all:
+                    details = [
+                        f"Scolarité {DashboardService.format_fcfa(summary['total_versements_scolarite'])}",
+                        f"Internat {DashboardService.format_fcfa(summary['total_versements_internat'])}",
+                        f"Cantine {DashboardService.format_fcfa(summary['total_versements_cantine_externe'])}",
+                        f"Kiosque {DashboardService.format_fcfa(summary['total_ventes_kiosque'])}",
+                    ]
+                self.kpi_cards["total_recettes"].set_value(
+                    DashboardService.format_fcfa(visible_recettes))
+                self.kpi_cards["total_recettes"].setToolTip(" · ".join(details))
+                self.kpi_cards["total_recettes"].set_subtitle("Survolez pour la ventilation")
 
         except Exception as e:
             print(f"Erreur refresh_data DashboardView : {e}")
@@ -374,7 +461,25 @@ class DashboardView(QWidget):
         has_alerts = False
         count = 0
 
-        stock_alerts = DashboardService.get_stock_alerts()
+        if AppSession.has_permission("INTERNAT_VIEW"):
+            internat = DashboardService.get_internat_alerts()
+            incomplete = internat["dossiers_incomplets"]
+            reste_internat = internat["reste"] if AppSession.has_permission("INTERNAT_VERSEMENTS") else 0
+            if incomplete or reste_internat > 0:
+                has_alerts = True
+                count += incomplete + (1 if reste_internat > 0 else 0)
+                title = QLabel(
+                    f"🏠  Internat — {incomplete} dossier(s) incomplet(s)"
+                    + (f", {DashboardService.format_fcfa(reste_internat)} à recouvrer"
+                       if reste_internat > 0 else "")
+                )
+                title.setStyleSheet(
+                    "color:#7C3AED;font-size:12px;font-weight:700;"
+                    "background:transparent;border:none;padding:4px 0 2px 0;"
+                )
+                self.alertes_layout.addWidget(title)
+
+        stock_alerts = DashboardService.get_stock_alerts() if AppSession.has_permission("KIOSQUE_VIEW") else []
         if stock_alerts:
             has_alerts = True
             count += len(stock_alerts)
@@ -392,7 +497,7 @@ class DashboardView(QWidget):
                 )
                 self.alertes_layout.addWidget(detail)
 
-        cap_alerts = DashboardService.get_classes_capacity_alerts()
+        cap_alerts = DashboardService.get_classes_capacity_alerts() if AppSession.has_permission("SCOLARITE_VIEW") else []
         if cap_alerts:
             has_alerts = True
             count += len(cap_alerts)
@@ -410,7 +515,7 @@ class DashboardView(QWidget):
                 )
                 self.alertes_layout.addWidget(detail)
 
-        impayes = DashboardService.get_impayes_scolarite()
+        impayes = DashboardService.get_impayes_scolarite() if AppSession.has_permission("SCOLARITE_VERSEMENTS") else []
         if impayes:
             has_alerts = True
             count += len(impayes)

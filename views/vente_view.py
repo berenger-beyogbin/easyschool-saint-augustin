@@ -1,4 +1,3 @@
-import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
@@ -7,6 +6,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from services.article_service import ArticleService
 from services.stock_service import StockService
+from services.vente_service import VenteService
+from utils.receipt_printer import ReceiptPrinter
 from app.session import AppSession
 from app.styles import (
     COLORS, INPUT_STYLE, COMBO_STYLE, SECTION_TITLE_STYLE,
@@ -180,8 +181,7 @@ class VenteView(QWidget):
         art = ArticleService.get_article_by_id(id_art)
 
         if art:
-            sc = StockService.get_stock_by_article(id_art)
-            stock_qte = sc.QuantiteCour if sc else 0
+            stock_qte = StockService.get_stock_disponible(id_art)
             self.lbl_stock_dispo.setText(f"Stock disponible : {stock_qte} unités")
             self.txt_pu.setText(str(int(art.PU)))
 
@@ -221,8 +221,7 @@ class VenteView(QWidget):
         if not art:
             return
 
-        sc = StockService.get_stock_by_article(id_art)
-        stock_qte = sc.QuantiteCour if sc else 0
+        stock_qte = StockService.get_stock_disponible(id_art)
 
         deja_dans_panier_qte = self.panier.get(id_art, {}).get("qte", 0)
         total_qte_demandee = qte + deja_dans_panier_qte
@@ -310,45 +309,26 @@ class VenteView(QWidget):
             QMessageBox.critical(self, "Erreur Session", "Aucune année scolaire active n'est configurée.")
             return
 
-        # Audit stock avant écriture
-        errs = []
-        for id_art, info in self.panier.items():
-            sc = StockService.get_stock_by_article(id_art)
-            stock_dispo = sc.QuantiteCour if sc else 0
-            if info["qte"] > stock_dispo:
-                errs.append(f"- {info['nom']} : demandé {info['qte']}, dispo {stock_dispo}")
-
-        if errs:
-            msg_err = "Certains articles ne possèdent plus le stock suffisant :\n" + "\n".join(errs)
-            QMessageBox.critical(self, "Vente Avortée", msg_err)
-            return
-
         login_util = AppSession.get_logged_in_username() or "admin"
-        ventes_reussies = 0
 
-        for id_art, info in self.panier.items():
-            success, msg = StockService.remove_stock(
-                id_art, info["qte"], active_annee_id, info["pu"], login_util
-            )
-            if success:
-                ventes_reussies += 1
-            else:
-                QMessageBox.critical(self, "Erreur lors du traitement", f"Erreur durant l'enregistrement de '{info['nom']}' : {msg}")
-                break
+        # Vente atomique : une seule transaction verrouille les stocks concernes,
+        # verifie toutes les quantites puis debite tout, ou n'ecrit rien du tout.
+        success, msg, recu = VenteService.process_sale(self.panier, active_annee_id, login_util)
 
-        if ventes_reussies == len(self.panier):
-            QMessageBox.information(
-                self, "Vente Validée",
-                f"Vente finalisée avec succès ! {ventes_reussies} article(s)/KIT(s) débité(s) des stocks."
-            )
+        if success:
+            QMessageBox.information(self, "Vente Validée", msg)
             self.on_vider_panier()
 
             if hasattr(self.main_window, "load_data"):
                 try:
                     self.main_window.load_data()
-                except:
+                except Exception:
                     pass
+
+            if recu:
+                ReceiptPrinter.print_vente_receipt(self, recu)
         else:
+            QMessageBox.critical(self, "Vente Avortée", msg)
             self.update_table_panier()
 
     def on_fermer(self):

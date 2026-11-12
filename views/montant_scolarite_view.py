@@ -7,14 +7,15 @@ from services.niveau_service import NiveauService
 from services.montant_scolarite_service import MontantScolariteService
 from app.session import AppSession
 from app.styles import (
-    COLORS, INPUT_STYLE, TABLE_STYLE, SECTION_TITLE_STYLE,
-    BUTTON_PRIMARY, BUTTON_SECONDARY, GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE,
+    COLORS, INPUT_STYLE, SECTION_TITLE_STYLE,
+    BUTTON_PRIMARY, GROUPBOX_ACCENT_STYLE, GROUPBOX_STYLE,
     apply_table_style
 )
 
 class MontantScolariteView(QWidget):
     """
-    Vue permettant de paramétrer les montants de scolarité par niveau.
+    Vue permettant de paramétrer les montants de scolarité par niveau,
+    selon le statut d'affectation de l'État (Non affecté / Affecté).
     """
     def __init__(self, main_window=None):
         super().__init__()
@@ -50,17 +51,13 @@ class MontantScolariteView(QWidget):
         form_commun.setSpacing(8)
         form_commun.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        self.txt_com_montant = QLineEdit("0")
-        self.txt_com_montant.setStyleSheet(INPUT_STYLE)
-        form_commun.addRow("Standard (F CFA) :", self.txt_com_montant)
+        self.txt_com_non_affecte = QLineEdit("0")
+        self.txt_com_non_affecte.setStyleSheet(INPUT_STYLE)
+        form_commun.addRow("Non affecté (F CFA) :", self.txt_com_non_affecte)
 
-        self.txt_com_pri = QLineEdit("0")
-        self.txt_com_pri.setStyleSheet(INPUT_STYLE)
-        form_commun.addRow("Ens. Primaire (F CFA) :", self.txt_com_pri)
-
-        self.txt_com_sec = QLineEdit("0")
-        self.txt_com_sec.setStyleSheet(INPUT_STYLE)
-        form_commun.addRow("Ens. Secondaire (F CFA) :", self.txt_com_sec)
+        self.txt_com_affecte = QLineEdit("0")
+        self.txt_com_affecte.setStyleSheet(INPUT_STYLE)
+        form_commun.addRow("Affecté (F CFA) :", self.txt_com_affecte)
 
         layout_commun.addLayout(form_commun)
 
@@ -88,17 +85,13 @@ class MontantScolariteView(QWidget):
         form_indiv.setSpacing(8)
         form_indiv.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        self.txt_ind_montant = QLineEdit("0")
-        self.txt_ind_montant.setStyleSheet(INPUT_STYLE)
-        form_indiv.addRow("Standard (F CFA) :", self.txt_ind_montant)
+        self.txt_ind_non_affecte = QLineEdit("0")
+        self.txt_ind_non_affecte.setStyleSheet(INPUT_STYLE)
+        form_indiv.addRow("Non affecté (F CFA) :", self.txt_ind_non_affecte)
 
-        self.txt_ind_pri = QLineEdit("0")
-        self.txt_ind_pri.setStyleSheet(INPUT_STYLE)
-        form_indiv.addRow("Ens. Primaire (F CFA) :", self.txt_ind_pri)
-
-        self.txt_ind_sec = QLineEdit("0")
-        self.txt_ind_sec.setStyleSheet(INPUT_STYLE)
-        form_indiv.addRow("Ens. Secondaire (F CFA) :", self.txt_ind_sec)
+        self.txt_ind_affecte = QLineEdit("0")
+        self.txt_ind_affecte.setStyleSheet(INPUT_STYLE)
+        form_indiv.addRow("Affecté (F CFA) :", self.txt_ind_affecte)
 
         layout_indiv.addLayout(form_indiv)
 
@@ -124,9 +117,9 @@ class MontantScolariteView(QWidget):
         layout_droit.addWidget(lbl_titre_table)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
+        self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels([
-            "Niveau", "Scolarité standard", "Enseignant Ca. Pri.", "Enseignant Ca. Sec."
+            "Niveau", "Non affecté", "Affecté"
         ])
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
@@ -149,7 +142,7 @@ class MontantScolariteView(QWidget):
 
         # 1. Charger tous les niveaux
         niveaux = NiveauService.get_all_with_cycle()
-        
+
         # 2. Charger les tarifs déjà configurés
         tarifs = MontantScolariteService.get_montants_by_annee(active_annee_id)
         tarifs_dict = {t.IDNiveau: t for t in tarifs}
@@ -158,34 +151,28 @@ class MontantScolariteView(QWidget):
         for i, niv in enumerate(niveaux):
             nid = niv["IDT_Niveau"]
             lib_niv = niv["Libelle"]
-            
+
             # Rechercher si des montants existent déjà
-            m_scol = 0.0
-            m_pri = 0.0
-            m_sec = 0.0
+            m_non_affecte = 0.0
+            m_affecte = 0.0
             if nid in tarifs_dict:
-                m_scol = float(tarifs_dict[nid].Montant)
-                m_pri = float(tarifs_dict[nid].MontantEnsPri)
-                m_sec = float(tarifs_dict[nid].MontantEnsSecondaire)
+                m_non_affecte = float(tarifs_dict[nid].MontantNonAffecte)
+                m_affecte = float(tarifs_dict[nid].MontantAffecte)
 
             # Cellules
             item_niv = QTableWidgetItem(lib_niv)
             item_niv.setData(Qt.UserRole, nid)
             item_niv.setFlags(item_niv.flags() & ~Qt.ItemIsEditable)
 
-            item_m = QTableWidgetItem(f"{int(m_scol):,} F")
-            item_m.setFlags(item_m.flags() & ~Qt.ItemIsEditable)
+            item_non_affecte = QTableWidgetItem(f"{int(m_non_affecte):,} F")
+            item_non_affecte.setFlags(item_non_affecte.flags() & ~Qt.ItemIsEditable)
 
-            item_pri = QTableWidgetItem(f"{int(m_pri):,} F")
-            item_pri.setFlags(item_pri.flags() & ~Qt.ItemIsEditable)
-
-            item_sec = QTableWidgetItem(f"{int(m_sec):,} F")
-            item_sec.setFlags(item_sec.flags() & ~Qt.ItemIsEditable)
+            item_affecte = QTableWidgetItem(f"{int(m_affecte):,} F")
+            item_affecte.setFlags(item_affecte.flags() & ~Qt.ItemIsEditable)
 
             self.table.setItem(i, 0, item_niv)
-            self.table.setItem(i, 1, item_m)
-            self.table.setItem(i, 2, item_pri)
-            self.table.setItem(i, 3, item_sec)
+            self.table.setItem(i, 1, item_non_affecte)
+            self.table.setItem(i, 2, item_affecte)
 
         self.lbl_selected_niveau.setText("Aucun niveau sélectionné")
         self.btn_enregistrer_niveau.setEnabled(False)
@@ -207,35 +194,32 @@ class MontantScolariteView(QWidget):
         self.btn_enregistrer_niveau.setEnabled(True)
 
         # Extraire les montants de la grille
-        m_scol = self.clean_amount(self.table.item(row, 1).text())
-        m_pri = self.clean_amount(self.table.item(row, 2).text())
-        m_sec = self.clean_amount(self.table.item(row, 3).text())
+        m_non_affecte = self.clean_amount(self.table.item(row, 1).text())
+        m_affecte = self.clean_amount(self.table.item(row, 2).text())
 
-        self.txt_ind_montant.setText(str(m_scol))
-        self.txt_ind_pri.setText(str(m_pri))
-        self.txt_ind_sec.setText(str(m_sec))
+        self.txt_ind_non_affecte.setText(str(m_non_affecte))
+        self.txt_ind_affecte.setText(str(m_affecte))
 
     def clean_amount(self, txt: str) -> int:
         """Nettoie l'affichage pour n'avoir que des chiffres."""
         return int("".join(c for c in txt if c.isdigit()))
 
     def on_apply_common(self):
-        """Applique une valeur commune à tous les niveaux."""
+        """Applique des valeurs communes à tous les niveaux."""
         active_annee_id = AppSession.get_active_annee_id()
         if not active_annee_id:
             QMessageBox.warning(self, "Erreur", "Aucune annee scolaire active.")
             return
 
         try:
-            val_com = float(self.txt_com_montant.text().strip() or 0)
-            val_pri = float(self.txt_com_pri.text().strip() or 0)
-            val_sec = float(self.txt_com_sec.text().strip() or 0)
+            val_non_affecte = float(self.txt_com_non_affecte.text().strip() or 0)
+            val_affecte = float(self.txt_com_affecte.text().strip() or 0)
         except ValueError:
             QMessageBox.critical(self, "Saisie Incorrecte", "Veuillez saisir des montants valides (nombres entiers).")
             return
 
         success, msg = MontantScolariteService.apply_common_amount_to_all_levels(
-            active_annee_id, val_com, val_pri, val_sec
+            active_annee_id, val_non_affecte, val_affecte
         )
 
         if success:
@@ -252,15 +236,14 @@ class MontantScolariteView(QWidget):
             return
 
         try:
-            val = float(self.txt_ind_montant.text().strip() or 0)
-            val_pri = float(self.txt_ind_pri.text().strip() or 0)
-            val_sec = float(self.txt_ind_sec.text().strip() or 0)
+            val_non_affecte = float(self.txt_ind_non_affecte.text().strip() or 0)
+            val_affecte = float(self.txt_ind_affecte.text().strip() or 0)
         except ValueError:
             QMessageBox.critical(self, "Saisie Incorrecte", "Veuillez entrer des montants numeriques corrects.")
             return
 
         success, msg = MontantScolariteService.save_montant_scolarite(
-            active_annee_id, self.selected_niveau_id, val, val_pri, val_sec
+            active_annee_id, self.selected_niveau_id, val_non_affecte, val_affecte
         )
 
         if success:

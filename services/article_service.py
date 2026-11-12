@@ -1,10 +1,14 @@
-from typing import List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional
 from decimal import Decimal
 from models.article import Article
+from models.kit_article import KitArticle
 from models.stock_cour import StockCour
 from models.stock_entree import StockEntree
-from models.stock_sortie import StockSortie
+from models.vente import VenteLigne
 from app.database import get_session
+import logging
+logger = logging.getLogger(__name__)
+
 
 class ArticleService:
     @staticmethod
@@ -13,8 +17,8 @@ class ArticleService:
         session = get_session()
         try:
             return session.query(Article).order_by(Article.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_all_articles : {e}")
+        except Exception:
+            logger.exception("Erreur get_all_articles")
             return []
         finally:
             session.close()
@@ -25,8 +29,8 @@ class ArticleService:
         session = get_session()
         try:
             return session.query(Article).filter(Article.KIT == False).order_by(Article.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_articles_simples : {e}")
+        except Exception:
+            logger.exception("Erreur get_articles_simples")
             return []
         finally:
             session.close()
@@ -37,8 +41,8 @@ class ArticleService:
         session = get_session()
         try:
             return session.query(Article).filter(Article.KIT == True).order_by(Article.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur get_kits : {e}")
+        except Exception:
+            logger.exception("Erreur get_kits")
             return []
         finally:
             session.close()
@@ -49,8 +53,8 @@ class ArticleService:
         session = get_session()
         try:
             return session.get(Article, id_art)
-        except Exception as e:
-            print(f"Erreur get_article_by_id : {e}")
+        except Exception:
+            logger.exception("Erreur get_article_by_id")
             return None
         finally:
             session.close()
@@ -65,8 +69,8 @@ class ArticleService:
             return session.query(Article).filter(
                 Article.Libelle.ilike(f"%{query}%")
             ).order_by(Article.Libelle.asc()).all()
-        except Exception as e:
-            print(f"Erreur search_articles : {e}")
+        except Exception:
+            logger.exception("Erreur search_articles")
             return []
         finally:
             session.close()
@@ -111,8 +115,49 @@ class ArticleService:
             session.close()
 
     @staticmethod
-    def create_kit(libelle: str, pu: float, seuil: int, contenu_kit: str, qte_kit: str) -> Tuple[bool, str]:
-        """Cree un nouveau kit d'articles et initialise son stock a 0."""
+    def _valider_composition(session, id_kit_exclu, composition: Dict[int, int]) -> Optional[str]:
+        """Valide une composition de KIT ({id_article_composant: quantite}).
+        Retourne un message d'erreur, ou None si tout est valide."""
+        if not composition:
+            return "Un KIT doit contenir au moins un article simple."
+
+        composants = session.query(Article).filter(
+            Article.IDTArticle.in_(composition.keys())
+        ).all()
+        composants_par_id = {a.IDTArticle: a for a in composants}
+
+        for id_comp, qte in composition.items():
+            if id_comp == id_kit_exclu:
+                return "Un KIT ne peut pas se contenir lui-meme."
+            comp = composants_par_id.get(id_comp)
+            if not comp:
+                return f"Article composant introuvable (ID {id_comp})."
+            if comp.KIT:
+                return f"'{comp.Libelle}' est lui-meme un KIT : un KIT ne peut pas contenir un autre KIT."
+            if qte <= 0:
+                return f"La quantite de '{comp.Libelle}' dans le KIT doit etre superieure a 0."
+        return None
+
+    @staticmethod
+    def get_kit_composition(id_kit: int) -> Dict[int, int]:
+        """Retourne la composition d'un kit : {id_article_composant: quantite}."""
+        session = get_session()
+        try:
+            lignes = session.query(KitArticle).filter_by(IDKit=id_kit).all()
+            return {ligne.IDArticleComposant: ligne.Quantite for ligne in lignes}
+        except Exception:
+            logger.exception("Erreur get_kit_composition")
+            return {}
+        finally:
+            session.close()
+
+    @staticmethod
+    def create_kit(libelle: str, pu: float, seuil: int, composition: Dict[int, int]) -> Tuple[bool, str]:
+        """Cree un nouveau kit d'articles avec sa composition (D3).
+
+        Un KIT n'a plus sa propre ligne de stock (StockCour) : sa quantite
+        vendable est deduite du stock de ses composants
+        (StockService.get_stock_disponible)."""
         if not libelle or not libelle.strip():
             return False, "Le libelle du kit est obligatoire."
         if pu < 0:
@@ -123,25 +168,21 @@ class ArticleService:
         lib_clean = libelle.strip()
         session = get_session()
         try:
+            erreur = ArticleService._valider_composition(session, None, composition)
+            if erreur:
+                return False, erreur
+
             # Verification unicite du libelle
             exist = session.query(Article).filter(Article.Libelle.ilike(lib_clean)).first()
             if exist:
                 return False, f"Un article ou un kit intitule '{lib_clean}' existe deja."
 
-            nouveau = Article(
-                Libelle=lib_clean,
-                PU=Decimal(str(pu)),
-                KIT=True,
-                QTESeuil=seuil,
-                ContenuKit=contenu_kit,
-                QteKit=qte_kit
-            )
+            nouveau = Article(Libelle=lib_clean, PU=Decimal(str(pu)), KIT=True, QTESeuil=seuil)
             session.add(nouveau)
-            session.flush()
+            session.flush()  # attribue IDTArticle avant de creer les lignes de composition
 
-            # Initialisation automatique du stock courant a 0
-            stock = StockCour(IDTArticle=nouveau.IDTArticle, QuantiteCour=0)
-            session.add(stock)
+            for id_comp, qte in composition.items():
+                session.add(KitArticle(IDKit=nouveau.IDTArticle, IDArticleComposant=id_comp, Quantite=qte))
 
             session.commit()
             return True, "Kit cree avec succes !"
@@ -152,8 +193,10 @@ class ArticleService:
             session.close()
 
     @staticmethod
-    def update_article(id_art: int, libelle: str, pu: float, seuil: int, contenu_kit: Optional[str] = None, qte_kit: Optional[str] = None, is_kit: bool = False) -> Tuple[bool, str]:
-        """Met a jour un article existant."""
+    def update_article(id_art: int, libelle: str, pu: float, seuil: int, composition: Optional[Dict[int, int]] = None, is_kit: bool = False) -> Tuple[bool, str]:
+        """Met a jour un article existant. Si is_kit, remplace integralement
+        sa composition (le formulaire soumet toujours la composition complete,
+        pas un diff)."""
         if not libelle or not libelle.strip():
             return False, "Le libelle est obligatoire."
         if pu < 0:
@@ -168,6 +211,11 @@ class ArticleService:
             if not art:
                 return False, "Article inexistant."
 
+            if is_kit:
+                erreur = ArticleService._valider_composition(session, id_art, composition or {})
+                if erreur:
+                    return False, erreur
+
             # Verification unicite libelle hors lui-meme
             exist = session.query(Article).filter(
                 (Article.Libelle.ilike(lib_clean)) & (Article.IDTArticle != id_art)
@@ -179,13 +227,12 @@ class ArticleService:
             art.PU = Decimal(str(pu))
             art.QTESeuil = seuil
             art.KIT = is_kit
-            
+
+            # Remplace integralement la composition existante.
+            session.query(KitArticle).filter_by(IDKit=id_art).delete()
             if is_kit:
-                art.ContenuKit = contenu_kit
-                art.QteKit = qte_kit
-            else:
-                art.ContenuKit = None
-                art.QteKit = None
+                for id_comp, qte in (composition or {}).items():
+                    session.add(KitArticle(IDKit=id_art, IDArticleComposant=id_comp, Quantite=qte))
 
             session.commit()
             return True, "Article/Kit mis a jour avec succes !"
@@ -204,13 +251,10 @@ class ArticleService:
             if not art:
                 return False, "Article inexistant."
 
-            # 1. Verifier si l'article est utilise dans un Kit
-            kits = session.query(Article).filter(Article.KIT == True).all()
-            for kit in kits:
-                if kit.ContenuKit:
-                    ids = [x.strip() for x in kit.ContenuKit.split(";") if x.strip()]
-                    if str(id_art) in ids:
-                        return False, "Impossible de supprimer cet article car il est utilisé dans la composition d’un kit."
+            # 1. Verifier si l'article est utilise dans la composition d'un KIT
+            composant_de = session.query(KitArticle).filter_by(IDArticleComposant=id_art).count()
+            if composant_de > 0:
+                return False, "Impossible de supprimer cet article car il est utilisé dans la composition d’un kit."
 
             # 2. Verifier si le stock courant est > 0
             sc = session.query(StockCour).filter_by(IDTArticle=id_art).first()
@@ -222,10 +266,11 @@ class ArticleService:
             if entrees > 0:
                 return False, "Impossible de supprimer cet article car il contient des historiques d'approvisionnement (StockEnt)."
 
-            # 3. Verifier si l'article est associe a des sorties (ventes) de stock
-            sorties = session.query(StockSortie).filter_by(IDTArticle=id_art).count()
+            # 3. Verifier si l'article est associe a des ventes (couvre l'historique
+            # backfille depuis StockSortie ainsi que les ventes enregistrees depuis D2)
+            sorties = session.query(VenteLigne).filter_by(IDTArticle=id_art).count()
             if sorties > 0:
-                return False, "Impossible de supprimer cet article car il contient des historiques de vente (StockSortie)."
+                return False, "Impossible de supprimer cet article car il contient des historiques de vente."
 
             # Tout est propre, on supprime le stock_cour lie puis l'article
             if sc:

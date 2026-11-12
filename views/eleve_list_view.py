@@ -1,12 +1,13 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView, QDialog
+    QPushButton, QTableWidget, QTableWidgetItem, QMessageBox, QHeaderView
 )
 from PySide6.QtCore import Qt
 from services.eleve_service import EleveService
 from views.eleve_form_view import EleveFormView
+from views.eleve_import_dialog import EleveImportDialog
 from app.styles import (
-    COLORS, INPUT_STYLE, TABLE_STYLE, PAGE_TITLE_STYLE,
+    COLORS, INPUT_STYLE, PAGE_TITLE_STYLE,
     BUTTON_PRIMARY, BUTTON_SUCCESS, BUTTON_SECONDARY, BUTTON_DANGER,
     apply_table_style
 )
@@ -39,7 +40,7 @@ class EleveListView(QWidget):
             f"font-size: 12px; color: {COLORS['muted']}; background-color: transparent;"
         )
         self.txt_recherche = QLineEdit()
-        self.txt_recherche.setPlaceholderText("Nom, prénom ou matricule…")
+        self.txt_recherche.setPlaceholderText("Matricule national, nom ou prénom…")
         self.txt_recherche.setStyleSheet(INPUT_STYLE)
         self.txt_recherche.setFixedWidth(240)
         self.txt_recherche.textChanged.connect(self.load_data)
@@ -50,14 +51,14 @@ class EleveListView(QWidget):
 
         # 2. Tableau de résultats
         self.table = QTableWidget()
-        self.table.setColumnCount(9)
+        self.table.setColumnCount(10)
         self.table.setHorizontalHeaderLabels([
-            "Matricule", "Nom", "Prénoms", "Date Naiss", "Lieu Naiss",
+            "Matricule national", "Matricule interne", "Nom", "Prénoms", "Date Naiss", "Lieu Naiss",
             "Sexe", "Nationalité", "Religion", "Habitation"
         ])
         apply_table_style(self.table)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.doubleClicked.connect(self.on_modifier)
@@ -75,6 +76,10 @@ class EleveListView(QWidget):
         self.btn_modifier.setStyleSheet(BUTTON_PRIMARY)
         self.btn_modifier.clicked.connect(self.on_modifier)
 
+        self.btn_importer = QPushButton("Importer Excel")
+        self.btn_importer.setStyleSheet(BUTTON_PRIMARY)
+        self.btn_importer.clicked.connect(self.on_importer)
+
         self.btn_detail = QPushButton("Détail")
         self.btn_detail.setStyleSheet(BUTTON_PRIMARY)
         self.btn_detail.clicked.connect(self.on_detail)
@@ -89,6 +94,7 @@ class EleveListView(QWidget):
 
         btn_layout.addWidget(self.btn_nouveau)
         btn_layout.addWidget(self.btn_modifier)
+        btn_layout.addWidget(self.btn_importer)
         btn_layout.addWidget(self.btn_detail)
         btn_layout.addWidget(self.btn_supprimer)
         btn_layout.addStretch()
@@ -107,33 +113,34 @@ class EleveListView(QWidget):
             # Application du filtrage de recherche
             if query:
                 nom_complet = f"{el.Nom} {el.Prenoms}".lower()
-                if query not in el.Matricule.lower() and query not in nom_complet:
+                matricule_national = (el.MatriculeNational or "").lower()
+                if query not in matricule_national and query not in el.Matricule.lower() and query not in nom_complet:
                     continue
             
             self.table.insertRow(row_idx)
             
             # Matricule avec ID de l’élève caché en UserRole
-            item_mat = QTableWidgetItem(el.Matricule)
+            item_mat = QTableWidgetItem(el.MatriculeNational or "—")
             item_mat.setData(Qt.UserRole, el.IDEleve)
             self.table.setItem(row_idx, 0, item_mat)
-            
-            self.table.setItem(row_idx, 1, QTableWidgetItem(el.Nom))
-            self.table.setItem(row_idx, 2, QTableWidgetItem(el.Prenoms))
+            self.table.setItem(row_idx, 1, QTableWidgetItem(el.Matricule))
+            self.table.setItem(row_idx, 2, QTableWidgetItem(el.Nom))
+            self.table.setItem(row_idx, 3, QTableWidgetItem(el.Prenoms))
             
             # Formater date de naissance
             date_str = el.DateNaissance.strftime("%d/%m/%Y") if el.DateNaissance else ""
-            self.table.setItem(row_idx, 3, QTableWidgetItem(date_str))
+            self.table.setItem(row_idx, 4, QTableWidgetItem(date_str))
             
-            self.table.setItem(row_idx, 4, QTableWidgetItem(el.LieuNaissance or ""))
-            self.table.setItem(row_idx, 5, QTableWidgetItem("M" if el.Sexe == 1 else "F"))
+            self.table.setItem(row_idx, 5, QTableWidgetItem(el.LieuNaissance or ""))
+            self.table.setItem(row_idx, 6, QTableWidgetItem("M" if el.Sexe == 1 else "F"))
             
             # Nationalité et religion
             nat_str = el.nationalite.Nationalite if el.nationalite else ""
             rel_str = el.religion.Religion if el.religion else ""
-            self.table.setItem(row_idx, 6, QTableWidgetItem(nat_str))
-            self.table.setItem(row_idx, 7, QTableWidgetItem(rel_str))
+            self.table.setItem(row_idx, 7, QTableWidgetItem(nat_str))
+            self.table.setItem(row_idx, 8, QTableWidgetItem(rel_str))
             
-            self.table.setItem(row_idx, 8, QTableWidgetItem(el.Habitation or ""))
+            self.table.setItem(row_idx, 9, QTableWidgetItem(el.Habitation or ""))
             
             row_idx += 1
 
@@ -158,6 +165,11 @@ class EleveListView(QWidget):
         
         dial = EleveFormView(self, id_eleve=id_el)
         if dial.exec() == EleveFormView.Accepted:
+            self.load_data()
+
+    def on_importer(self):
+        dialog = EleveImportDialog(self)
+        if dialog.exec() == EleveImportDialog.Accepted:
             self.load_data()
 
     def on_detail(self):
@@ -195,7 +207,8 @@ class EleveListView(QWidget):
         details_msg = (
             f"=== FICHE SYNTHÉTIQUE DE L'ÉLÈVE ===\n\n"
             f"IDENTIFICATION :\n"
-            f"- Matricule : {el.Matricule}\n"
+            f"- Matricule national : {el.MatriculeNational or 'Non renseigné'}\n"
+            f"- Matricule interne : {el.Matricule}\n"
             f"- Nom complet : {el.Nom} {el.Prenoms}\n"
             f"- Sexe : {sexe_lib}\n"
             f"- Né(e) le : {bday_str} à {el.LieuNaissance or 'Inconnu'}\n"
@@ -231,7 +244,7 @@ class EleveListView(QWidget):
             return
 
         row = self.table.currentRow()
-        nom_eleve = f"{self.table.item(row, 1).text()} {self.table.item(row, 2).text()}"
+        nom_eleve = f"{self.table.item(row, 2).text()} {self.table.item(row, 3).text()}"
 
         confirm = QMessageBox.question(
             self, "Confirmation de suppression",

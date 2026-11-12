@@ -5,16 +5,22 @@ from sqlalchemy.orm import joinedload
 from app.database import get_session
 from app.session import AppSession
 from models.inscription import TInscription
-from models.eleve import Eleve
 from models.famille import TFamille
 from models.classe import TClasse
 from models.versement_scol import VersementScol
 from models.montant_scol import MontantScol
-from models.stock_sortie import StockSortie
+from models.vente import Vente, VenteLigne
 from models.article import Article
+from models.kit_article import KitArticle
 from models.stock_cour import StockCour
 from models.sortie_fin import SortieFin
+from models.internat import InscriptionInternat, VersementInternat
+from models.cantine_externe import InscriptionCantine, VersementCantine
+from services.tarification_service import TarificationService
 from models.etablissement import EtablissementEcole
+import logging
+logger = logging.getLogger(__name__)
+
 
 
 class DashboardService:
@@ -50,8 +56,8 @@ class DashboardService:
                 "localite": etab.Localite or "",
                 "telephone": etab.Telephone or "",
             }
-        except Exception as e:
-            print(f"Erreur get_etablissement_info : {e}")
+        except Exception:
+            logger.exception("Erreur get_etablissement_info")
             return {"nom": "Erreur chargement", "sigle": "", "localite": "", "telephone": ""}
         finally:
             session.close()
@@ -63,12 +69,21 @@ class DashboardService:
             "total_nouveaux": 0,
             "total_classes": 0,
             "total_familles": 0,
+            "total_pensionnaires": 0,
+            "total_attendu_internat": Decimal("0"),
+            "total_reste_internat": Decimal("0"),
             "total_versements_scolarite": Decimal("0"),
+            "total_attendu_scolarite": Decimal("0"),
             "total_versements_cantine": Decimal("0"),
             "total_versements_transport": Decimal("0"),
+            "total_versements_internat": Decimal("0"),
+            "total_attendu_cantine_externe": Decimal("0"),
+            "total_versements_cantine_externe": Decimal("0"),
+            "total_reste_cantine_externe": Decimal("0"),
             "total_ventes_kiosque": Decimal("0"),
             "total_depenses": Decimal("0"),
             "total_recettes": Decimal("0"),
+            "solde_net": Decimal("0"),
         }
         id_annee = AppSession.get_active_annee_id()
         if not id_annee:
@@ -95,59 +110,155 @@ class DashboardService:
                 func.count(TFamille.IdTFamille)
             ).scalar() or 0
 
+            total_pensionnaires = session.query(
+                func.count(InscriptionInternat.IDInscriptionInternat)
+            ).filter(
+                InscriptionInternat.IDTAnneeScolaire == id_annee,
+                InscriptionInternat.Statut != "SORTIE",
+            ).scalar() or 0
+
+            total_attendu_internat = session.query(
+                func.sum(InscriptionInternat.MontantAnnuel)
+            ).filter(
+                InscriptionInternat.IDTAnneeScolaire == id_annee,
+                InscriptionInternat.Statut != "SORTIE",
+            ).scalar() or Decimal("0")
+
             total_versements_scolarite = session.query(
                 func.sum(VersementScol.MontantVersSco)
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).scalar() or Decimal("0")
 
             total_versements_cantine = session.query(
                 func.sum(VersementScol.MontantCantine)
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).scalar() or Decimal("0")
 
             total_versements_transport = session.query(
                 func.sum(VersementScol.MontantVersTrans)
             ).filter(
                 VersementScol.IDTAnneeScolaire == id_annee,
-                VersementScol.Reduction == False
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
+            ).scalar() or Decimal("0")
+
+            montants_scolarite = {
+                row.IDNiveau: row
+                for row in session.query(MontantScol).filter(
+                    MontantScol.IDTAnneeScolaire == id_annee
+                ).all()
+            }
+            total_attendu_scolarite = Decimal("0")
+            inscriptions_scolarite = session.query(TInscription).filter(
+                TInscription.IDTAnneeScolaire == id_annee,
+                TInscription.Scolarite == True,
+            ).all()
+            for inscription in inscriptions_scolarite:
+                if inscription.MontantScolariteApplique is not None:
+                    montant_du = inscription.MontantScolariteApplique
+                else:
+                    tarif = montants_scolarite.get(inscription.IDNiveau)
+                    montant_du = Decimal(str(TarificationService.calculer_scolarite_due(
+                        montant_affecte=tarif.MontantAffecte if tarif else 0,
+                        montant_non_affecte=tarif.MontantNonAffecte if tarif else 0,
+                        statut_affectation=inscription.StatutAffectation,
+                    )))
+                total_attendu_scolarite += Decimal(str(montant_du or 0))
+
+            total_versements_internat = session.query(
+                func.sum(VersementInternat.Montant)
+            ).join(
+                InscriptionInternat,
+                VersementInternat.IDInscriptionInternat == InscriptionInternat.IDInscriptionInternat,
+            ).filter(
+                InscriptionInternat.IDTAnneeScolaire == id_annee,
+                VersementInternat.Annule == False,
+            ).scalar() or Decimal("0")
+
+            total_attendu_cantine_externe = session.query(
+                func.sum(InscriptionCantine.MontantTotal)
+            ).filter(
+                InscriptionCantine.IDTAnneeScolaire == id_annee,
+                InscriptionCantine.Statut != "SORTIE",
+            ).scalar() or Decimal("0")
+
+            total_versements_cantine_externe = session.query(
+                func.sum(VersementCantine.Montant)
+            ).join(
+                InscriptionCantine,
+                VersementCantine.IDInscriptionCantine == InscriptionCantine.IDInscriptionCantine,
+            ).filter(
+                InscriptionCantine.IDTAnneeScolaire == id_annee,
+                VersementCantine.Annule == False,
+            ).scalar() or Decimal("0")
+
+            total_versements_autres = session.query(
+                func.sum(VersementScol.MontantVersAutres)
+            ).filter(
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).scalar() or Decimal("0")
 
             total_ventes_kiosque = session.query(
-                func.sum(StockSortie.QuantiteSort * StockSortie.Prix_vente)
-            ).filter(StockSortie.IDTAnneeScolaire == id_annee).scalar() or Decimal("0")
+                func.sum(Vente.MontantTotal)
+            ).filter(
+                Vente.IDTAnneeScolaire == id_annee,
+                Vente.Annule == False,
+            ).scalar() or Decimal("0")
 
             total_depenses = session.query(
                 func.sum(SortieFin.Montant)
             ).filter(
                 SortieFin.IDAnSco == id_annee,
-                SortieFin.DebitCredit == "Debit"
+                SortieFin.DebitCredit == "Debit",
+                SortieFin.Annule == False,
             ).scalar() or Decimal("0")
 
             total_recettes = (
                 total_versements_scolarite
                 + total_versements_cantine
                 + total_versements_transport
+                + total_versements_autres
+                + total_versements_internat
+                + total_versements_cantine_externe
                 + total_ventes_kiosque
             )
+            total_reste_internat = max(Decimal("0"), total_attendu_internat - total_versements_internat)
+            total_reste_cantine_externe = max(
+                Decimal("0"), total_attendu_cantine_externe - total_versements_cantine_externe
+            )
+            solde_net = total_recettes - total_depenses
 
             return {
                 "total_inscrits": total_inscrits,
                 "total_nouveaux": total_nouveaux,
                 "total_classes": total_classes,
                 "total_familles": total_familles,
+                "total_pensionnaires": total_pensionnaires,
+                "total_attendu_internat": total_attendu_internat,
+                "total_reste_internat": total_reste_internat,
                 "total_versements_scolarite": total_versements_scolarite,
+                "total_attendu_scolarite": total_attendu_scolarite,
                 "total_versements_cantine": total_versements_cantine,
                 "total_versements_transport": total_versements_transport,
+                "total_versements_internat": total_versements_internat,
+                "total_attendu_cantine_externe": total_attendu_cantine_externe,
+                "total_versements_cantine_externe": total_versements_cantine_externe,
+                "total_reste_cantine_externe": total_reste_cantine_externe,
                 "total_ventes_kiosque": total_ventes_kiosque,
                 "total_depenses": total_depenses,
                 "total_recettes": total_recettes,
+                "solde_net": solde_net,
             }
-        except Exception as e:
-            print(f"Erreur get_dashboard_summary : {e}")
+        except Exception:
+            logger.exception("Erreur get_dashboard_summary")
             return defaults
         finally:
             session.close()
@@ -182,8 +293,8 @@ class DashboardService:
                     "classe": classe,
                 })
             return result
-        except Exception as e:
-            print(f"Erreur get_latest_inscriptions : {e}")
+        except Exception:
+            logger.exception("Erreur get_latest_inscriptions")
             return []
         finally:
             session.close()
@@ -218,8 +329,8 @@ class DashboardService:
                     "transport": DashboardService.format_fcfa(v.MontantVersTrans),
                 })
             return result
-        except Exception as e:
-            print(f"Erreur get_latest_versements : {e}")
+        except Exception:
+            logger.exception("Erreur get_latest_versements")
             return []
         finally:
             session.close()
@@ -231,29 +342,30 @@ class DashboardService:
             return []
         session = get_session()
         try:
-            rows = session.query(StockSortie).options(
-                joinedload(StockSortie.article),
-            ).filter(
-                StockSortie.IDTAnneeScolaire == id_annee
+            rows = session.query(VenteLigne).options(
+                joinedload(VenteLigne.article),
+                joinedload(VenteLigne.vente),
+            ).join(Vente, VenteLigne.IDVente == Vente.IDVente).filter(
+                Vente.IDTAnneeScolaire == id_annee
             ).order_by(
-                StockSortie.DateSort.desc(),
-                StockSortie.HeureSortie.desc()
+                Vente.DateVente.desc(),
+                Vente.HeureVente.desc(),
+                VenteLigne.IDVenteLigne.desc(),
             ).limit(limit).all()
 
             result = []
-            for v in rows:
-                date_str = v.DateSort.strftime("%d/%m/%Y") if v.DateSort else ""
-                article = v.article.Libelle if v.article else ""
-                montant = float(v.QuantiteSort or 0) * float(v.Prix_vente or 0)
+            for ligne in rows:
+                date_str = ligne.vente.DateVente.strftime("%d/%m/%Y") if ligne.vente and ligne.vente.DateVente else ""
+                article = ligne.article.Libelle if ligne.article else ""
                 result.append({
                     "date": date_str,
                     "article": article,
-                    "quantite": str(v.QuantiteSort or 0),
-                    "montant": DashboardService.format_fcfa(montant),
+                    "quantite": str(ligne.Quantite or 0),
+                    "montant": DashboardService.format_fcfa(float(ligne.Total or 0)),
                 })
             return result
-        except Exception as e:
-            print(f"Erreur get_latest_ventes : {e}")
+        except Exception:
+            logger.exception("Erreur get_latest_ventes")
             return []
         finally:
             session.close()
@@ -262,13 +374,14 @@ class DashboardService:
     def get_stock_alerts(limit=10) -> list:
         session = get_session()
         try:
+            result = []
+
             rows = session.query(StockCour).options(
                 joinedload(StockCour.article),
             ).join(StockCour.article).filter(
-                StockCour.QuantiteCour <= Article.QTESeuil
+                Article.KIT == False,
+                StockCour.QuantiteCour <= Article.QTESeuil,
             ).limit(limit).all()
-
-            result = []
             for sc in rows:
                 article_nom = sc.article.Libelle if sc.article else ""
                 seuil = sc.article.QTESeuil if sc.article else 0
@@ -277,12 +390,47 @@ class DashboardService:
                     "stock": sc.QuantiteCour,
                     "seuil": seuil,
                 })
+
+            # Un KIT n'a plus de ligne de stock propre depuis D3 : son alerte
+            # se calcule a partir du stock deduit de ses composants.
+            if len(result) < limit:
+                kits = session.query(Article).filter(Article.KIT == True).all()
+                stocks_simples = {s.IDTArticle: s.QuantiteCour for s in session.query(StockCour).all()}
+                for kit in kits:
+                    lignes = session.query(KitArticle).filter_by(IDKit=kit.IDTArticle).all()
+                    if not lignes:
+                        continue
+                    dispo = max(0, min(
+                        stocks_simples.get(ligne.IDArticleComposant, 0) // ligne.Quantite
+                        for ligne in lignes
+                    ))
+                    if dispo <= kit.QTESeuil:
+                        result.append({"article": kit.Libelle, "stock": dispo, "seuil": kit.QTESeuil})
+                        if len(result) >= limit:
+                            break
+
             return result
-        except Exception as e:
-            print(f"Erreur get_stock_alerts : {e}")
+        except Exception:
+            logger.exception("Erreur get_stock_alerts")
             return []
         finally:
             session.close()
+
+    @staticmethod
+    def get_internat_alerts() -> dict:
+        id_annee = AppSession.get_active_annee_id()
+        if not id_annee:
+            return {"dossiers_incomplets": 0, "reste": 0}
+        try:
+            from services.internat_service import InternatService
+            stats = InternatService.dashboard(id_annee)
+            return {
+                "dossiers_incomplets": stats.get("dossiers_incomplets", 0),
+                "reste": stats.get("reste", 0),
+            }
+        except Exception:
+            logger.exception("Erreur get_internat_alerts")
+            return {"dossiers_incomplets": 0, "reste": 0}
 
     @staticmethod
     def get_classes_capacity_alerts(limit=10) -> list:
@@ -319,8 +467,8 @@ class DashboardService:
 
             result.sort(key=lambda x: x["pct"], reverse=True)
             return result[:limit]
-        except Exception as e:
-            print(f"Erreur get_classes_capacity_alerts : {e}")
+        except Exception:
+            logger.exception("Erreur get_classes_capacity_alerts")
             return []
         finally:
             session.close()
@@ -349,49 +497,29 @@ class DashboardService:
             ).all()
             montants_par_niveau = {m.IDNiveau: m for m in montants_scol}
 
-            if not montants_par_niveau:
-                return []
-
             versements = session.query(
                 VersementScol.IDEleve,
                 func.coalesce(func.sum(VersementScol.MontantVersSco), 0).label("total_verse")
             ).filter(
-                VersementScol.IDTAnneeScolaire == id_annee
+                VersementScol.IDTAnneeScolaire == id_annee,
+                VersementScol.Reduction == False,
+                VersementScol.Annule == False,
             ).group_by(VersementScol.IDEleve).all()
 
             verses_par_eleve = {v.IDEleve: float(v.total_verse) for v in versements}
 
-            # Pré-calcul des rangs par famille pour la règle 3e enfant
-            from collections import defaultdict
-            fam_buckets = defaultdict(list)
-            for row in session.query(
-                TInscription.IDFamille, TInscription.IDEleve, TInscription.IDTInscription
-            ).filter(TInscription.IDTAnneeScolaire == id_annee
-            ).order_by(TInscription.IDFamille, TInscription.IDTInscription.asc()).all():
-                fam_buckets[row.IDFamille].append(row.IDEleve)
-            rang_par_eleve = {}
-            for id_fam, eleve_ids in fam_buckets.items():
-                for idx, id_el in enumerate(eleve_ids):
-                    rang_par_eleve[id_el] = (idx + 1, len(eleve_ids))
-
             result = []
             for ins in inscriptions:
                 m_scol = montants_par_niveau.get(ins.IDNiveau)
-                if not m_scol:
+                if ins.MontantScolariteApplique is None and not m_scol:
                     continue
-                if ins.famille and ins.famille.EnsCatPrimaire:
-                    montant_du = float(m_scol.MontantEnsPri or 0)
-                elif ins.famille and ins.famille.EnsCatSecondaire:
-                    montant_du = float(m_scol.MontantEnsSecondaire or 0)
-                else:
-                    montant_du = float(m_scol.Montant or 0)
-                if ins.famille and ins.famille.EbrieAbobote:
-                    montant_du = max(0.0, montant_du - 10000.0)
-                if ins.Nouveau:
-                    montant_du += 10000.0
-                rang, nb_famille = rang_par_eleve.get(ins.IDEleve, (1, 1))
-                if nb_famille >= 3 and rang >= 3:
-                    montant_du = max(0.0, montant_du - 10000.0)
+                montant_du = float(ins.MontantScolariteApplique) if ins.MontantScolariteApplique is not None else (
+                    TarificationService.calculer_scolarite_due(
+                        montant_affecte=m_scol.MontantAffecte,
+                        montant_non_affecte=m_scol.MontantNonAffecte,
+                        statut_affectation=ins.StatutAffectation,
+                    )
+                )
                 if montant_du == 0:
                     continue
                 total_verse = verses_par_eleve.get(ins.IDEleve, 0)
@@ -412,8 +540,8 @@ class DashboardService:
             for r in result:
                 r.pop("_reste_raw", None)
             return result[:limit]
-        except Exception as e:
-            print(f"Erreur get_impayes_scolarite : {e}")
+        except Exception:
+            logger.exception("Erreur get_impayes_scolarite")
             return []
         finally:
             session.close()

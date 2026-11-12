@@ -2,6 +2,10 @@ from app.database import get_session
 from models.profil import Profil
 from models.profil_permission import ProfilPermission
 from models.permission import Permission
+from services.authorization import permission_denied
+import logging
+logger = logging.getLogger(__name__)
+
 
 # Profils par défaut avec leurs permissions initiales
 _DEFAULT_PROFILES = [
@@ -21,6 +25,7 @@ _DEFAULT_PROFILES = [
             "DASHBOARD_VIEW", "SCOLARITE_VIEW", "SCOLARITE_ELEVES",
             "SCOLARITE_INSCRIPTIONS", "SCOLARITE_VERSEMENTS",
             "KIOSQUE_VIEW", "STATISTIQUES_VIEW", "PARAMETRES_VIEW",
+            "INTERNAT_VIEW", "INTERNAT_ADMISSIONS", "INTERNAT_PARAMETRES",
         ],
     },
     {
@@ -31,6 +36,7 @@ _DEFAULT_PROFILES = [
         "permissions": [
             "DASHBOARD_VIEW", "SCOLARITE_VIEW", "SCOLARITE_VERSEMENTS",
             "COMPTABILITE_VIEW", "COMPTABILITE_SAISIE", "STATISTIQUES_VIEW",
+            "INTERNAT_VIEW", "INTERNAT_VERSEMENTS",
         ],
     },
     {
@@ -41,6 +47,7 @@ _DEFAULT_PROFILES = [
         "permissions": [
             "DASHBOARD_VIEW", "SCOLARITE_VIEW", "SCOLARITE_ELEVES",
             "SCOLARITE_INSCRIPTIONS", "KIOSQUE_VIEW", "KIOSQUE_VENTES",
+            "INTERNAT_VIEW", "INTERNAT_ADMISSIONS",
         ],
     },
 ]
@@ -77,9 +84,9 @@ class ProfilService:
                                 Accordee=True,
                             ))
             session.commit()
-        except Exception as e:
+        except Exception:
             session.rollback()
-            print(f"Erreur seeding profils : {e}")
+            logger.exception("Erreur seeding profils")
         finally:
             session.close()
 
@@ -110,6 +117,9 @@ class ProfilService:
 
     @staticmethod
     def create(data: dict) -> tuple[bool, str]:
+        denied = permission_denied("UTILISATEURS_MODIFIER", "créer un profil")
+        if denied:
+            return denied
         session = get_session()
         try:
             code = data.get("Code", "").strip().upper()
@@ -137,6 +147,9 @@ class ProfilService:
 
     @staticmethod
     def update(id_profil: int, data: dict) -> tuple[bool, str]:
+        denied = permission_denied("UTILISATEURS_MODIFIER", "modifier un profil")
+        if denied:
+            return denied
         session = get_session()
         try:
             profil = session.get(Profil, id_profil)
@@ -168,6 +181,9 @@ class ProfilService:
     @staticmethod
     def delete(id_profil: int) -> tuple[bool, str]:
         from models.utilisateur import Utilisateur
+        denied = permission_denied("UTILISATEURS_MODIFIER", "supprimer un profil")
+        if denied:
+            return denied
         session = get_session()
         try:
             profil = session.get(Profil, id_profil)
@@ -206,6 +222,9 @@ class ProfilService:
     @staticmethod
     def set_profil_permissions(id_profil: int, codes_accordes: set[str]) -> tuple[bool, str]:
         """Remplace toutes les permissions d'un profil par les codes fournis."""
+        denied = permission_denied("UTILISATEURS_MODIFIER", "modifier les droits d'un profil")
+        if denied:
+            return denied
         session = get_session()
         try:
             all_perms = session.query(Permission).all()

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, LargeBinary
+from sqlalchemy import Column, Integer, String, Boolean
 from app.database import Base
 
 class EtablissementEcole(Base):

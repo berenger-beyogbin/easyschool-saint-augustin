@@ -3,6 +3,9 @@ from models.montant_cantine import MontantCantine
 from models.niveau import TNiveau
 from app.database import get_session
 from sqlalchemy.orm import joinedload
+import logging
+logger = logging.getLogger(__name__)
+
 
 class MontantCantineService:
     @staticmethod
@@ -13,8 +16,8 @@ class MontantCantineService:
             return session.query(MontantCantine).options(
                 joinedload(MontantCantine.niveau)
             ).filter(MontantCantine.IDTAnneeScolaire == id_annee).all()
-        except Exception as e:
-            print(f"Erreur get_montants_by_annee MontantCantine : {e}")
+        except Exception:
+            logger.exception("Erreur get_montants_by_annee MontantCantine")
             return []
         finally:
             session.close()
@@ -27,8 +30,8 @@ class MontantCantineService:
             return session.query(MontantCantine).filter(
                 (MontantCantine.IDTAnneeScolaire == id_annee) & (MontantCantine.IDNiveau == id_niveau)
             ).first()
-        except Exception as e:
-            print(f"Erreur get_montant_by_niveau MontantCantine : {e}")
+        except Exception:
+            logger.exception("Erreur get_montant_by_niveau MontantCantine")
             return None
         finally:
             session.close()
