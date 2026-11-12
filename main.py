@@ -32,6 +32,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _run_backup_now() -> int:
+    """Exécute une sauvegarde sans ouvrir l'interface (tâche planifiée Windows)."""
+    setup_logging()
+    try:
+        from services.backup_service import run_backup
+
+        result = run_backup()
+        logger.info("Sauvegarde automatique créée : %s", result.file_path)
+        return 0
+    except Exception:
+        logger.exception("Échec de la sauvegarde automatique")
+        return 1
+
+
 def _run_packaged_migrations() -> int:
     """Applique les migrations embarquées lors d'une mise à jour client."""
     setup_logging()
@@ -48,8 +62,12 @@ def _run_packaged_migrations() -> int:
         command.upgrade(config, "head")
         logger.info("Migration de la base de données terminée avec succès.")
         return 0
-    except Exception:
+    except Exception as exc:
         logger.exception("Échec de la migration de mise à jour")
+        from sqlalchemy.exc import OperationalError
+        if isinstance(exc, OperationalError):
+            logger.error("Connexion PostgreSQL impossible : verifiez DB_HOST, DB_USER et DB_PASSWORD dans le .env.")
+            return 2
         return 1
 
 
@@ -151,6 +169,8 @@ def main():
     sys.exit(app.exec())
 
 if __name__ == "__main__":
-    if "--migrate" in sys.argv:
+    if "--backup-now" in sys.argv:
+        sys.exit(_run_backup_now())
+    elif "--migrate" in sys.argv:
         sys.exit(_run_packaged_migrations())
     main()

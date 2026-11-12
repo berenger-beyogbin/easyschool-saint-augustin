@@ -1,8 +1,12 @@
 import os
+import sys
+from pathlib import Path
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement du fichier .env s'il existe
-load_dotenv()
+_runtime_dir = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
+load_dotenv(_runtime_dir / ".env")
 
 class Config:
     DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
@@ -23,4 +27,7 @@ class Config:
     @classmethod
     def get_db_url(cls):
         # Genere l'URL de connexion SQLAlchemy pour PostgreSQL
-        return f"postgresql://{cls.DB_USER}:{cls.DB_PASSWORD}@{cls.DB_HOST}:{cls.DB_PORT}/{cls.DB_NAME}"
+        return (
+            f"postgresql://{quote_plus(cls.DB_USER)}:{quote_plus(cls.DB_PASSWORD)}"
+            f"@{cls.DB_HOST}:{cls.DB_PORT}/{cls.DB_NAME}"
+        )

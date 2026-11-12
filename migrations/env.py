@@ -53,12 +53,14 @@ import models.audit_log  # noqa: E402,F401
 config = context.config
 
 # Injecte l'URL de connexion depuis .env (via Config), jamais depuis alembic.ini
-config.set_main_option("sqlalchemy.url", Config.get_db_url())
+# "%" doit etre double : configparser l'interprete (mot de passe encode en %40, etc.).
+config.set_main_option("sqlalchemy.url", Config.get_db_url().replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False : sinon les erreurs de --migrate ne sont jamais journalisees.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

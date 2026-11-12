@@ -9,7 +9,7 @@ Cette page documente `scripts/backup_db.ps1` et `scripts/restore_db.ps1`.
 .\scripts\backup_db.ps1
 ```
 
-Produit un fichier `backups\easy_school_<base>_<horodatage>.dump` (format
+Produit un fichier `backups\easy_school_<base>_<horodatage>.backup` (format
 `pg_dump -Fc`, déjà compressé). Lit les identifiants de connexion depuis le
 `.env` du projet — pas besoin de les ressaisir.
 
@@ -29,6 +29,22 @@ fichier, taille, statut) — c'est le journal des sauvegardes demandé par
 l'audit.
 
 ## Sauvegarde quotidienne automatique
+
+### Depuis l'application (méthode recommandée)
+
+Ouvrir **Paramètres > Généraux > Sauvegardes**, puis :
+
+1. choisir le dossier de destination ;
+2. choisir l'heure et le nombre de copies à conserver ;
+3. cocher **Activer la sauvegarde automatique quotidienne** ;
+4. cliquer sur **Enregistrer la planification**.
+
+Le bouton **Sauvegarder maintenant** permet de vérifier immédiatement le
+fonctionnement. La tâche Windows appelle `EasySchool.exe --backup-now` et
+fonctionne même si l'interface Easy School est fermée. Le compte Windows qui
+a créé la tâche doit toutefois être connecté.
+
+### Depuis PowerShell
 
 Planifier via le Planificateur de tâches Windows :
 
@@ -58,7 +74,7 @@ Une sauvegarde jamais restaurée n'est pas une sauvegarde fiable. Chaque
 mois :
 
 ```powershell
-.\scripts\restore_db.ps1 -BackupFile "backups\easy_school_..._<date>.dump"
+.\scripts\restore_db.ps1 -BackupFile "backups\easy_school_..._<date>.backup"
 ```
 
 Par défaut, restaure dans `easy_school_restore_test_db` (jamais la base de
@@ -73,7 +89,7 @@ Pour restaurer réellement sur la base de production (après un sinistre
 confirmé) :
 
 ```powershell
-.\scripts\restore_db.ps1 -BackupFile "backups\....dump" -TargetDb "easy_school_cjga_db" -Confirm
+.\scripts\restore_db.ps1 -BackupFile "backups\....backup" -TargetDb "easy_school_cjga_db" -Confirm
 ```
 
 Le flag `-Confirm` est requis dès que la cible n'est pas la base de test
@@ -81,8 +97,12 @@ par défaut — protection volontaire contre un écrasement accidentel.
 
 ## Prérequis
 
-- `pg_dump`, `pg_restore`, `psql` doivent être sur le `PATH` (installés
-  avec PostgreSQL, généralement dans `...\PostgreSQL\<version>\bin`).
+- L'application installée embarque `pg_dump`. En mode développement, il doit
+  être sur le `PATH` ou installé dans le dossier habituel de PostgreSQL
+  (`...\PostgreSQL\<version>\bin`). `PG_DUMP_PATH` permet d'indiquer un autre
+  emplacement.
+- Pour la restauration en PowerShell, `pg_restore` et `psql` doivent être sur
+  le `PATH` (ils ne sont pas nécessaires à la sauvegarde depuis l'interface).
 - `7z.exe` optionnel, uniquement nécessaire pour le chiffrement/déchiffrement.
 
 ## Hors scope de ces scripts

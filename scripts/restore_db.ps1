@@ -4,7 +4,8 @@
     PostgreSQL. Voir BACKUP.md pour la procedure de test mensuel.
 
 .PARAMETER BackupFile
-    Chemin du fichier .dump (ou .dump.7z chiffre) a restaurer.
+    Chemin du fichier .backup (ou .backup.7z chiffre) a restaurer.
+    Les anciens fichiers .dump restent acceptes.
 
 .PARAMETER TargetDb
     Base de destination. Par defaut, une base de verification separee
@@ -16,11 +17,11 @@
 
 .EXAMPLE
     # Test de restauration standard, dans une base jetable dediee :
-    .\scripts\restore_db.ps1 -BackupFile "backups\easy_school_easy_school_cjga_db_2026-07-16_120000.dump"
+    .\scripts\restore_db.ps1 -BackupFile "backups\easy_school_easy_school_cjga_db_2026-07-16_120000.backup"
 
 .EXAMPLE
     # Restauration reelle sur la base de production (apres sinistre), en connaissance de cause :
-    .\scripts\restore_db.ps1 -BackupFile "backups\....dump" -TargetDb "easy_school_cjga_db" -Confirm
+    .\scripts\restore_db.ps1 -BackupFile "backups\....backup" -TargetDb "easy_school_cjga_db" -Confirm
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -61,7 +62,7 @@ $DbPort = if ($envVars["DB_PORT"]) { $envVars["DB_PORT"] } else { "5432" }
 $DbUser = if ($envVars["DB_USER"]) { $envVars["DB_USER"] } else { "postgres" }
 $DbPassword = if ($envVars["DB_PASSWORD"]) { $envVars["DB_PASSWORD"] } else { "" }
 
-$dumpToRestore = $BackupFile
+$backupToRestore = $BackupFile
 if ($BackupFile -like "*.7z") {
     if (-not $DecryptionPassword) {
         Write-Error "Ce fichier est chiffre (.7z) : fournissez -DecryptionPassword."
@@ -78,7 +79,14 @@ if ($BackupFile -like "*.7z") {
         Write-Error "Echec du dechiffrement (mot de passe incorrect ?)."
         exit 1
     }
-    $dumpToRestore = Get-ChildItem $tempDir -Filter "*.dump" | Select-Object -First 1 -ExpandProperty FullName
+    $backupToRestore = Get-ChildItem $tempDir -Filter "*.backup" | Select-Object -First 1 -ExpandProperty FullName
+    if (-not $backupToRestore) {
+        $backupToRestore = Get-ChildItem $tempDir -Filter "*.dump" | Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $backupToRestore) {
+        Write-Error "L'archive ne contient aucun fichier .backup restaurable."
+        exit 1
+    }
 }
 
 Write-Host "Recreation de la base '$TargetDb' ($DbHost`:$DbPort)..."
@@ -87,8 +95,8 @@ try {
     & psql -h $DbHost -p $DbPort -U $DbUser -d postgres -c "DROP DATABASE IF EXISTS `"$TargetDb`";"
     & psql -h $DbHost -p $DbPort -U $DbUser -d postgres -c "CREATE DATABASE `"$TargetDb`";"
 
-    Write-Host "Restauration de $dumpToRestore vers '$TargetDb'..."
-    & pg_restore -h $DbHost -p $DbPort -U $DbUser -d $TargetDb --no-owner --no-privileges $dumpToRestore
+    Write-Host "Restauration de $backupToRestore vers '$TargetDb'..."
+    & pg_restore -h $DbHost -p $DbPort -U $DbUser -d $TargetDb --no-owner --no-privileges $backupToRestore
     if ($LASTEXITCODE -ne 0) {
         throw "pg_restore a retourne le code $LASTEXITCODE"
     }

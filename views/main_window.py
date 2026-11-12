@@ -23,6 +23,7 @@ from .dashboard_view import DashboardView
 from .utilisateurs_view import UtilisateursView
 from .internat_view import InternatView
 from .cantine_externe_view import CantineExterneView
+from .backup_view import BackupView
 
 from app.styles import (
     COLORS, SIDEBAR_MENU_STYLE, TAB_STYLE, COMBO_STYLE, BUTTON_SECONDARY
@@ -369,6 +370,9 @@ class MainWindow(QMainWindow):
         self.annee_view = AnneeScolaireView()
         self.annee_view.data_changed.connect(self.reload_annee_header)
         tab_generaux.addTab(self.annee_view, "Année Scolaire")
+
+        self.backup_view = BackupView()
+        tab_generaux.addTab(self.backup_view, "Sauvegardes")
 
         support_lbl = QLabel(
             "Support Technique :\nContactez Julien Kanga au 01-xx-xx-xx-xx."
